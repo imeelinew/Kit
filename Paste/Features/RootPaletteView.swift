@@ -114,7 +114,6 @@ private struct DaycastPaletteView: View {
         }
         .animation(Self.menuAnimation, value: vm.overlay)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(VisualEffectView())
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .onChange(of: vm.resetToken) {
             scroll = ScrollIntent(kind: .top)

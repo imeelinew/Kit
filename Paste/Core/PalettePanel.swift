@@ -257,7 +257,7 @@ final class PalettePanel: NSPanel {
         titlebarAppearsTransparent = true
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = true
+        hasShadow = false
         animationBehavior = .none
         isReleasedWhenClosed = false
 
@@ -269,7 +269,13 @@ final class PalettePanel: NSPanel {
         hosting.layer?.backgroundColor = NSColor.clear.cgColor
         hosting.sizingOptions = []
         hosting.autoresizingMask = [.width, .height]
-        contentView = hosting
+
+        let glass = NSGlassEffectView(frame: frame)
+        glass.autoresizingMask = [.width, .height]
+        glass.style = .regular
+        glass.cornerRadius = Theme.Radius.panel
+        glass.contentView = hosting
+        contentView = glass
     }
 
     override var canBecomeKey: Bool { true }
