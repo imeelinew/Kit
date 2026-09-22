@@ -721,6 +721,8 @@ private final class ClipboardItemCellView: NSTableCellView {
     private let thumbnailView = ClipboardThumbnailView()
     private let titleLabel = NSTextField(labelWithString: "")
     private var selected = false
+    /// Invalidates a fade queued from a scroll transaction once the cell is reused or reconfigured.
+    private var hoverFadeToken = 0
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -774,6 +776,7 @@ private final class ClipboardItemCellView: NSTableCellView {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        hoverFadeToken += 1
         highlightView.layer?.removeAnimation(forKey: "hoverFade")
         titleLabel.isHidden = false
         thumbnailView.prepareForReuse()
@@ -788,8 +791,12 @@ private final class ClipboardItemCellView: NSTableCellView {
     func configure(
         item: ClipboardItem, selected: Bool, query: String, imageURL: URL?, locale: Locale
     ) {
+        let selectionChanged = self.selected != selected
         self.selected = selected
-        updateSelectionVisibility(animated: false)
+        if selectionChanged {
+            // A reused row can appear under a stationary pointer while the trackpad scrolls.
+            scheduleHoverFade()
+        }
         titleLabel.attributedStringValue = SearchHighlight.nsAttributed(
             item.displayTitle(locale: locale),
             query: query,
@@ -800,7 +807,18 @@ private final class ClipboardItemCellView: NSTableCellView {
     func setSelected(_ selected: Bool) {
         guard self.selected != selected else { return }
         self.selected = selected
-        updateSelectionVisibility(animated: true)
+        scheduleHoverFade()
+    }
+
+    /// Trackpad scrolling updates the hovered row inside the scroll view's disabled action
+    /// transaction, which drops a fade started immediately. Commit it on the next turn.
+    private func scheduleHoverFade() {
+        hoverFadeToken += 1
+        let token = hoverFadeToken
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.hoverFadeToken == token else { return }
+            self.updateSelectionVisibility(animated: true)
+        }
     }
 
     private func updateSelectionColor() {
