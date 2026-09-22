@@ -4,7 +4,7 @@ import Combine
 import QuartzCore
 
 /// Menu bar status item: `arrow.trianglehead.clockwise` template icon, left-click toggles the palette,
-/// right-click offers Show Paste / Settings / Quit. Spins clockwise on new clipboard inserts.
+/// right-click offers About, Settings, and Quit. Spins clockwise on new clipboard inserts.
 @MainActor
 final class MenuBarController: NSObject {
     private let settings: AppSettings
@@ -33,7 +33,26 @@ final class MenuBarController: NSObject {
     }
 
     func spin() {
-        iconView?.spin()
+        guard let button = statusItem?.button, let image = button.image else { return }
+        let rect = (button.cell as? NSButtonCell)?.imageRect(forBounds: button.bounds)
+            ?? NSRect(
+                x: (button.bounds.width - image.size.width) / 2,
+                y: (button.bounds.height - image.size.height) / 2,
+                width: image.size.width,
+                height: image.size.height
+            )
+        let spinner = MenuBarIconView(symbol: image)
+        spinner.frame = rect
+        button.image = nil
+        button.addSubview(spinner)
+        iconView = spinner
+        spinner.spin { [weak self, weak button, weak spinner] in
+            spinner?.removeFromSuperview()
+            button?.image = image
+            button?.imagePosition = .imageOnly
+            button?.imageScaling = .scaleNone
+            self?.iconView = nil
+        }
     }
 
     private func setVisible(_ visible: Bool) {
@@ -46,25 +65,19 @@ final class MenuBarController: NSObject {
 
     private func installIfNeeded() {
         if statusItem != nil { return }
-        let symbol = MenuBarIconView.symbolImage
-        let item = NSStatusBar.system.statusItem(withLength: symbol.size.width)
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         guard let button = item.button else {
             NSStatusBar.system.removeStatusItem(item)
             return
         }
-        button.image = nil
+        button.image = MenuBarIconView.symbolImage
         button.imagePosition = .imageOnly
+        button.imageScaling = .scaleNone
         button.target = self
         button.action = #selector(handleClick(_:))
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
 
-        let icon = MenuBarIconView(symbol: symbol)
-        icon.frame = button.bounds
-        icon.autoresizingMask = [.width, .height]
-        button.addSubview(icon)
-
         statusItem = item
-        iconView = icon
         applyLocalizedChrome()
     }
 
@@ -100,20 +113,23 @@ final class MenuBarController: NSObject {
         let locale = settings.language.locale
         let menu = NSMenu()
 
-        let showItem = NSMenuItem(
-            title: String(localized: "Show Paste", locale: locale),
-            action: #selector(showPaste),
+        let aboutItem = NSMenuItem(
+            title: String(localized: "About Paste", locale: locale),
+            action: #selector(showAbout),
             keyEquivalent: ""
         )
-        showItem.target = self
-        menu.addItem(showItem)
+        aboutItem.target = self
+        menu.addItem(aboutItem)
 
         let settingsItem = NSMenuItem(
-            title: String(localized: "Settings", locale: locale),
+            title: String(localized: "Settings…", locale: locale),
             action: #selector(openSettings),
             keyEquivalent: ","
         )
         settingsItem.target = self
+        if #available(macOS 27.0, *) {
+            settingsItem.preferredImageVisibility = .hidden
+        }
         menu.addItem(settingsItem)
 
         menu.addItem(.separator())
@@ -129,8 +145,8 @@ final class MenuBarController: NSObject {
         NSMenu.popUpContextMenu(menu, with: event, for: button)
     }
 
-    @objc private func showPaste() {
-        AppCore.shared.showPalette()
+    @objc private func showAbout() {
+        AppCore.shared.showAbout()
     }
 
     @objc private func openSettings() {
@@ -178,16 +194,22 @@ private final class MenuBarIconView: NSView {
         centerAnchor()
     }
 
-    func spin() {
+    func spin(completion: @escaping () -> Void) {
         imageView.wantsLayer = true
         centerAnchor()
-        guard let layer = imageView.layer else { return }
+        guard let layer = imageView.layer else {
+            completion()
+            return
+        }
         let animation = CABasicAnimation(keyPath: "transform.rotation.z")
         animation.fromValue = 0
         animation.toValue = -Double.pi * 2
         animation.duration = 0.35
         animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        CATransaction.begin()
+        CATransaction.setCompletionBlock(completion)
         layer.add(animation, forKey: "spin")
+        CATransaction.commit()
     }
 
     private func centerAnchor() {
