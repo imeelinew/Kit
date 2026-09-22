@@ -336,6 +336,12 @@ enum ClipboardRetention: Int, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// A named group. An item belongs to at most one stack.
+struct ClipboardStack: Identifiable, Equatable, Hashable, Sendable {
+    let id: UUID
+    var name: String
+}
+
 /// SQLite-backed clipboard history (rows + trigram FTS5 index in `clipboard.sqlite3`, image blobs on disk).
 @MainActor
 final class ClipboardStore: ObservableObject {
@@ -347,6 +353,10 @@ final class ClipboardStore: ObservableObject {
         }
     }
     @Published private(set) var revision: UInt64 = 0
+    /// Named stacks. Empty until creation is wired up.
+    @Published private(set) var stacks: [ClipboardStack] = []
+    /// Item id to the single stack that owns it.
+    private var stackMembership: [ClipboardItem.ID: ClipboardStack.ID] = [:]
     /// Fired after a new history row is inserted, not on recopy-of-top or image refresh.
     var onItemInserted: (() -> Void)?
     private(set) var captureGeneration: UInt64 = 0
@@ -376,6 +386,15 @@ final class ClipboardStore: ObservableObject {
           ON items(pinned_at) WHERE pinned_at IS NOT NULL;
         CREATE UNIQUE INDEX IF NOT EXISTS items_image_fingerprint
           ON items(image_fingerprint) WHERE image_fingerprint IS NOT NULL;
+        CREATE TABLE IF NOT EXISTS stacks(
+          id TEXT NOT NULL UNIQUE,
+          name TEXT NOT NULL,
+          position INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS stack_items(
+          item_id TEXT NOT NULL UNIQUE,
+          stack_id TEXT NOT NULL
+        );
         """
 
     private static let searchSchema = """
@@ -411,6 +430,9 @@ final class ClipboardStore: ObservableObject {
     private var deleteStaleStmt: OpaquePointer?
     private var imageByFingerprintStmt: OpaquePointer?
     private var itemByIDStmt: OpaquePointer?
+    private var insertStackStmt: OpaquePointer?
+    private var upsertMembershipStmt: OpaquePointer?
+    private var deleteMembershipStmt: OpaquePointer?
     private var pendingSearchMetadata: [SearchMetadataUpdate] = []
     private var searchMetadataTask: Task<Void, Never>?
 
@@ -444,6 +466,7 @@ final class ClipboardStore: ObservableObject {
     }
 
     func load() {
+        loadStackState()
         guard let stmt = loadStmt else { return }
         sqlite3_bind_int64(stmt, 1, windowFloor())
         var loaded: [ClipboardItem] = []
@@ -533,6 +556,7 @@ final class ClipboardStore: ObservableObject {
         sqlite3_bind_text(stmt, 1, item.id.uuidString, -1, SQLITE_TRANSIENT)
         guard stepAndReset(stmt) else { return }
         items.removeAll { $0.id == item.id }
+        deleteMembership(item.id)
         deleteBlob(item)
     }
 
@@ -542,6 +566,8 @@ final class ClipboardStore: ObservableObject {
         pendingSearchMetadata.removeAll()
         guard sqlite3_exec(db, "DELETE FROM items", nil, nil, nil) == SQLITE_OK else { return }
         items = []
+        sqlite3_exec(db, "DELETE FROM stack_items", nil, nil, nil)
+        stackMembership.removeAll()
         try? FileManager.default.removeItem(at: imagesDir)
         try? FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
     }
@@ -552,6 +578,130 @@ final class ClipboardStore: ObservableObject {
     }
 
     var displayItems: [ClipboardItem] { orderedItems }
+
+    func stackID(for itemID: ClipboardItem.ID) -> ClipboardStack.ID? {
+        stackMembership[itemID]
+    }
+
+    /// Moves an item into `stackID`, leaving any stack it was in before.
+    func assign(_ itemID: ClipboardItem.ID, to stackID: ClipboardStack.ID) {
+        guard stacks.contains(where: { $0.id == stackID }) else { return }
+        guard stackMembership[itemID] != stackID else { return }
+        guard writeMembership(itemID, stackID: stackID) else { return }
+        stackMembership[itemID] = stackID
+        revision &+= 1
+    }
+
+    func createStack(name: String) -> ClipboardStack? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let stmt = insertStackStmt else { return nil }
+        let stack = ClipboardStack(id: UUID(), name: trimmed)
+        sqlite3_reset(stmt)
+        sqlite3_clear_bindings(stmt)
+        sqlite3_bind_text(stmt, 1, stack.id.uuidString, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, trimmed, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_int64(stmt, 3, sqlite3_int64(stacks.count))
+        guard stepAndReset(stmt) else { return nil }
+        stacks.append(stack)
+        return stack
+    }
+
+    func renameStack(_ id: ClipboardStack.ID, to name: String) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let index = stacks.firstIndex(where: { $0.id == id }) else {
+            return false
+        }
+        if stacks[index].name == trimmed { return true }
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_prepare_v2(db, "UPDATE stacks SET name = ? WHERE id = ?", -1, &stmt, nil)
+            == SQLITE_OK, let stmt
+        else { return false }
+        sqlite3_bind_text(stmt, 1, trimmed, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, id.uuidString, -1, SQLITE_TRANSIENT)
+        guard sqlite3_step(stmt) == SQLITE_DONE else { return false }
+        stacks[index].name = trimmed
+        return true
+    }
+
+    func deleteStack(_ id: ClipboardStack.ID) {
+        guard stacks.contains(where: { $0.id == id }) else { return }
+        var deleteStack: OpaquePointer?
+        if sqlite3_prepare_v2(db, "DELETE FROM stacks WHERE id = ?", -1, &deleteStack, nil)
+            == SQLITE_OK, let deleteStack
+        {
+            sqlite3_bind_text(deleteStack, 1, id.uuidString, -1, SQLITE_TRANSIENT)
+            _ = sqlite3_step(deleteStack)
+        }
+        sqlite3_finalize(deleteStack)
+        var deleteItems: OpaquePointer?
+        if sqlite3_prepare_v2(
+            db, "DELETE FROM stack_items WHERE stack_id = ?", -1, &deleteItems, nil
+        ) == SQLITE_OK, let deleteItems {
+            sqlite3_bind_text(deleteItems, 1, id.uuidString, -1, SQLITE_TRANSIENT)
+            _ = sqlite3_step(deleteItems)
+        }
+        sqlite3_finalize(deleteItems)
+        stacks.removeAll { $0.id == id }
+        stackMembership = stackMembership.filter { $0.value != id }
+        revision &+= 1
+    }
+
+    private func loadStackState() {
+        stacks = []
+        stackMembership = [:]
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(
+            db, "SELECT id, name FROM stacks ORDER BY position, rowid", -1, &stmt, nil
+        ) == SQLITE_OK {
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                if let idString = Self.columnString(stmt, 0),
+                    let id = UUID(uuidString: idString),
+                    let name = Self.columnString(stmt, 1)
+                {
+                    stacks.append(ClipboardStack(id: id, name: name))
+                }
+            }
+        }
+        sqlite3_finalize(stmt)
+        stmt = nil
+        sqlite3_exec(
+            db, "DELETE FROM stack_items WHERE item_id NOT IN (SELECT id FROM items)",
+            nil, nil, nil)
+        if sqlite3_prepare_v2(
+            db, "SELECT item_id, stack_id FROM stack_items", -1, &stmt, nil
+        ) == SQLITE_OK {
+            let known = Set(stacks.map(\.id))
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                guard let itemString = Self.columnString(stmt, 0),
+                    let itemID = UUID(uuidString: itemString),
+                    let stackString = Self.columnString(stmt, 1),
+                    let stackID = UUID(uuidString: stackString),
+                    known.contains(stackID)
+                else { continue }
+                stackMembership[itemID] = stackID
+            }
+        }
+        sqlite3_finalize(stmt)
+    }
+
+    private func writeMembership(_ itemID: ClipboardItem.ID, stackID: ClipboardStack.ID) -> Bool {
+        guard let stmt = upsertMembershipStmt else { return false }
+        sqlite3_reset(stmt)
+        sqlite3_clear_bindings(stmt)
+        sqlite3_bind_text(stmt, 1, itemID.uuidString, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, stackID.uuidString, -1, SQLITE_TRANSIENT)
+        return stepAndReset(stmt)
+    }
+
+    private func deleteMembership(_ itemID: ClipboardItem.ID) {
+        stackMembership.removeValue(forKey: itemID)
+        guard let stmt = deleteMembershipStmt else { return }
+        sqlite3_reset(stmt)
+        sqlite3_clear_bindings(stmt)
+        sqlite3_bind_text(stmt, 1, itemID.uuidString, -1, SQLITE_TRANSIENT)
+        _ = stepAndReset(stmt)
+    }
 
     /// Full-history search for the UI. SQLite work and resident pinyin matching both run outside the
     /// main actor; cancellation discards an obsolete keystroke's result before it reaches SwiftUI.
@@ -1024,6 +1174,14 @@ final class ClipboardStore: ObservableObject {
                    image_fingerprint, custom_title
             FROM items WHERE id = ? LIMIT 1
             """)
+        insertStackStmt = prepare(
+            "INSERT INTO stacks(id, name, position) VALUES(?,?,?)")
+        upsertMembershipStmt = prepare(
+            """
+            INSERT INTO stack_items(item_id, stack_id) VALUES(?,?)
+            ON CONFLICT(item_id) DO UPDATE SET stack_id = excluded.stack_id
+            """)
+        deleteMembershipStmt = prepare("DELETE FROM stack_items WHERE item_id = ?")
         return insertStmt != nil && loadStmt != nil && windowFloorStmt != nil
             && deleteByIDStmt != nil && staleImagesStmt != nil
             && deleteStaleStmt != nil && imageByFingerprintStmt != nil
@@ -1065,6 +1223,7 @@ final class ClipboardStore: ObservableObject {
         [
             insertStmt, loadStmt, windowFloorStmt, deleteByIDStmt,
             staleImagesStmt, deleteStaleStmt, imageByFingerprintStmt, itemByIDStmt,
+            insertStackStmt, upsertMembershipStmt, deleteMembershipStmt,
         ].forEach { sqlite3_finalize($0) }
         insertStmt = nil
         loadStmt = nil
@@ -1074,6 +1233,9 @@ final class ClipboardStore: ObservableObject {
         deleteStaleStmt = nil
         imageByFingerprintStmt = nil
         itemByIDStmt = nil
+        insertStackStmt = nil
+        upsertMembershipStmt = nil
+        deleteMembershipStmt = nil
         sqlite3_close_v2(db)
         db = nil
     }

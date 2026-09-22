@@ -156,6 +156,10 @@ final class AppCore: ObservableObject {
         updateService.checkForUpdates()
     }
 
+    func runModalAlert(_ alert: NSAlert) -> NSApplication.ModalResponse {
+        windowController.runModalAlert(alert)
+    }
+
     func requestQuit() {
         let locale = settings.language.locale
         let alert = NSAlert()

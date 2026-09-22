@@ -33,6 +33,11 @@ final class PalettePanel: NSPanel {
         guard let paletteViewModel else { return false }
         let keyCode = Int(event.keyCode)
         let modifiers = event.modifierFlags.intersection(Self.relevantModifiers)
+        if let handled = routeStackNaming(
+            keyCode: keyCode, modifiers: modifiers, viewModel: paletteViewModel)
+        {
+            return handled
+        }
         let shortcut = KeyboardShortcuts.Shortcut(event: event)
 
         if modifiers == .command {
@@ -103,6 +108,36 @@ final class PalettePanel: NSPanel {
         return paletteViewModel.menuOpen
     }
 
+    /// `true` consumes the key, `false` lets the stack name field see it, `nil` is not naming.
+    private func routeStackNaming(
+        keyCode: Int, modifiers: NSEvent.ModifierFlags, viewModel: PaletteViewModel
+    ) -> Bool? {
+        guard viewModel.isNamingStack else { return nil }
+        if modifiers.isEmpty {
+            switch keyCode {
+            case kVK_Escape:
+                viewModel.cancelStackName()
+                return true
+            case kVK_Return, kVK_ANSI_KeypadEnter:
+                viewModel.commitStackName()
+                return true
+            case kVK_UpArrow, kVK_DownArrow:
+                return true
+            default:
+                return false
+            }
+        }
+        if modifiers == .command {
+            switch keyCode {
+            case kVK_ANSI_C, kVK_ANSI_X, kVK_ANSI_V, kVK_ANSI_A:
+                return handleEditingShortcut(keyCode)
+            default:
+                return nil
+            }
+        }
+        return false
+    }
+
     private func handleOnce(_ command: PaletteCommand, event: NSEvent) -> Bool {
         if event.isARepeat { return true }
         return paletteViewModel?.handle(command) ?? false
@@ -132,6 +167,10 @@ final class PalettePanel: NSPanel {
 
     @discardableResult
     private func focusSearch(for request: UUID) -> Bool {
+        guard paletteViewModel?.isNamingStack != true else {
+            pendingSearchFocusRequest = nil
+            return false
+        }
         guard pendingSearchFocusRequest == request, isVisible, isKeyWindow,
             let searchField, searchField.isEnabled
         else { return false }
@@ -149,7 +188,9 @@ final class PalettePanel: NSPanel {
     /// This accessory app has no visible Edit menu, so route standard editing commands to the
     /// active AppKit field editor ourselves.
     private func handleEditingShortcut(_ keyCode: Int) -> Bool {
-        guard paletteViewModel?.menuOpen != true, let editor = firstResponder as? NSTextView else {
+        guard paletteViewModel?.menuOpen != true || paletteViewModel?.isNamingStack == true,
+            let editor = firstResponder as? NSTextView
+        else {
             return false
         }
 

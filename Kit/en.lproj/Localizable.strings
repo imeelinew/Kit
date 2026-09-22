@@ -3,6 +3,7 @@
 "Acknowledgments" = "Acknowledgments";
 "Actions" = "Actions";
 "Add" = "Add";
+"Add to Stack" = "Add to Stack";
 "All Types" = "All Types";
 "App Language" = "App Language";
 "Appearance" = "Appearance";
@@ -26,6 +27,8 @@
 "Danger Zone" = "Danger Zone";
 "Dark" = "Dark";
 "Delete Entry" = "Delete Entry";
+"Delete Stack…" = "Delete…";
+"Delete Stack %@?" = "Delete “%@”?";
 "Delete" = "Delete";
 "Dimensions" = "Dimensions";
 "Disabled Applications" = "Disabled Applications";
@@ -40,6 +43,8 @@
 "Image" = "Image";
 "Icon Animation" = "Icon Animation";
 "Information" = "Information";
+"Items in this stack return to the clipboard." = "Items in this stack return to the clipboard.";
+"Rename" = "Rename";
 "Input Method" = "Input Method";
 "Keep history for" = "Keep history for";
 "Language" = "Language";
@@ -49,6 +54,8 @@
 "Launch at Login" = "Launch at Login";
 "Switch to English When Opening" = "Switch to English When Opening";
 "No matching entries" = "No matching entries";
+"Name" = "Name";
+"New Stack" = "New Stack";
 "New Text Item" = "New Text Item";
 "Paste Menu" = "Kit Menu";
 "Pause Paste" = "Pause Kit";

@@ -17,6 +17,8 @@ enum PopoverMenuIcon: Equatable {
 /// Display metadata derived from the same semantic action the palette state machine executes.
 struct PopoverMenuItem {
     let title: LocalizedStringKey
+    /// User-entered stack names stay literal so they are not looked up as localization keys.
+    var verbatimTitle: String? = nil
     let icon: PopoverMenuIcon?
     var shortcut: String? = nil
     var isDestructive: Bool = false
@@ -24,7 +26,12 @@ struct PopoverMenuItem {
     var isChecked = false
 
     @MainActor
-    init(action: PaletteMenuAction, target: PasteTarget?, kindFilter: ClipboardKindFilter = .all) {
+    init(
+        action: PaletteMenuAction,
+        target: PasteTarget?,
+        kindFilter: ClipboardKindFilter = .all,
+        stackFilter: ClipboardStack.ID? = nil
+    ) {
         switch action {
         case .about:
             title = "About Paste"
@@ -65,10 +72,39 @@ struct PopoverMenuItem {
             title = "Delete Entry"
             icon = .symbol("trash")
             isDestructive = true
+        case .addToStack:
+            title = "Add to Stack"
+            icon = nil
+        case .assignToStack(let item, let stack):
+            title = "Add to Stack"
+            verbatimTitle = stack.name
+            icon = nil
+            isChecked = AppCore.shared.clipboardStore.stackID(for: item.id) == stack.id
         case .setKindFilter(let filter):
             title = filter.title
             icon = .symbol(filter.symbolName)
             isChecked = filter == kindFilter
+        case .setStackFilter(let stack):
+            if let stack {
+                title = "Add to Stack"
+                verbatimTitle = stack.name
+                icon = nil
+                isChecked = stackFilter == stack.id
+            } else {
+                title = "Clipboard"
+                icon = nil
+                isChecked = stackFilter == nil
+            }
+        case .newStack:
+            title = "New Stack"
+            icon = nil
+        case .renameStack:
+            title = "Rename"
+            icon = nil
+        case .deleteStack:
+            title = "Delete Stack…"
+            icon = nil
+            isDestructive = true
         }
     }
 }
@@ -78,20 +114,29 @@ struct PopoverMenu: View {
     let items: [PopoverMenuItem]
     @Binding var selection: Int
     let onActivate: (Int) -> Void
+    var onRightClick: ((Int) -> Void)? = nil
+    var namingText: Binding<String>? = nil
+    var namingRow: Int? = nil
+    var namingSelectsAll = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             // Index-as-id is stable because a menu's rows never reorder while it is open, and the index is what selection/activation address.
             let reservesIconSpace = items.contains { $0.icon != nil }
             ForEach(items.indices, id: \.self) { index in
-                PopoverMenuRow(
-                    item: items[index],
-                    selected: index == selection,
-                    reservesIconSpace: reservesIconSpace,
-                    onHover: { selection = index },
-                    onActivate: { onActivate(index) }
-                )
-                .disabled(!items[index].isEnabled)
+                if let namingText, index == namingRow {
+                    StackNameRow(text: namingText, selectAll: namingSelectsAll)
+                } else {
+                    PopoverMenuRow(
+                        item: items[index],
+                        selected: index == selection,
+                        reservesIconSpace: reservesIconSpace,
+                        onHover: { selection = index },
+                        onActivate: { onActivate(index) },
+                        onRightClick: onRightClick.map { handler in { handler(index) } }
+                    )
+                    .disabled(!items[index].isEnabled)
+                }
             }
         }
         .padding(Theme.Spacing.sm)
@@ -100,6 +145,82 @@ struct PopoverMenu: View {
         .glassEffect(
             .regular, in: RoundedRectangle(cornerRadius: Theme.Radius.menuPanel, style: .continuous)
         )
+    }
+}
+
+/// Replaces the「新建 Stack」row with a field. Return and Esc are handled by the palette panel.
+private struct StackNameRow: View {
+    @Binding var text: String
+    var selectAll: Bool
+
+    var body: some View {
+        StackNameField(text: $text, selectAll: selectAll)
+            .padding(.horizontal, Theme.Spacing.md)
+            .padding(.vertical, Theme.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct StackNameField: NSViewRepresentable {
+    @Binding var text: String
+    var selectAll: Bool
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text, selectAll: selectAll)
+    }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField(string: text)
+        field.placeholderString = String(localized: "Name")
+        field.isBordered = false
+        field.isBezeled = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.font = .preferredFont(forTextStyle: .body)
+        field.textColor = .labelColor
+        field.delegate = context.coordinator
+        field.cell?.sendsActionOnEndEditing = false
+        return field
+    }
+
+    func updateNSView(_ field: NSTextField, context: Context) {
+        context.coordinator.text = $text
+        if field.stringValue != text {
+            field.stringValue = text
+        }
+        // The click that opens this field restores the search field after mouseUp.
+        // Take first responder on the next turn, once that restoration has finished.
+        guard !context.coordinator.didFocus, !context.coordinator.focusScheduled else { return }
+        context.coordinator.focusScheduled = true
+        DispatchQueue.main.async {
+            context.coordinator.focusScheduled = false
+            guard !context.coordinator.didFocus, let window = field.window else { return }
+            guard window.makeFirstResponder(field) else { return }
+            context.coordinator.didFocus = true
+            if let editor = window.fieldEditor(true, for: field) as? NSTextView {
+                editor.insertionPointColor = .textColor
+                if context.coordinator.selectAll {
+                    editor.selectAll(nil)
+                }
+            }
+        }
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var text: Binding<String>
+        var selectAll: Bool
+        var didFocus = false
+        var focusScheduled = false
+
+        init(text: Binding<String>, selectAll: Bool) {
+            self.text = text
+            self.selectAll = selectAll
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            text.wrappedValue = field.stringValue
+        }
     }
 }
 
@@ -112,6 +233,7 @@ private struct PopoverMenuRow: View {
     /// Fired when the cursor enters the row so the owner can move selection here — keyboard and mouse then share one highlight.
     let onHover: () -> Void
     let onActivate: () -> Void
+    var onRightClick: (() -> Void)? = nil
 
     var body: some View {
         Button(action: onActivate) {
@@ -131,9 +253,15 @@ private struct PopoverMenuRow: View {
                     Color.clear
                         .frame(width: Theme.Size.menuIcon, height: Theme.Size.menuIcon)
                 }
-                Text(item.title)
-                    .font(Theme.Typography.menuRow)
-                    .foregroundStyle(item.isDestructive ? Color.red : Color.primary)
+                Group {
+                    if let verbatimTitle = item.verbatimTitle {
+                        Text(verbatim: verbatimTitle)
+                    } else {
+                        Text(item.title)
+                    }
+                }
+                .font(Theme.Typography.menuRow)
+                .foregroundStyle(item.isDestructive ? Color.red : Color.primary)
                 Spacer(minLength: Theme.Spacing.sm)
                 if item.isChecked {
                     Image(systemName: "checkmark")
@@ -161,6 +289,40 @@ private struct PopoverMenuRow: View {
         }
         .buttonStyle(.plain)
         .onHover { if $0 { onHover() } }
+        .overlay {
+            if let onRightClick {
+                StackRowRightClick(action: onRightClick)
+            }
+        }
+    }
+}
+
+/// Lets a left click reach the SwiftUI button, and handles a right click itself.
+private struct StackRowRightClick: NSViewRepresentable {
+    let action: () -> Void
+
+    func makeNSView(context: Context) -> RightClickView {
+        let view = RightClickView()
+        view.action = action
+        return view
+    }
+
+    func updateNSView(_ view: RightClickView, context: Context) {
+        view.action = action
+    }
+
+    final class RightClickView: NSView {
+        var action: (() -> Void)?
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            guard bounds.contains(point) else { return nil }
+            let rightButton = NSEvent.pressedMouseButtons & (1 << 1) != 0
+            return rightButton ? self : nil
+        }
+
+        override func rightMouseDown(with event: NSEvent) {
+            action?()
+        }
     }
 }
 

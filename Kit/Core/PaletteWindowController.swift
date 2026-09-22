@@ -10,6 +10,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     private var styleObserver: AnyCancellable?
     private var showToken = 0
     private var hiding = false
+    private var modalAlertDepth = 0
     private(set) var previousApp: NSRunningApplication?
 
     init(core: AppCore) {
@@ -111,8 +112,19 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        guard isVisible else { return }
+        guard isVisible, modalAlertDepth == 0 else { return }
         core.hidePalette(restoreFocus: false)
+    }
+
+    /// The delete confirmation takes key focus. Keep the palette up until that alert closes.
+    func runModalAlert(_ alert: NSAlert) -> NSApplication.ModalResponse {
+        modalAlertDepth += 1
+        let response = alert.runModal()
+        modalAlertDepth = max(0, modalAlertDepth - 1)
+        if let panel, panel.isVisible, !hiding {
+            panel.makeKeyAndOrderFront(nil)
+        }
+        return response
     }
 
     private func ensurePanel() -> PalettePanel {

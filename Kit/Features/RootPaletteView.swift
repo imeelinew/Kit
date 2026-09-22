@@ -24,11 +24,39 @@ private struct DaycastPaletteView: View {
 
     private var showAppMenu: Bool { vm.overlay == .appMenu }
     private var showTypeFilter: Bool { vm.overlay == .typeFilter }
+    private var showStackFilter: Bool { vm.overlay == .stackFilter }
+    private var showStackActions: Bool {
+        if case .stackActions = vm.overlay { return true }
+        return false
+    }
+
+    private var stackNamingRow: Int? {
+        guard showStackFilter else { return nil }
+        switch vm.stackNameEdit {
+        case .create:
+            return vm.menuActions.count - 1
+        case .rename(let id):
+            return vm.menuActions.firstIndex { action in
+                if case .setStackFilter(let stack) = action { return stack?.id == id }
+                return false
+            }
+        case nil:
+            return nil
+        }
+    }
+    private var showAddToStack: Bool {
+        if case .addToStack = vm.overlay { return true }
+        return false
+    }
+
+    @State private var stackControlWidth: CGFloat = 0
 
     @MainActor
     private var menuItems: [PopoverMenuItem] {
         vm.menuActions.map {
-            PopoverMenuItem(action: $0, target: vm.pasteTarget, kindFilter: vm.kindFilter)
+            PopoverMenuItem(
+                action: $0, target: vm.pasteTarget, kindFilter: vm.kindFilter,
+                stackFilter: vm.stackFilter)
         }
     }
 
@@ -39,7 +67,7 @@ private struct DaycastPaletteView: View {
         return Group {
             if clips.isEmpty {
                 EmptyResults(
-                    text: isQueryEmpty && vm.kindFilter == .all
+                    text: isQueryEmpty && vm.kindFilter == .all && vm.stackFilter == nil
                         ? "Clipboard history is empty" : "No matching entries",
                     systemImage: "magnifyingglass"
                 )
@@ -84,7 +112,7 @@ private struct DaycastPaletteView: View {
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            if showActions {
+            if showActions || showAddToStack {
                 PopoverMenu(
                     items: menuItems,
                     selection: $vm.menuSelection,
@@ -100,6 +128,28 @@ private struct DaycastPaletteView: View {
                     items: menuItems,
                     selection: $vm.menuSelection,
                     onActivate: activateMenuItem
+                )
+                .padding(.top, Theme.Size.headerPadding + Theme.Size.headerHeight)
+                .padding(
+                    .trailing,
+                    Theme.Spacing.md * 2 + stackControlWidth + Theme.Spacing.md
+                )
+                .transition(Self.menuTransition(.topTrailing))
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if showStackFilter || showStackActions {
+                PopoverMenu(
+                    items: menuItems,
+                    selection: $vm.menuSelection,
+                    onActivate: activateMenuItem,
+                    onRightClick: { vm.openStackActions(at: $0) },
+                    namingText: stackNamingRow == nil ? nil : $vm.stackNameDraft,
+                    namingRow: stackNamingRow,
+                    namingSelectsAll: {
+                        if case .rename = vm.stackNameEdit { return true }
+                        return false
+                    }()
                 )
                 .padding(.top, Theme.Size.headerPadding + Theme.Size.headerHeight)
                 .padding(.trailing, Theme.Spacing.md * 2)
@@ -122,6 +172,7 @@ private struct DaycastPaletteView: View {
             PaletteSearchField(text: $vm.query, enabled: true, fontSize: 20)
                 .frame(maxWidth: .infinity)
             typeFilterControl
+            stackFilterControl
         }
         .padding(.horizontal, Theme.Spacing.md * 2)
         .frame(height: Theme.Size.headerHeight)
@@ -148,6 +199,31 @@ private struct DaycastPaletteView: View {
         .fixedSize()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(vm.kindFilter.title)
+    }
+
+    private var stackFilterControl: some View {
+        BarButton(pressed: showStackFilter, action: { vm.toggleStackFilter() }) {
+            HStack(spacing: Theme.Spacing.sm) {
+                Text(vm.stackFilterTitle)
+                    .font(Theme.Typography.bar)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.Colors.textSecondary)
+            }
+        }
+        .padding(Theme.Spacing.xs)
+        .frosted(in: Capsule())
+        .fixedSize()
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(key: StackControlWidthKey.self, value: proxy.size.width)
+            }
+        }
+        .onPreferenceChange(StackControlWidthKey.self) { stackControlWidth = $0 }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(vm.stackFilterTitle))
     }
 
     private func bottomBar(showActionGroup: Bool) -> some View {
@@ -265,6 +341,13 @@ private final class PaletteSearchTextField: NSTextField {
         super.viewDidMoveToWindow()
         (window as? PalettePanel)?.registerSearchField(self)
     }
+
+    override func becomeFirstResponder() -> Bool {
+        if (window as? PalettePanel)?.paletteViewModel?.isNamingStack == true {
+            return false
+        }
+        return super.becomeFirstResponder()
+    }
 }
 
 private struct MenuCircleButton: View {
@@ -315,6 +398,14 @@ private struct BarButton<Label: View>: View {
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
+    }
+}
+
+private struct StackControlWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 

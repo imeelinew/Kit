@@ -30,15 +30,23 @@ enum PaletteOverlay: Equatable {
     case actions(ClipboardItem.ID)
     case appMenu
     case typeFilter
+    case stackFilter
+    case stackActions(ClipboardStack.ID)
+    case addToStack(ClipboardItem.ID)
 
     var isOpen: Bool { self != .none }
 
     var isMenu: Bool {
         switch self {
-        case .actions, .appMenu, .typeFilter: return true
+        case .actions, .appMenu, .typeFilter, .stackFilter, .stackActions, .addToStack: return true
         default: return false
         }
     }
+}
+
+enum StackNameEdit: Equatable {
+    case create
+    case rename(ClipboardStack.ID)
 }
 
 enum PaletteCommand: Equatable {
@@ -67,7 +75,14 @@ enum PaletteMenuAction: Equatable {
     case pinToScreen(ClipboardItem)
     case revealInFinder(ClipboardItem)
     case delete(ClipboardItem)
+    case addToStack(ClipboardItem)
+    case assignToStack(ClipboardItem, ClipboardStack)
     case setKindFilter(ClipboardKindFilter)
+    /// `nil` is the clipboard, which shows every item.
+    case setStackFilter(ClipboardStack?)
+    case newStack
+    case renameStack(ClipboardStack)
+    case deleteStack(ClipboardStack)
 }
 
 extension ClipboardItem.DisplayKind {
@@ -113,6 +128,21 @@ final class PaletteViewModel: ObservableObject {
         didSet { queryChanged() }
     }
     @Published private(set) var kindFilter: ClipboardKindFilter = .all
+    /// `nil` shows the whole clipboard. A stack id shows only items in that stack.
+    @Published private(set) var stackFilter: ClipboardStack.ID?
+    @Published var stackNameEdit: StackNameEdit?
+    @Published var stackNameDraft = ""
+
+    var isNamingStack: Bool { stackNameEdit != nil }
+
+    var stackFilterTitle: String {
+        if let stackFilter,
+            let stack = core.clipboardStore.stacks.first(where: { $0.id == stackFilter })
+        {
+            return stack.name
+        }
+        return String(localized: "Clipboard")
+    }
     @Published private(set) var results: [ClipboardItem] = []
     @Published private(set) var selectedID: ClipboardItem.ID?
     @Published private(set) var searchReady = true
@@ -125,6 +155,10 @@ final class PaletteViewModel: ObservableObject {
             if overlay.isOpen {
                 imageQuickLookOpen = false
                 ImageQuickLook.close()
+            }
+            if overlay != .stackFilter {
+                stackNameEdit = nil
+                stackNameDraft = ""
             }
             if oldValue.isMenu != overlay.isMenu {
                 onMenuOpenChanged?(overlay.isMenu)
@@ -186,11 +220,42 @@ final class PaletteViewModel: ObservableObject {
                 actions.append(.pinToScreen(item))
                 actions.append(.revealInFinder(item))
             }
+            if !core.clipboardStore.stacks.isEmpty {
+                actions.append(.addToStack(item))
+            }
             actions.append(.delete(item))
             return actions
         case .typeFilter:
             return ClipboardKindFilter.allCases.map(PaletteMenuAction.setKindFilter)
+        case .stackFilter:
+            var actions: [PaletteMenuAction] = [.setStackFilter(nil)]
+            actions.append(contentsOf: core.clipboardStore.stacks.map { .setStackFilter($0) })
+            actions.append(.newStack)
+            return actions
+        case .addToStack(let id):
+            guard let item = item(withID: id) else { return [] }
+            return core.clipboardStore.stacks.map { .assignToStack(item, $0) }
+        case .stackActions(let id):
+            guard let stack = core.clipboardStore.stacks.first(where: { $0.id == id }) else {
+                return []
+            }
+            return [.renameStack(stack), .deleteStack(stack)]
         }
+    }
+
+    func openStackActions(at index: Int) {
+        let actions = menuActions
+        guard actions.indices.contains(index),
+            case .setStackFilter(let stack) = actions[index],
+            let stack
+        else { return }
+        openStackActions(stack)
+    }
+
+    func openStackActions(_ stack: ClipboardStack) {
+        stackNameEdit = nil
+        overlay = .stackActions(stack.id)
+        menuSelection = 0
     }
 
     func prepare() {
@@ -231,14 +296,65 @@ final class PaletteViewModel: ObservableObject {
         }
     }
 
+    func toggleStackFilter() {
+        if overlay == .stackFilter {
+            overlay = .none
+            menuSelection = 0
+        } else {
+            overlay = .stackFilter
+            if let stackFilter,
+                let index = core.clipboardStore.stacks.firstIndex(where: { $0.id == stackFilter })
+            {
+                menuSelection = index + 1
+            } else {
+                menuSelection = 0
+            }
+        }
+    }
+
     func closeMenu() {
         overlay = .none
         menuSelection = 0
     }
 
+    /// Esc removes only the front menu. A menu opened from another menu returns there.
+    private func dismissMenuLayer() {
+        switch overlay {
+        case .stackActions(let id):
+            overlay = .stackFilter
+            if let index = core.clipboardStore.stacks.firstIndex(where: { $0.id == id }) {
+                menuSelection = index + 1
+            } else {
+                menuSelection = 0
+            }
+        case .addToStack(let id):
+            overlay = .actions(id)
+            menuSelection = menuActions.firstIndex {
+                if case .addToStack = $0 { return true }
+                return false
+            } ?? 0
+        default:
+            overlay = .none
+            menuSelection = 0
+        }
+    }
+
     func activateMenuItem(at index: Int) {
         let actions = menuActions
         guard actions.indices.contains(index) else { return }
+        if case .newStack = actions[index] {
+            beginStackName()
+            return
+        }
+        if case .addToStack(let item) = actions[index] {
+            overlay = .addToStack(item.id)
+            menuSelection = 0
+            return
+        }
+        if case .deleteStack = actions[index] {
+            perform(actions[index])
+            return
+        }
         overlay = .none
         menuSelection = 0
         perform(actions[index])
@@ -268,8 +384,7 @@ final class PaletteViewModel: ObservableObject {
                 imageQuickLookOpen = false
                 ImageQuickLook.close()
             } else if menuOpen {
-                overlay = .none
-                menuSelection = 0
+                dismissMenuLayer()
             } else if !queryIsEmpty {
                 query = ""
                 onSearchFocusRequested?()
@@ -317,7 +432,7 @@ final class PaletteViewModel: ObservableObject {
             return item(withID: id)
         case .none:
             return selectedItem
-        case .appMenu, .typeFilter:
+        case .appMenu, .typeFilter, .stackFilter, .stackActions, .addToStack:
             return nil
         }
     }
@@ -368,6 +483,11 @@ final class PaletteViewModel: ObservableObject {
             core.pinToScreen(item)
         case .revealInFinder(let item):
             core.revealClipboardImage(item)
+        case .addToStack(let item):
+            overlay = .addToStack(item.id)
+            menuSelection = 0
+        case .assignToStack(let item, let stack):
+            core.clipboardStore.assign(item.id, to: stack.id)
         case .delete(let item):
             let removedIndex = selectionIndex
             core.clipboardStore.remove(item)
@@ -380,7 +500,93 @@ final class PaletteViewModel: ObservableObject {
         case .setKindFilter(let filter):
             applyKindFilter(filter)
             onSearchFocusRequested?()
+        case .setStackFilter(let stack):
+            applyStackFilter(stack?.id)
+            onSearchFocusRequested?()
+        case .newStack:
+            break
+        case .renameStack(let stack):
+            beginRename(stack)
+        case .deleteStack(let stack):
+            confirmDelete(stack)
         }
+    }
+
+    func beginStackName() {
+        guard overlay == .stackFilter else { return }
+        stackNameEdit = .create
+        stackNameDraft = ""
+    }
+
+    func beginRename(_ stack: ClipboardStack) {
+        stackNameDraft = stack.name
+        stackNameEdit = .rename(stack.id)
+        overlay = .stackFilter
+        if let index = core.clipboardStore.stacks.firstIndex(where: { $0.id == stack.id }) {
+            menuSelection = index + 1
+        }
+    }
+
+    func cancelStackName() {
+        guard stackNameEdit != nil else { return }
+        stackNameEdit = nil
+        stackNameDraft = ""
+    }
+
+    func commitStackName() {
+        guard let edit = stackNameEdit else { return }
+        let name = stackNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        switch edit {
+        case .create:
+            guard let stack = core.clipboardStore.createStack(name: name) else { return }
+            stackNameEdit = nil
+            stackNameDraft = ""
+            overlay = .none
+            menuSelection = 0
+            applyStackFilter(stack.id)
+        case .rename(let id):
+            guard core.clipboardStore.renameStack(id, to: name) else { return }
+            stackNameEdit = nil
+            stackNameDraft = ""
+            overlay = .none
+            menuSelection = 0
+            onSearchFocusRequested?()
+        }
+    }
+
+    private func confirmDelete(_ stack: ClipboardStack) {
+        let locale = core.settings.language.locale
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = String(
+            format: String(localized: "Delete Stack %@?", locale: locale),
+            locale: locale,
+            stack.name
+        )
+        alert.informativeText = String(
+            localized: "Items in this stack return to the clipboard.",
+            locale: locale
+        )
+        alert.addButton(withTitle: String(localized: "Delete", locale: locale))
+        alert.addButton(withTitle: String(localized: "Cancel", locale: locale))
+        alert.buttons.first?.hasDestructiveAction = true
+        guard core.runModalAlert(alert) == .alertFirstButtonReturn else { return }
+        overlay = .none
+        menuSelection = 0
+        core.clipboardStore.deleteStack(stack.id)
+        if stackFilter == stack.id {
+            applyStackFilter(nil)
+        }
+    }
+
+    private func applyStackFilter(_ stackID: ClipboardStack.ID?) {
+        guard stackFilter != stackID else { return }
+        stackFilter = stackID
+        imageQuickLookOpen = false
+        ImageQuickLook.close()
+        resetToken = UUID()
+        refreshResults(resetSelection: true, blockCommands: true)
     }
 
     private func applyKindFilter(_ filter: ClipboardKindFilter) {
@@ -408,9 +614,10 @@ final class PaletteViewModel: ObservableObject {
         let priorIndex = selectionIndex
         if blockCommands { searchReady = false }
 
+        let stackID = stackFilter
         if query.isEmpty && kindFilter == .all {
             applyResults(
-                core.clipboardStore.displayItems,
+                scoped(core.clipboardStore.displayItems, to: stackID),
                 resetSelection: resetSelection,
                 priorID: priorID,
                 priorIndex: priorIndex)
@@ -424,14 +631,20 @@ final class PaletteViewModel: ObservableObject {
                 query, displayKind: filter.displayKind)
             guard !Task.isCancelled,
                 self.query.trimmingCharacters(in: .whitespacesAndNewlines) == query,
-                self.kindFilter == filter
+                self.kindFilter == filter,
+                self.stackFilter == stackID
             else { return }
             applyResults(
-                matches,
+                self.scoped(matches, to: stackID),
                 resetSelection: resetSelection,
                 priorID: priorID,
                 priorIndex: priorIndex)
         }
+    }
+
+    private func scoped(_ items: [ClipboardItem], to stackID: ClipboardStack.ID?) -> [ClipboardItem] {
+        guard let stackID else { return items }
+        return items.filter { core.clipboardStore.stackID(for: $0.id) == stackID }
     }
 
     private func applyResults(
@@ -458,11 +671,11 @@ final class PaletteViewModel: ObservableObject {
         }
 
         switch overlay {
-        case .actions(let id):
+        case .actions(let id), .addToStack(let id):
             if !newResults.contains(where: { $0.id == id }) {
                 overlay = .none
             }
-        case .none, .appMenu, .typeFilter:
+        case .none, .appMenu, .typeFilter, .stackFilter, .stackActions:
             break
         }
     }
