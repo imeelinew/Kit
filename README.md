@@ -1,8 +1,8 @@
 <p align="center">
-  <img src=".github/assets/logo.png" width="128" height="128" alt="Paste">
+  <img src=".github/assets/logo.png" width="128" height="128" alt="Kit">
 </p>
 
-<h1 align="center">Paste</h1>
+<h1 align="center">Kit</h1>
 
 <p align="center">
   面向键盘工作流的原生 macOS 剪贴板历史工具<br>
@@ -29,18 +29,18 @@
 ---
 
 <p align="center">
-  <img alt="Paste 剪贴板历史窗口" src=".github/assets/app.png" width="860">
+  <img alt="Kit 剪贴板历史窗口" src=".github/assets/app.png" width="860">
 </p>
 
 ## 简介
 
-Paste 是一款原生 macOS 剪贴板历史工具，用一个随时呼出的轻量命令面板保存和检索你复制过的内容。它识别文本、代码、链接与图片，记录来源应用，并把搜索、选择和粘贴组织成一套无需离开键盘的工作流。
+Kit 是一款原生 macOS 剪贴板历史工具，用一个随时呼出的轻量命令面板保存和检索你复制过的内容。它识别文本、代码、链接与图片，记录来源应用，并把搜索、选择和粘贴组织成一套无需离开键盘的工作流。
 
 历史记录保存在本机 SQLite 数据库中，图片作为本地文件管理。搜索通过 SQLite FTS5 与拼音索引覆盖完整历史，即使中文内容只记得拼音全拼或首字母，也可以直接找到。
 
-## 为什么开发 Paste
+## 为什么开发 Kit
 
-系统剪贴板只保留最后一次复制，常见剪贴板工具又容易把大量功能和视觉层级塞进一个常驻窗口。Paste 更接近一个专用命令面板：需要时出现，完成搜索与粘贴后立即回到原来的应用。
+系统剪贴板只保留最后一次复制，常见剪贴板工具又容易把大量功能和视觉层级塞进一个常驻窗口。Kit 更接近一个专用命令面板：需要时出现，完成搜索与粘贴后立即回到原来的应用。
 
 - **多类型捕获**：自动区分普通文本、代码、链接和图片
 - **完整历史搜索**：SQLite FTS5 全文索引，不受内存窗口限制
@@ -63,9 +63,9 @@ Paste 是一款原生 macOS 剪贴板历史工具，用一个随时呼出的轻�
 
 ## 本地存储与隐私
 
-Paste 的剪贴板数据库和图片均保存在本机，不依赖云端服务。历史保留时间可以设置为一天、一周、一个月、三个月、半年、一年或永久；固定记录不受自动清理影响。
+Kit 的剪贴板数据库和图片均保存在本机，不依赖云端服务。历史保留时间可以设置为一天、一周、一个月、三个月、半年、一年或永久；固定记录不受自动清理影响。
 
-可以配置禁止捕获的应用。默认排除“钥匙串访问”和“密码”应用，避免敏感内容进入历史记录。Paste 需要辅助功能权限，才能把选中的内容可靠地发送回原目标应用。
+可以配置禁止捕获的应用。默认排除“钥匙串访问”和“密码”应用，避免敏感内容进入历史记录。Kit 需要辅助功能权限，才能把选中的内容可靠地发送回原目标应用。
 
 ## 其他功能
 
@@ -81,9 +81,9 @@ Paste 的剪贴板数据库和图片均保存在本机，不依赖云端服务�
 需要 macOS 26、Xcode 26 与 Swift 6。
 
 ```bash
-git clone https://github.com/imeelinew/Paste.git
-cd Paste
-open Paste.xcodeproj
+git clone https://github.com/imeelinew/Kit.git
+cd Kit
+open Kit.xcodeproj
 ```
 
-在 Xcode 中选择 **Paste** scheme，然后执行 **Product → Run**。首次粘贴前，请按系统提示授予辅助功能权限。
+在 Xcode 中选择 **Kit** scheme，然后执行 **Product → Run**。首次粘贴前，请按系统提示授予辅助功能权限。

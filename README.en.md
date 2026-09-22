@@ -1,8 +1,8 @@
 <p align="center">
-  <img src=".github/assets/logo.png" width="128" height="128" alt="Paste">
+  <img src=".github/assets/logo.png" width="128" height="128" alt="Kit">
 </p>
 
-<h1 align="center">Paste</h1>
+<h1 align="center">Kit</h1>
 
 <p align="center">
   A native macOS clipboard history tool built for keyboard workflows<br>
@@ -29,18 +29,18 @@
 ---
 
 <p align="center">
-  <img alt="Paste clipboard history palette" src=".github/assets/app.png" width="860">
+  <img alt="Kit clipboard history palette" src=".github/assets/app.png" width="860">
 </p>
 
 ## About
 
-Paste is a native macOS clipboard history tool that keeps copied content inside a lightweight command palette. It recognizes text, code, links, and images, records the source application, and turns search, selection, and paste-back into a keyboard-driven workflow.
+Kit is a native macOS clipboard history tool that keeps copied content inside a lightweight command palette. It recognizes text, code, links, and images, records the source application, and turns search, selection, and paste-back into a keyboard-driven workflow.
 
 History is stored in a local SQLite database, with image payloads managed as local files. SQLite FTS5 and a Pinyin index search the complete history, including Chinese text found through full spelling or initials.
 
-## Why Paste
+## Why Kit
 
-The system clipboard remembers only the latest copy, while many clipboard managers turn into permanent, feature-heavy windows. Paste behaves more like a focused command palette: summon it when needed, find and paste an item, then return immediately to the previous app.
+The system clipboard remembers only the latest copy, while many clipboard managers turn into permanent, feature-heavy windows. Kit behaves more like a focused command palette: summon it when needed, find and paste an item, then return immediately to the previous app.
 
 - **Multiple content types**: classifies plain text, code, links, and images
 - **Full-history search**: SQLite FTS5 searches beyond the in-memory window
@@ -59,7 +59,7 @@ Press `Option + W` to show or hide the palette. Type to search, move with the ar
 - `Space`: preview an image
 - Action menu: paste while keeping the palette open, reveal images in Finder, delete entries, and more
 
-The global shortcut is configurable. Paste can also switch to an English input source when the palette opens, making Pinyin queries immediately available.
+The global shortcut is configurable. Kit can also switch to an English input source when the palette opens, making Pinyin queries immediately available.
 
 ## Local Storage and Privacy
 
@@ -81,9 +81,9 @@ Applications can be excluded from capture. Keychain Access and Passwords are exc
 You need macOS 26, Xcode 26, and Swift 6.
 
 ```bash
-git clone https://github.com/imeelinew/Paste.git
-cd Paste
-open Paste.xcodeproj
+git clone https://github.com/imeelinew/Kit.git
+cd Kit
+open Kit.xcodeproj
 ```
 
-Select the **Paste** scheme and choose **Product → Run**. Grant Accessibility permission when prompted before the first paste operation.
+Select the **Kit** scheme and choose **Product → Run**. Grant Accessibility permission when prompted before the first paste operation.

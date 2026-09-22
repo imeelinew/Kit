@@ -55,7 +55,7 @@ jobs:
           import json
           from pathlib import Path
 
-          resolved = json.loads(Path("Paste.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved").read_text())
+          resolved = json.loads(Path("Kit.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved").read_text())
           for pin in resolved["pins"]:
               if pin["identity"].lower() == "sparkle":
                   print(pin["state"]["version"])

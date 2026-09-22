@@ -1,6 +1,6 @@
-# Releasing Paste
+# Releasing Kit
 
-Paste uses Sparkle without Developer ID signing or Apple notarization. GitHub Releases hosts update ZIPs and GitHub Pages serves the signed appcast.
+Kit uses Sparkle without Developer ID signing or Apple notarization. GitHub Releases hosts update ZIPs and GitHub Pages serves the signed appcast.
 
 ## One-time setup
 

@@ -12,9 +12,9 @@ build="$2"
 tag="v${version}"
 script_dir="${0:A:h}"
 repo_root="${script_dir:h}"
-github_repo="${PASTE_GITHUB_REPOSITORY:-imeelinew/Paste}"
+github_repo="${KIT_GITHUB_REPOSITORY:-imeelinew/Kit}"
 team_id="${PASTE_TEAM_ID:-5Q5QT76MJU}"
-work_dir=$(mktemp -d /tmp/paste-release.XXXXXX)
+work_dir=$(mktemp -d /tmp/kit-release.XXXXXX)
 trap 'rm -rf "$work_dir"' EXIT
 
 cd "$repo_root"
@@ -47,16 +47,16 @@ signing_identities=$(security find-identity -v -p codesigning)
 }
 
 "$script_dir/set-version.sh" "$version" "$build"
-git add Paste.xcodeproj/project.pbxproj
+git add Kit.xcodeproj/project.pbxproj
 if ! git diff --cached --quiet; then
     git commit -m "Release $tag"
 fi
 
-archive_path="$work_dir/Paste.xcarchive"
+archive_path="$work_dir/Kit.xcarchive"
 derived_data="$work_dir/DerivedData"
 xcodebuild archive \
-    -project Paste.xcodeproj \
-    -scheme Paste \
+    -project Kit.xcodeproj \
+    -scheme Kit \
     -configuration Release \
     -archivePath "$archive_path" \
     -derivedDataPath "$derived_data" \
@@ -66,14 +66,14 @@ xcodebuild archive \
     MARKETING_VERSION="$version" \
     CURRENT_PROJECT_VERSION="$build"
 
-app_path="$archive_path/Products/Applications/Paste.app"
+app_path="$archive_path/Products/Applications/Kit.app"
 [[ -d "$app_path" ]] || {
     print -u2 "Archived app not found"
     exit 70
 }
 codesign --verify --deep --strict --verbose=2 "$app_path"
 
-archive_file="$work_dir/Paste-${version}.zip"
+archive_file="$work_dir/Kit-${version}.zip"
 ditto -c -k --sequesterRsrc --keepParent "$app_path" "$archive_file"
 
 git fetch origin main

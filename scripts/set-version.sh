@@ -8,7 +8,7 @@ fi
 
 version="$1"
 build="$2"
-project_file="${0:A:h:h}/Paste.xcodeproj/project.pbxproj"
+project_file="${0:A:h:h}/Kit.xcodeproj/project.pbxproj"
 
 if [[ ! "$version" =~ '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$' ]]; then
     print -u2 "Invalid marketing version: $version"
@@ -31,4 +31,4 @@ contents.gsub!(/CURRENT_PROJECT_VERSION = [^;]+;/, "CURRENT_PROJECT_VERSION = #{
 File.binwrite(path, contents)
 RUBY
 
-print "Paste version set to ${version} (${build})"
+print "Kit version set to ${version} (${build})"
