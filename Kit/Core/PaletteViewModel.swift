@@ -182,8 +182,8 @@ final class PaletteViewModel: ObservableObject {
                 .pasteKeepingOpen(item),
                 .copy(item),
             ]
-            actions.append(.pinToScreen(item))
             if item.kind == .image {
+                actions.append(.pinToScreen(item))
                 actions.append(.revealInFinder(item))
             }
             actions.append(.delete(item))
@@ -281,7 +281,7 @@ final class PaletteViewModel: ObservableObject {
             overlay = overlay == .actions(id) ? .none : .actions(id)
             menuSelection = 0
         case .pinToScreen:
-            guard searchReady, let item = actionTarget else { return true }
+            guard searchReady, let item = actionTarget, item.kind == .image else { return true }
             overlay = .none
             core.pinToScreen(item)
         case .revealInFinder:
@@ -364,6 +364,7 @@ final class PaletteViewModel: ObservableObject {
         case .copy(let item):
             core.copyToClipboard(item)
         case .pinToScreen(let item):
+            guard item.kind == .image else { return }
             core.pinToScreen(item)
         case .revealInFinder(let item):
             core.revealClipboardImage(item)

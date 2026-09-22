@@ -88,17 +88,6 @@ enum PinnedImageSize: String, CaseIterable, Identifiable {
     }
 }
 
-enum PinnedTextSize {
-    static let minimum: CGFloat = 9
-    static let maximum: CGFloat = 24
-    static let step: CGFloat = 1
-    static let defaultValue: CGFloat = 13
-
-    static func clamped(_ value: CGFloat) -> CGFloat {
-        min(max(value, minimum), maximum)
-    }
-}
-
 enum CopySoundEffect: Int, CaseIterable, Identifiable {
     case one = 1
     case two = 2
@@ -110,20 +99,6 @@ enum CopySoundEffect: Int, CaseIterable, Identifiable {
     var title: String { "音效\(rawValue)" }
 
     var resourceName: String { "sound-effect-\(rawValue)" }
-}
-
-enum PinnedWindowOpacity {
-    static let minimum: Double = 50
-    static let maximum: Double = 100
-    static let defaultValue: Double = 100
-
-    static func clamped(_ value: Double) -> Double {
-        min(max(value, minimum), maximum)
-    }
-
-    static func alpha(from percent: Double) -> CGFloat {
-        CGFloat(clamped(percent) / 100)
-    }
 }
 
 @MainActor
@@ -141,9 +116,6 @@ final class AppSettings: ObservableObject {
         static let appearance = "appAppearance"
         static let paletteVisualStyle = "paletteVisualStyle"
         static let pinnedImageSize = "pinnedImageSize"
-        static let pinnedTextSize = "pinnedTextSize"
-        static let pinnedWindowOpacity = "pinnedWindowOpacity"
-        static let pinnedWindowBlur = "pinnedWindowBlur"
         static let showMenuBarIcon = "showMenuBarIcon"
         static let animateMenuBarIconOnCopy = "animateMenuBarIconOnCopy"
         static let soundEffectsEnabled = "soundEffectsEnabled"
@@ -198,21 +170,6 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(pinnedImageSize.rawValue, forKey: Key.pinnedImageSize) }
     }
 
-    /// Shared by every pinned Markdown and code card and persisted as the next card's default.
-    @Published var pinnedTextSize: CGFloat {
-        didSet { defaults.set(Double(pinnedTextSize), forKey: Key.pinnedTextSize) }
-    }
-
-    /// Visible alpha of every pinned card, stored as 50...100 so 100 keeps today's fully opaque look.
-    @Published var pinnedWindowOpacity: Double {
-        didSet { defaults.set(pinnedWindowOpacity, forKey: Key.pinnedWindowOpacity) }
-    }
-
-    /// When enabled, pinned cards use a vibrancy material so the desktop shows through as blur.
-    @Published var pinnedWindowBlur: Bool {
-        didSet { defaults.set(pinnedWindowBlur, forKey: Key.pinnedWindowBlur) }
-    }
-
     @Published var showMenuBarIcon: Bool {
         didSet { defaults.set(showMenuBarIcon, forKey: Key.showMenuBarIcon) }
     }
@@ -227,10 +184,6 @@ final class AppSettings: ObservableObject {
 
     @Published var copySoundEffect: CopySoundEffect {
         didSet { defaults.set(copySoundEffect.rawValue, forKey: Key.copySoundEffect) }
-    }
-
-    var pinnedWindowAlpha: CGFloat {
-        PinnedWindowOpacity.alpha(from: pinnedWindowOpacity)
     }
 
     init() {
@@ -254,17 +207,6 @@ final class AppSettings: ObservableObject {
         pinnedImageSize =
             defaults.string(forKey: Key.pinnedImageSize).flatMap(PinnedImageSize.init(rawValue:))
             ?? .medium
-        pinnedTextSize = PinnedTextSize.clamped(
-            defaults.object(forKey: Key.pinnedTextSize) == nil
-                ? PinnedTextSize.defaultValue
-                : CGFloat(defaults.double(forKey: Key.pinnedTextSize))
-        )
-        pinnedWindowOpacity = PinnedWindowOpacity.clamped(
-            defaults.object(forKey: Key.pinnedWindowOpacity) == nil
-                ? PinnedWindowOpacity.defaultValue
-                : defaults.double(forKey: Key.pinnedWindowOpacity)
-        )
-        pinnedWindowBlur = defaults.bool(forKey: Key.pinnedWindowBlur)
         showMenuBarIcon = defaults.object(forKey: Key.showMenuBarIcon) as? Bool ?? true
         animateMenuBarIconOnCopy =
             defaults.object(forKey: Key.animateMenuBarIconOnCopy) as? Bool ?? true

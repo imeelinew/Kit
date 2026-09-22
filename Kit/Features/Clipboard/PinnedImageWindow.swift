@@ -18,20 +18,8 @@ private enum PinnedImageCommand {
     }
 }
 
-enum PinnedTextStyle: Equatable {
-    case plain
-    case markdown
-    case code
-}
-
 private enum PinnedCommandContext {
     case image(url: URL, imageSize: CGSize, preferredLongEdge: () -> CGFloat)
-    case text(String, initialSize: CGSize)
-}
-
-private struct PinnedTextViewport: Equatable {
-    var scrollPosition: CGPoint = .zero
-    var selection = NSRange(location: 0, length: 0)
 }
 
 private struct PinnedCardRecord: Codable, Identifiable {
@@ -67,21 +55,10 @@ private struct PinnedCardRecord: Codable, Identifiable {
     let id: UUID
     let kind: Kind
     var frame: Frame
-    var scrollY: Double
-    var selectionLocation: Int
-    var selectionLength: Int
-
-    var viewport: PinnedTextViewport {
-        PinnedTextViewport(
-            scrollPosition: CGPoint(x: 0, y: scrollY),
-            selection: NSRange(location: selectionLocation, length: selectionLength)
-        )
-    }
 
     var isValid: Bool {
         frame.x.isFinite && frame.y.isFinite && frame.width.isFinite && frame.height.isFinite
-            && frame.width > 0 && frame.height > 0 && scrollY.isFinite && scrollY >= 0
-            && selectionLocation >= 0 && selectionLength >= 0
+            && frame.width > 0 && frame.height > 0
     }
 }
 
@@ -139,35 +116,16 @@ private final class PinnedCardSessionStore {
         }
     }
 
-    func writeTextPayload(_ text: String, itemID: UUID, kind: PinnedCardRecord.Kind) -> Bool {
-        guard kind != .image else { return false }
-        do {
-            try text.write(
-                to: payloadURL(itemID: itemID, kind: kind),
-                atomically: true,
-                encoding: .utf8)
-            return true
-        } catch {
-            return false
-        }
-    }
-
     func imageURL(for record: PinnedCardRecord) -> URL? {
         guard record.kind == .image else { return nil }
         let url = payloadURL(for: record)
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
-    func text(for record: PinnedCardRecord) -> String? {
-        guard record.kind != .image else { return nil }
-        return try? String(contentsOf: payloadURL(for: record), encoding: .utf8)
-    }
-
     func add(
         itemID: UUID,
         kind: PinnedCardRecord.Kind,
-        frame: NSRect,
-        viewport: PinnedTextViewport = PinnedTextViewport()
+        frame: NSRect
     ) {
         guard FileManager.default.fileExists(atPath: payloadURL(itemID: itemID, kind: kind).path)
         else { return }
@@ -176,10 +134,7 @@ private final class PinnedCardSessionStore {
             PinnedCardRecord(
                 id: itemID,
                 kind: kind,
-                frame: PinnedCardRecord.Frame(frame),
-                scrollY: viewport.scrollPosition.y,
-                selectionLocation: viewport.selection.location,
-                selectionLength: viewport.selection.length
+                frame: PinnedCardRecord.Frame(frame)
             )
         )
         saveNow()
@@ -200,20 +155,6 @@ private final class PinnedCardSessionStore {
             || abs(stored.width - frame.width) > 0.5 || abs(stored.height - frame.height) > 0.5
         else { return false }
         records[index].frame = PinnedCardRecord.Frame(frame)
-        return true
-    }
-
-    @discardableResult
-    func updateViewport(itemID: UUID, viewport: PinnedTextViewport) -> Bool {
-        guard let index = records.firstIndex(where: { $0.id == itemID }) else { return false }
-        let record = records[index]
-        guard abs(record.scrollY - viewport.scrollPosition.y) > 0.5
-            || record.selectionLocation != viewport.selection.location
-            || record.selectionLength != viewport.selection.length
-        else { return false }
-        records[index].scrollY = viewport.scrollPosition.y
-        records[index].selectionLocation = viewport.selection.location
-        records[index].selectionLength = viewport.selection.length
         return true
     }
 
@@ -280,7 +221,6 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
     private var restoredSession = false
     private let sessionStore = PinnedCardSessionStore()
     private var titleObserver: AnyCancellable?
-    private var opacityObserver: AnyCancellable?
     private var parkedHomeFrames: [ClipboardItem.ID: NSRect] = [:]
     private var isUnparking = false
 
@@ -289,20 +229,9 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         restoredSession = true
         observeExclusiveFullScreenIfNeeded()
         observeTitlesIfNeeded()
-        observeOpacityIfNeeded()
 
         for record in sessionStore.records {
-            let restored: Bool
-            switch record.kind {
-            case .image:
-                restored = restoreImage(record)
-            case .plain:
-                restored = restoreText(record, style: .plain)
-            case .markdown:
-                restored = restoreText(record, style: .markdown)
-            case .code:
-                restored = restoreText(record, style: .code)
-            }
+            let restored = record.kind == .image && restoreImage(record)
             if !restored {
                 sessionStore.remove(itemID: record.id)
             }
@@ -378,7 +307,6 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
     ) {
         observeExclusiveFullScreenIfNeeded()
         observeTitlesIfNeeded()
-        observeOpacityIfNeeded()
         if let panel = panels[itemID] {
             reveal(panel, itemID: itemID)
             return
@@ -428,68 +356,6 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    func showText(
-        itemID: ClipboardItem.ID,
-        text: String,
-        style: PinnedTextStyle,
-        title: String
-    ) {
-        observeExclusiveFullScreenIfNeeded()
-        observeTitlesIfNeeded()
-        observeOpacityIfNeeded()
-        if let panel = panels[itemID] {
-            reveal(panel, itemID: itemID)
-            return
-        }
-
-        let recordKind: PinnedCardRecord.Kind
-        switch style {
-        case .plain: recordKind = .plain
-        case .markdown: recordKind = .markdown
-        case .code: recordKind = .code
-        }
-        let storedPayload = sessionStore.writeTextPayload(
-            text, itemID: itemID, kind: recordKind)
-        let visibleFrame = targetVisibleFrame()
-        let initialSize = PinnedTextLayout.initialSize(
-            text: text,
-            style: style,
-            fontSize: AppCore.shared.settings.pinnedTextSize,
-            visibleFrame: visibleFrame
-        )
-        let panel = makePanel(
-            title: title,
-            initialSize: initialSize,
-            aspectRatio: nil,
-            minSize: PinnedTextLayout.minimumSize
-        )
-        panel.onCommand = { [weak self] command in
-            self?.handle(
-                command,
-                itemID: itemID,
-                context: .text(text, initialSize: initialSize)
-            )
-        }
-        install(
-            PinnedTextContent(
-                itemID: itemID,
-                text: text,
-                style: style,
-                viewport: PinnedTextViewport(),
-                onViewportChange: { [weak self] viewport in
-                    self?.updateViewport(itemID: itemID, viewport: viewport)
-                },
-                onClose: { [weak self] in self?.close(itemID) }
-            ),
-            in: panel
-        )
-        let frame = present(panel, size: initialSize, in: visibleFrame, itemID: itemID)
-        if storedPayload {
-            sessionStore.add(itemID: itemID, kind: recordKind, frame: frame)
-            lastPersistenceSave = Date()
-        }
-    }
-
     private func restoreImage(_ record: PinnedCardRecord) -> Bool {
         guard let url = sessionStore.imageURL(for: record) else { return false }
         let visibleFrame = visibleFrame(for: record.frame.rect)
@@ -529,64 +395,6 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
                 itemID: record.id,
                 url: url,
                 decodeMaxPixel: imageDecodeMaxPixel,
-                onClose: { [weak self] in self?.close(record.id) }
-            ),
-            in: panel
-        )
-        restore(panel, record: record)
-        return true
-    }
-
-    private func restoreText(_ record: PinnedCardRecord, style: PinnedTextStyle) -> Bool {
-        guard let text = sessionStore.text(for: record) else { return false }
-        let visibleFrame = visibleFrame(for: record.frame.rect)
-        let initialSize = PinnedTextLayout.initialSize(
-            text: text,
-            style: style,
-            fontSize: AppCore.shared.settings.pinnedTextSize,
-            visibleFrame: visibleFrame
-        )
-        let fallback =
-            switch style {
-            case .plain:
-                String(
-                    localized: "Pinned Text",
-                    locale: AppCore.shared.settings.language.locale)
-            case .markdown:
-                String(
-                    localized: "Pinned Markdown",
-                    locale: AppCore.shared.settings.language.locale)
-            case .code:
-                String(
-                    localized: "Pinned Code",
-                    locale: AppCore.shared.settings.language.locale)
-            }
-        let panel = makePanel(
-            title: cardTitle(for: record.id, fallback: fallback),
-            initialSize: initialSize,
-            aspectRatio: nil,
-            minSize: PinnedTextLayout.minimumSize
-        )
-        panel.onCommand = { [weak self] command in
-            self?.handle(
-                command,
-                itemID: record.id,
-                context: .text(text, initialSize: initialSize)
-            )
-        }
-        var viewport = record.viewport
-        if NSMaxRange(viewport.selection) > (text as NSString).length {
-            viewport.selection = NSRange(location: 0, length: 0)
-        }
-        install(
-            PinnedTextContent(
-                itemID: record.id,
-                text: text,
-                style: style,
-                viewport: viewport,
-                onViewportChange: { [weak self] viewport in
-                    self?.updateViewport(itemID: record.id, viewport: viewport)
-                },
                 onClose: { [weak self] in self?.close(record.id) }
             ),
             in: panel
@@ -836,11 +644,6 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func updateViewport(itemID: ClipboardItem.ID, viewport: PinnedTextViewport) {
-        guard sessionStore.updateViewport(itemID: itemID, viewport: viewport) else { return }
-        schedulePersistence()
-    }
-
     private func schedulePersistence() {
         let interval: TimeInterval = 0.12
         let elapsed = Date().timeIntervalSince(lastPersistenceSave)
@@ -878,7 +681,7 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
                 close(id)
             }
         case .copy:
-            copy(from: panel, context: context)
+            copy(context: context)
         case .zoomIn:
             panel.resize(by: 1.1)
         case .zoomOut:
@@ -888,26 +691,11 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func copy(from panel: PinnedImagePanel, context: PinnedCommandContext) {
+    private func copy(context: PinnedCommandContext) {
         switch context {
         case .image(let url, _, _):
             Task { _ = await Paster.copyImage(at: url) }
-        case .text(let text, _):
-            Paster.copyString(selectedText(in: panel) ?? text)
         }
-    }
-
-    private func selectedText(in panel: NSPanel) -> String? {
-        var responder: NSResponder? = panel.firstResponder
-        while let current = responder {
-            if let textView = current as? NSTextView {
-                let range = textView.selectedRange()
-                guard range.length > 0 else { return nil }
-                return (textView.string as NSString).substring(with: range)
-            }
-            responder = current.nextResponder
-        }
-        return nil
     }
 
     private func resetSize(of panel: PinnedImagePanel, context: PinnedCommandContext) {
@@ -920,8 +708,6 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
                 visibleFrame: visibleFrame,
                 preferredLongEdge: preferredLongEdge()
             )
-        case .text(_, let initialSize):
-            size = initialSize
         }
         resetFrame(of: panel, to: size, in: visibleFrame)
     }
@@ -951,32 +737,11 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
             }
     }
 
-    private func observeOpacityIfNeeded() {
-        guard opacityObserver == nil else { return }
-        opacityObserver = AppCore.shared.settings.$pinnedWindowOpacity
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.applyVisibleAlphaToOpenPanels()
-            }
-    }
-
-    private var visibleAlpha: CGFloat {
-        AppCore.shared.settings.pinnedWindowAlpha
-    }
+    private let visibleAlpha: CGFloat = 1
 
     private func applyVisibleAlpha(to panel: PinnedImagePanel) {
-        let alpha = visibleAlpha
-        panel.alphaValue = alpha
-        panel.ignoresMouseEvents = alpha <= 0
-    }
-
-    private func applyVisibleAlphaToOpenPanels() {
-        for (itemID, panel) in panels {
-            guard !closingPanels.contains(itemID), !hiddenForFullscreen.contains(itemID) else {
-                continue
-            }
-            applyVisibleAlpha(to: panel)
-        }
+        panel.alphaValue = visibleAlpha
+        panel.ignoresMouseEvents = false
     }
 
     private func syncPanelTitles() {
@@ -1290,64 +1055,6 @@ enum PinnedImageLayout {
     }
 }
 
-enum PinnedTextLayout {
-    static let minimumSize = CGSize(width: 280, height: 160)
-
-    static func initialSize(
-        text: String,
-        style: PinnedTextStyle,
-        fontSize: CGFloat,
-        visibleFrame: CGRect
-    ) -> CGSize {
-        let availableWidth = max(visibleFrame.width - 48, 1)
-        let availableHeight = max(visibleFrame.height - 48, 1)
-        let minimumWidth = min(minimumSize.width, availableWidth)
-        let maximumWidth = min(preferredMaximumWidth(for: style), availableWidth)
-        let lineWidths = sampledLineWidths(text: text, style: style, fontSize: fontSize)
-        let measuredWidth = (lineWidths.max() ?? 0) + 48
-        let width = min(max(measuredWidth, minimumWidth), max(maximumWidth, minimumWidth))
-
-        let contentWidth = max(width - 32, 1)
-        let wrappedLines = lineWidths.reduce(CGFloat.zero) { count, lineWidth in
-            count + max(ceil(lineWidth / contentWidth), 1)
-        }
-        let lineHeight = max(fontSize * 1.4, 18)
-        let height = min(
-            max(220, 72 + wrappedLines * lineHeight),
-            max(availableHeight * 0.72, minimumSize.height)
-        )
-        return CGSize(width: width.rounded(), height: height.rounded())
-    }
-
-    private static func preferredMaximumWidth(for style: PinnedTextStyle) -> CGFloat {
-        switch style {
-        case .plain: return 420
-        case .markdown: return 460
-        case .code: return 500
-        }
-    }
-
-    private static func sampledLineWidths(
-        text: String,
-        style: PinnedTextStyle,
-        fontSize: CGFloat
-    ) -> [CGFloat] {
-        let font =
-            style == .code
-            ? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
-            : NSFont.systemFont(ofSize: fontSize)
-        let sample = String(text.prefix(20_000))
-        let lines = sample.split(separator: "\n", omittingEmptySubsequences: false).prefix(200)
-        let widths = lines.map { line -> CGFloat in
-            let measuredLine = String(line.prefix(200))
-            return ceil(
-                (measuredLine as NSString).size(withAttributes: [.font: font]).width
-            )
-        }
-        return widths.isEmpty ? [0] : widths
-    }
-}
-
 private enum PinnedCardPark {
     static let duration: TimeInterval = 0.34
     static let margin: CGFloat = 12
@@ -1467,17 +1174,9 @@ private extension NSRect {
 
 @MainActor
 private struct PinnedCardBackground: View {
-    @ObservedObject private var settings = AppCore.shared.settings
-
     var body: some View {
-        Group {
-            if settings.pinnedWindowBlur {
-                VisualEffectView()
-            } else {
-                Color(nsColor: .windowBackgroundColor)
-            }
-        }
-        .ignoresSafeArea()
+        Color(nsColor: .windowBackgroundColor)
+            .ignoresSafeArea()
     }
 }
 
@@ -1533,122 +1232,6 @@ private struct PinnedImageContent: View {
             image = await ImageThumbnail.loadAsync(url, maxPixel: decodeMaxPixel)
             loadFailed = image == nil
         }
-    }
-}
-
-@MainActor
-private struct PinnedTextContent: View {
-    let itemID: ClipboardItem.ID
-    let text: String
-    let style: PinnedTextStyle
-    let onViewportChange: (PinnedTextViewport) -> Void
-    let onClose: () -> Void
-
-    @ObservedObject private var settings = AppCore.shared.settings
-    @State private var viewport: PinnedTextViewport
-
-    init(
-        itemID: ClipboardItem.ID,
-        text: String,
-        style: PinnedTextStyle,
-        viewport: PinnedTextViewport,
-        onViewportChange: @escaping (PinnedTextViewport) -> Void,
-        onClose: @escaping () -> Void
-    ) {
-        self.itemID = itemID
-        self.text = text
-        self.style = style
-        self.onViewportChange = onViewportChange
-        self.onClose = onClose
-        _viewport = State(initialValue: viewport)
-    }
-
-    var body: some View {
-        ZStack(alignment: .top) {
-            PinnedCardBackground()
-
-            Group {
-                switch style {
-                case .plain:
-                    SelectableAttributedText(
-                        nsAttributed: NSAttributedString(string: text),
-                        fontSize: settings.pinnedTextSize,
-                        scrollPosition: viewport.scrollPosition,
-                        selection: viewport.selection,
-                        onScroll: updateScrollPosition,
-                        onSelectionChange: updateSelection)
-                case .markdown:
-                    MarkdownPreview(
-                        source: text,
-                        fontSize: settings.pinnedTextSize,
-                        scrollPosition: viewport.scrollPosition,
-                        selection: viewport.selection,
-                        onScroll: updateScrollPosition,
-                        onSelectionChange: updateSelection)
-                case .code:
-                    CodePreview(
-                        code: text,
-                        fontSize: settings.pinnedTextSize,
-                        scrollPosition: viewport.scrollPosition,
-                        selection: viewport.selection,
-                        onScroll: updateScrollPosition,
-                        onSelectionChange: updateSelection)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .padding(.horizontal, 16)
-            .padding(.top, 48)
-            .padding(.bottom, 16)
-
-            PinnedImageDragSurface()
-                .frame(height: 44)
-                .frame(maxWidth: .infinity, alignment: .top)
-
-            PinnedCardChrome(
-                itemID: itemID,
-                trailingWidth: 64,
-                closeLabel: "Close Pinned Item",
-                onClose: onClose
-            ) {
-                HStack(spacing: 8) {
-                    PinnedCardButton(
-                        systemName: "minus",
-                        label: "Decrease Pinned Text Size"
-                    ) {
-                        changeTextSize(by: -PinnedTextSize.step)
-                    }
-                    .disabled(settings.pinnedTextSize <= PinnedTextSize.minimum)
-
-                    PinnedCardButton(
-                        systemName: "plus",
-                        label: "Increase Pinned Text Size"
-                    ) {
-                        changeTextSize(by: PinnedTextSize.step)
-                    }
-                    .disabled(settings.pinnedTextSize >= PinnedTextSize.maximum)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(Rectangle())
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
-        .ignoresSafeArea()
-    }
-
-    private func changeTextSize(by amount: CGFloat) {
-        settings.pinnedTextSize = PinnedTextSize.clamped(settings.pinnedTextSize + amount)
-    }
-
-    private func updateScrollPosition(_ position: CGPoint) {
-        guard abs(viewport.scrollPosition.y - position.y) > 0.5 else { return }
-        viewport.scrollPosition = CGPoint(x: 0, y: position.y)
-        onViewportChange(viewport)
-    }
-
-    private func updateSelection(_ selection: NSRange) {
-        guard viewport.selection != selection else { return }
-        viewport.selection = selection
-        onViewportChange(viewport)
     }
 }
 

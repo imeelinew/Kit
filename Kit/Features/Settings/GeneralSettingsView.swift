@@ -113,38 +113,6 @@ struct AppearanceSettingsView: View {
                 .labelsHidden()
                 .fixedSize()
             }
-
-            PreferencesRow(label: "Pinned Text Size") {
-                Stepper(
-                    value: $settings.pinnedTextSize,
-                    in: PinnedTextSize.minimum...PinnedTextSize.maximum,
-                    step: PinnedTextSize.step
-                ) {
-                    Text(verbatim: "\(Int(settings.pinnedTextSize)) pt")
-                        .monospacedDigit()
-                        .frame(minWidth: 36, alignment: .trailing)
-                }
-                .fixedSize()
-                .accessibilityLabel(Text("Pinned Text Size"))
-            }
-
-            PreferencesRow(label: "Pinned Opacity") {
-                HStack(spacing: Theme.Spacing.md) {
-                    Slider(
-                        value: $settings.pinnedWindowOpacity,
-                        in: PinnedWindowOpacity.minimum...PinnedWindowOpacity.maximum
-                    )
-                    .accessibilityLabel(Text("Pinned Opacity"))
-                    Text(verbatim: "\(Int(settings.pinnedWindowOpacity.rounded()))%")
-                        .monospacedDigit()
-                        .frame(minWidth: 40, alignment: .trailing)
-                }
-            }
-
-            PreferencesCheckboxRow(
-                title: "Background Blur",
-                isOn: $settings.pinnedWindowBlur
-            )
         }
     }
 }

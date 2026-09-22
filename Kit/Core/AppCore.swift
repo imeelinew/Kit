@@ -230,38 +230,17 @@ final class AppCore: ObservableObject {
     }
 
     func pinToScreen(_ item: ClipboardItem, dismissPalette: Bool = true) {
-        let locale = settings.language.locale
-        let title = item.displayTitle(locale: locale)
-        switch item.kind {
-        case .image:
-            guard let url = clipboardStore.imageURL(for: item) else { return }
-            if dismissPalette { hidePalette() }
-            pinnedImageWindows.show(
-                itemID: item.id,
-                url: url,
-                title: title,
-                preferredLongEdge: { [weak settings] in
-                    settings?.pinnedImageSize.longestEdge ?? PinnedImageSize.medium.longestEdge
-                }
-            )
-        case .text, .code, .link:
-            guard let text = item.text, !text.isEmpty else { return }
-            let style: PinnedTextStyle
-            if ClipboardTextClassifier.isMarkdownArticle(text) {
-                style = .markdown
-            } else if item.kind == .code {
-                style = .code
-            } else {
-                style = .plain
+        guard item.kind == .image, let url = clipboardStore.imageURL(for: item) else { return }
+        let title = item.displayTitle(locale: settings.language.locale)
+        if dismissPalette { hidePalette() }
+        pinnedImageWindows.show(
+            itemID: item.id,
+            url: url,
+            title: title,
+            preferredLongEdge: { [weak settings] in
+                settings?.pinnedImageSize.longestEdge ?? PinnedImageSize.medium.longestEdge
             }
-            if dismissPalette { hidePalette() }
-            pinnedImageWindows.showText(
-                itemID: item.id,
-                text: text,
-                style: style,
-                title: title
-            )
-        }
+        )
     }
 
     private func handleClipboardItemInserted() {
