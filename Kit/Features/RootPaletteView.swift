@@ -204,6 +204,11 @@ private struct DaycastPaletteView: View {
     private var stackFilterControl: some View {
         BarButton(pressed: showStackFilter, action: { vm.toggleStackFilter() }) {
             HStack(spacing: Theme.Spacing.sm) {
+                if vm.stackFilter == nil {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundStyle(Theme.Colors.textSecondary)
+                }
                 Text(vm.stackFilterTitle)
                     .font(Theme.Typography.bar)
                     .foregroundStyle(.primary)

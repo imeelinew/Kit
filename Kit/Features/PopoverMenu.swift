@@ -92,12 +92,12 @@ struct PopoverMenuItem {
                 isChecked = stackFilter == stack.id
             } else {
                 title = "Clipboard"
-                icon = nil
+                icon = .symbol("clock.arrow.circlepath")
                 isChecked = stackFilter == nil
             }
         case .newStack:
             title = "New Stack"
-            icon = nil
+            icon = .symbol("plus")
         case .renameStack:
             title = "Rename"
             icon = nil
