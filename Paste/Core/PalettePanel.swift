@@ -257,7 +257,7 @@ final class PalettePanel: NSPanel {
         titlebarAppearsTransparent = true
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = false
+        hasShadow = true
         animationBehavior = .none
         isReleasedWhenClosed = false
 
@@ -275,7 +275,17 @@ final class PalettePanel: NSPanel {
         glass.style = .regular
         glass.cornerRadius = Theme.Radius.panel
         glass.contentView = hosting
-        contentView = glass
+
+        // The glass shadow is still a rectangle. Masking the window to the same
+        // corner makes those square corners transparent so the shadow follows the curve.
+        let shell = NSView(frame: frame)
+        shell.autoresizingMask = [.width, .height]
+        shell.wantsLayer = true
+        shell.layer?.backgroundColor = NSColor.clear.cgColor
+        shell.layer?.cornerRadius = Theme.Radius.panel
+        shell.layer?.masksToBounds = true
+        shell.addSubview(glass)
+        contentView = shell
     }
 
     override var canBecomeKey: Bool { true }
