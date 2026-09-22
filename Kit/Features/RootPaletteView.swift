@@ -67,11 +67,10 @@ private struct DaycastPaletteView: View {
             bottomBar(showActionGroup: selected != nil)
         }
         .overlay {
-            if vm.menuOpen {
-                Color.black.opacity(0.001)
-                    .contentShape(Rectangle())
-                    .onTapGesture { vm.closeMenu() }
-            }
+            Color.black.opacity(vm.menuOpen ? 0.001 : 0)
+                .contentShape(Rectangle())
+                .allowsHitTesting(vm.menuOpen)
+                .onTapGesture { vm.closeMenu() }
         }
         .overlay(alignment: .bottomLeading) {
             if showAppMenu {
