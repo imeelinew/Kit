@@ -124,42 +124,6 @@ final class ClipboardStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.item(id: item.id)?.customTitle, "Final")
     }
 
-    // MARK: - Pinboards
-
-    func testPinboardMetadataAndMembershipPersist() async throws {
-        let directory = TestSupport.makeTemporaryDirectory("pinboards")
-        defer { TestSupport.removeTemporaryDirectory(directory) }
-
-        let store = ClipboardStore(directory: directory)
-        let item = try XCTUnwrap(store.addText("grouped", sourceBundleID: nil))
-        let group = try XCTUnwrap(store.createGroup(named: "Ideas", color: .orange))
-        store.setItem(item.id, in: group.id, member: true)
-        store.renameGroup(group, to: "Research")
-        store.setColor(.purple, for: store.groups[0])
-
-        let reloaded = ClipboardStore(directory: directory)
-        reloaded.load()
-        let loadedGroup = try XCTUnwrap(reloaded.groups.first)
-        XCTAssertEqual(loadedGroup.name, "Research")
-        XCTAssertEqual(loadedGroup.color, .purple)
-        XCTAssertTrue(reloaded.contains(item.id, in: loadedGroup.id))
-    }
-
-    func testPinboardSearchFiltersBeforeReturningResults() async throws {
-        let directory = TestSupport.makeTemporaryDirectory("pinboard-search")
-        defer { TestSupport.removeTemporaryDirectory(directory) }
-
-        let store = ClipboardStore(directory: directory)
-        let included = try XCTUnwrap(store.addText("needle included", sourceBundleID: nil))
-        _ = try XCTUnwrap(store.addText("needle excluded", sourceBundleID: nil))
-        let group = try XCTUnwrap(store.createGroup(named: "Keep"))
-        store.setItem(included.id, in: group.id, member: true)
-
-        let results = await store.searchAsync(
-            "needle", allowedItemIDs: store.itemIDs(in: group.id))
-        XCTAssertEqual(results.map(\.id), [included.id])
-    }
-
     // MARK: - Removal
 
     func testRemoveDeletesRow() {

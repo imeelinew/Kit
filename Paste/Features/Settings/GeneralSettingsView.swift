@@ -70,22 +70,6 @@ struct AppearanceSettingsView: View {
 
             PreferencesDivider()
 
-            PreferencesSectionHeader(title: "Visual Style")
-
-            PreferencesRow(label: "Visual Style") {
-                Picker("Visual Style", selection: $settings.paletteVisualStyle) {
-                    ForEach(PaletteVisualStyle.allCases) { style in
-                        Text(verbatim: style.title).tag(style)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                .accessibilityLabel("Visual Style")
-            }
-
-            PreferencesDivider()
-
             PreferencesSectionHeader(title: "Menu Bar")
 
             PreferencesCheckboxRow(

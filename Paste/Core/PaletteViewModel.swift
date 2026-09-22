@@ -117,7 +117,6 @@ final class PaletteViewModel: ObservableObject {
         didSet { queryChanged() }
     }
     @Published private(set) var kindFilter: ClipboardKindFilter = .all
-    @Published private(set) var selectedGroupID: ClipboardGroup.ID?
     @Published private(set) var results: [ClipboardItem] = []
     @Published private(set) var selectedID: ClipboardItem.ID?
     @Published private(set) var searchReady = true
@@ -218,18 +217,6 @@ final class PaletteViewModel: ObservableObject {
         selectedID = id
         imageQuickLookOpen = false
         if follow { followToken = UUID() }
-    }
-
-    func selectGroup(_ groupID: ClipboardGroup.ID?) {
-        guard selectedGroupID != groupID else { return }
-        selectedGroupID = groupID
-        overlay = .none
-        menuSelection = 0
-        imageQuickLookOpen = false
-        ImageQuickLook.close()
-        resetToken = UUID()
-        refreshResults(resetSelection: true, blockCommands: true)
-        onSearchFocusRequested?()
     }
 
     func openActions(for id: ClipboardItem.ID) {
@@ -475,7 +462,7 @@ final class PaletteViewModel: ObservableObject {
         let priorIndex = selectionIndex
         if blockCommands { searchReady = false }
 
-        if query.isEmpty && kindFilter == .all && selectedGroupID == nil {
+        if query.isEmpty && kindFilter == .all {
             applyResults(
                 core.clipboardStore.displayItems,
                 resetSelection: resetSelection,
@@ -485,16 +472,13 @@ final class PaletteViewModel: ObservableObject {
         }
 
         let filter = kindFilter
-        let groupID = selectedGroupID
-        let allowedItemIDs = groupID.map { core.clipboardStore.itemIDs(in: $0) }
         searchTask = Task { [weak self] in
             guard let self else { return }
             let matches = await core.clipboardStore.searchAsync(
-                query, displayKind: filter.displayKind, allowedItemIDs: allowedItemIDs)
+                query, displayKind: filter.displayKind)
             guard !Task.isCancelled,
                 self.query.trimmingCharacters(in: .whitespacesAndNewlines) == query,
-                self.kindFilter == filter,
-                self.selectedGroupID == groupID
+                self.kindFilter == filter
             else { return }
             applyResults(
                 matches,

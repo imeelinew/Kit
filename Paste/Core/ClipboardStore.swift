@@ -160,27 +160,6 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     }
 }
 
-enum ClipboardGroupColor: String, CaseIterable, Identifiable, Sendable {
-    case red, orange, yellow, green, blue, purple, pink, gray
-
-    var id: String { rawValue }
-}
-
-struct ClipboardGroup: Identifiable, Hashable, Sendable {
-    let id: UUID
-    let name: String
-    let color: ClipboardGroupColor
-    let createdAt: Date
-
-    func renamed(_ name: String) -> ClipboardGroup {
-        ClipboardGroup(id: id, name: name, color: color, createdAt: createdAt)
-    }
-
-    func recolored(_ color: ClipboardGroupColor) -> ClipboardGroup {
-        ClipboardGroup(id: id, name: name, color: color, createdAt: createdAt)
-    }
-}
-
 /// Mandarin romanization helpers for clipboard search (Foundation/`CFStringTransform` only).
 enum Pinyin {
     struct SearchForms: Sendable {
@@ -371,7 +350,6 @@ final class ClipboardStore: ObservableObject {
         }
     }
     @Published private(set) var revision: UInt64 = 0
-    @Published private(set) var groups: [ClipboardGroup] = []
     /// Fired after a new history row is inserted, not on recopy-of-top or image refresh.
     var onItemInserted: (() -> Void)?
     private(set) var captureGeneration: UInt64 = 0
@@ -379,7 +357,6 @@ final class ClipboardStore: ObservableObject {
 
     /// Memoized display order, invalidated on mutation.
     private var orderedCache: [ClipboardItem]?
-    private var groupMemberships: [ClipboardGroup.ID: Set<ClipboardItem.ID>] = [:]
 
     private static let memoryWindow = 1000
 
@@ -424,22 +401,6 @@ final class ClipboardStore: ObservableObject {
           INSERT INTO items_fts(rowid, text, pinyin, pinyin_initials)
           VALUES(new.rowid, new.text, new.pinyin, new.pinyin_initials);
         END;
-        """
-
-    private static let groupSchema = """
-        CREATE TABLE IF NOT EXISTS pinboards(
-          id TEXT NOT NULL UNIQUE,
-          name TEXT NOT NULL,
-          color TEXT NOT NULL,
-          created_at REAL NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS pinboard_items(
-          pinboard_id TEXT NOT NULL,
-          item_id TEXT NOT NULL,
-          added_at REAL NOT NULL,
-          PRIMARY KEY(pinboard_id, item_id)
-        );
-        CREATE INDEX IF NOT EXISTS pinboard_items_item_id ON pinboard_items(item_id);
         """
 
     private let imagesDir: URL
@@ -488,7 +449,6 @@ final class ClipboardStore: ObservableObject {
     }
 
     func load() {
-        loadGroups()
         guard let stmt = loadStmt else { return }
         sqlite3_bind_int64(stmt, 1, windowFloor())
         var loaded: [ClipboardItem] = []
@@ -603,7 +563,6 @@ final class ClipboardStore: ObservableObject {
         guard let stmt = deleteByIDStmt else { return }
         sqlite3_bind_text(stmt, 1, item.id.uuidString, -1, SQLITE_TRANSIENT)
         guard stepAndReset(stmt) else { return }
-        removeMemberships(for: item.id)
         items.removeAll { $0.id == item.id }
         deleteBlob(item)
     }
@@ -612,11 +571,7 @@ final class ClipboardStore: ObservableObject {
         captureGeneration &+= 1
         searchMetadataTask?.cancel()
         pendingSearchMetadata.removeAll()
-        guard
-            sqlite3_exec(db, "DELETE FROM pinboard_items; DELETE FROM items", nil, nil, nil)
-                == SQLITE_OK
-        else { return }
-        groupMemberships = Dictionary(uniqueKeysWithValues: groups.map { ($0.id, []) })
+        guard sqlite3_exec(db, "DELETE FROM items", nil, nil, nil) == SQLITE_OK else { return }
         items = []
         try? FileManager.default.removeItem(at: imagesDir)
         try? FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
@@ -629,129 +584,13 @@ final class ClipboardStore: ObservableObject {
 
     var displayItems: [ClipboardItem] { orderedItems }
 
-    func itemIDs(in groupID: ClipboardGroup.ID) -> Set<ClipboardItem.ID> {
-        groupMemberships[groupID] ?? []
-    }
-
-    func contains(_ itemID: ClipboardItem.ID, in groupID: ClipboardGroup.ID) -> Bool {
-        groupMemberships[groupID]?.contains(itemID) == true
-    }
-
-    @discardableResult
-    func createGroup(
-        named name: String, color: ClipboardGroupColor = .blue
-    ) -> ClipboardGroup? {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        let group = ClipboardGroup(
-            id: UUID(), name: trimmed, color: color, createdAt: Date())
-        var statement: OpaquePointer?
-        guard
-            sqlite3_prepare_v2(
-                db, "INSERT INTO pinboards(id, name, color, created_at) VALUES(?,?,?,?)", -1,
-                &statement, nil) == SQLITE_OK,
-            let statement
-        else {
-            sqlite3_finalize(statement)
-            return nil
-        }
-        defer { sqlite3_finalize(statement) }
-        sqlite3_bind_text(statement, 1, group.id.uuidString, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_text(statement, 2, group.name, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_text(statement, 3, group.color.rawValue, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_double(statement, 4, group.createdAt.timeIntervalSince1970)
-        guard stepAndReset(statement) else { return nil }
-        groups.append(group)
-        groupMemberships[group.id] = []
-        return group
-    }
-
-    func renameGroup(_ group: ClipboardGroup, to name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != group.name else { return }
-        guard updateGroup(
-            sql: "UPDATE pinboards SET name = ? WHERE id = ?", value: trimmed, groupID: group.id)
-        else { return }
-        guard let index = groups.firstIndex(where: { $0.id == group.id }) else { return }
-        groups[index] = groups[index].renamed(trimmed)
-    }
-
-    func setColor(_ color: ClipboardGroupColor, for group: ClipboardGroup) {
-        guard color != group.color else { return }
-        guard updateGroup(
-            sql: "UPDATE pinboards SET color = ? WHERE id = ?", value: color.rawValue,
-            groupID: group.id)
-        else { return }
-        guard let index = groups.firstIndex(where: { $0.id == group.id }) else { return }
-        groups[index] = groups[index].recolored(color)
-    }
-
-    func deleteGroup(_ group: ClipboardGroup) {
-        var membershipStatement: OpaquePointer?
-        var groupStatement: OpaquePointer?
-        guard
-            sqlite3_prepare_v2(
-                db, "DELETE FROM pinboard_items WHERE pinboard_id = ?", -1,
-                &membershipStatement, nil) == SQLITE_OK,
-            sqlite3_prepare_v2(
-                db, "DELETE FROM pinboards WHERE id = ?", -1, &groupStatement, nil) == SQLITE_OK,
-            let membershipStatement, let groupStatement
-        else {
-            sqlite3_finalize(membershipStatement)
-            sqlite3_finalize(groupStatement)
-            return
-        }
-        defer {
-            sqlite3_finalize(membershipStatement)
-            sqlite3_finalize(groupStatement)
-        }
-        guard sqlite3_exec(db, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { return }
-        var committed = false
-        defer { if !committed { sqlite3_exec(db, "ROLLBACK", nil, nil, nil) } }
-        sqlite3_bind_text(membershipStatement, 1, group.id.uuidString, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_text(groupStatement, 1, group.id.uuidString, -1, SQLITE_TRANSIENT)
-        guard stepAndReset(membershipStatement), stepAndReset(groupStatement) else { return }
-        committed = sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK
-        guard committed else { return }
-        groups.removeAll { $0.id == group.id }
-        groupMemberships[group.id] = nil
-    }
-
-    func setItem(_ itemID: ClipboardItem.ID, in groupID: ClipboardGroup.ID, member: Bool) {
-        guard groups.contains(where: { $0.id == groupID }), item(id: itemID) != nil else { return }
-        var statement: OpaquePointer?
-        let sql = member
-            ? "INSERT OR IGNORE INTO pinboard_items(pinboard_id, item_id, added_at) VALUES(?,?,?)"
-            : "DELETE FROM pinboard_items WHERE pinboard_id = ? AND item_id = ?"
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
-            sqlite3_finalize(statement)
-            return
-        }
-        defer { sqlite3_finalize(statement) }
-        sqlite3_bind_text(statement, 1, groupID.uuidString, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_text(statement, 2, itemID.uuidString, -1, SQLITE_TRANSIENT)
-        if member { sqlite3_bind_double(statement, 3, Date().timeIntervalSince1970) }
-        guard stepAndReset(statement), sqlite3_changes(db) > 0 else { return }
-        if member {
-            groupMemberships[groupID, default: []].insert(itemID)
-        } else {
-            groupMemberships[groupID]?.remove(itemID)
-        }
-        revision &+= 1
-    }
-
-    func toggleItem(_ itemID: ClipboardItem.ID, in groupID: ClipboardGroup.ID) {
-        setItem(itemID, in: groupID, member: !contains(itemID, in: groupID))
-    }
-
     /// Full-history search for the UI. SQLite work and resident pinyin matching both run outside the
     /// main actor; cancellation discards an obsolete keystroke's result before it reaches SwiftUI.
     func searchAsync(
-        _ query: String, displayKind: ClipboardItem.DisplayKind? = nil,
-        allowedItemIDs: Set<ClipboardItem.ID>? = nil
+        _ query: String, displayKind: ClipboardItem.DisplayKind? = nil
     ) async -> [ClipboardItem] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty || displayKind != nil || allowedItemIDs != nil else { return orderedItems }
+        guard !q.isEmpty || displayKind != nil else { return orderedItems }
 
         let resident = items
         let pinned = pinnedItems
@@ -760,8 +599,7 @@ final class ClipboardStore: ObservableObject {
             () -> [ClipboardItem] in
             guard !Task.isCancelled else { return [] }
             return Self.queryDatabase(
-                path: path, query: q, displayKind: displayKind,
-                allowedItemIDs: allowedItemIDs) ?? []
+                path: path, query: q, displayKind: displayKind) ?? []
         }
         let residentTask = Task.detached(priority: .userInitiated) {
             () -> [ClipboardItem] in
@@ -769,7 +607,6 @@ final class ClipboardStore: ObservableObject {
             return resident.filter {
                 (q.isEmpty || $0.matches(q))
                     && (displayKind == nil || $0.displayKind == displayKind)
-                    && (allowedItemIDs == nil || allowedItemIDs?.contains($0.id) == true)
             }
         }
         let (databaseResult, residentResult) = await withTaskCancellationHandler {
@@ -796,8 +633,7 @@ final class ClipboardStore: ObservableObject {
     }
 
     private nonisolated static func queryDatabase(
-        path: String, query: String, displayKind: ClipboardItem.DisplayKind?,
-        allowedItemIDs: Set<ClipboardItem.ID>?
+        path: String, query: String, displayKind: ClipboardItem.DisplayKind?
     ) -> [ClipboardItem]? {
         var connection: OpaquePointer?
         guard sqlite3_open_v2(path, &connection, SQLITE_OPEN_READONLY, nil) == SQLITE_OK,
@@ -865,7 +701,6 @@ final class ClipboardStore: ObservableObject {
             if Task.isCancelled { return nil }
             if let item = row(statement),
                 displayKind == nil || item.displayKind == displayKind,
-                allowedItemIDs == nil || allowedItemIDs?.contains(item.id) == true,
                 seen.insert(item.id).inserted
             {
                 results.append(item)
@@ -879,10 +714,7 @@ final class ClipboardStore: ObservableObject {
             let titleMatches = queryCustomTitles(
                 connection: connection, pattern: pattern, displayKind: displayKind)
             guard let titleMatches else { return nil }
-            for item in titleMatches
-            where (allowedItemIDs == nil || allowedItemIDs?.contains(item.id) == true)
-                && seen.insert(item.id).inserted
-            {
+            for item in titleMatches where seen.insert(item.id).inserted {
                 results.append(item)
             }
         }
@@ -980,105 +812,6 @@ final class ClipboardStore: ObservableObject {
         }
         committed = sqlite3_exec(connection, "COMMIT", nil, nil, nil) == SQLITE_OK
         return committed
-    }
-
-    private func loadGroups() {
-        var groupStatement: OpaquePointer?
-        guard
-            sqlite3_prepare_v2(
-                db, "SELECT id, name, color, created_at FROM pinboards ORDER BY created_at", -1,
-                &groupStatement, nil) == SQLITE_OK,
-            let groupStatement
-        else {
-            sqlite3_finalize(groupStatement)
-            return
-        }
-        defer { sqlite3_finalize(groupStatement) }
-
-        var loadedGroups: [ClipboardGroup] = []
-        var status = sqlite3_step(groupStatement)
-        while status == SQLITE_ROW {
-            if let idString = Self.columnString(groupStatement, 0),
-                let id = UUID(uuidString: idString),
-                let name = Self.columnString(groupStatement, 1),
-                let colorString = Self.columnString(groupStatement, 2),
-                let color = ClipboardGroupColor(rawValue: colorString)
-            {
-                loadedGroups.append(
-                    ClipboardGroup(
-                        id: id, name: name, color: color,
-                        createdAt: Date(
-                            timeIntervalSince1970: sqlite3_column_double(groupStatement, 3))))
-            }
-            status = sqlite3_step(groupStatement)
-        }
-        guard status == SQLITE_DONE else { return }
-        groups = loadedGroups
-
-        var loadedMemberships = Dictionary(
-            uniqueKeysWithValues: loadedGroups.map { ($0.id, Set<ClipboardItem.ID>()) })
-        var membershipStatement: OpaquePointer?
-        guard
-            sqlite3_prepare_v2(
-                db,
-                """
-                SELECT pi.pinboard_id, pi.item_id
-                FROM pinboard_items pi
-                JOIN pinboards p ON p.id = pi.pinboard_id
-                JOIN items i ON i.id = pi.item_id
-                """, -1, &membershipStatement, nil) == SQLITE_OK,
-            let membershipStatement
-        else {
-            sqlite3_finalize(membershipStatement)
-            groupMemberships = loadedMemberships
-            return
-        }
-        defer { sqlite3_finalize(membershipStatement) }
-        status = sqlite3_step(membershipStatement)
-        while status == SQLITE_ROW {
-            if let groupString = Self.columnString(membershipStatement, 0),
-                let groupID = UUID(uuidString: groupString),
-                let itemString = Self.columnString(membershipStatement, 1),
-                let itemID = UUID(uuidString: itemString)
-            {
-                loadedMemberships[groupID, default: []].insert(itemID)
-            }
-            status = sqlite3_step(membershipStatement)
-        }
-        if status == SQLITE_DONE { groupMemberships = loadedMemberships }
-    }
-
-    private func updateGroup(
-        sql: String, value: String, groupID: ClipboardGroup.ID
-    ) -> Bool {
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
-            sqlite3_finalize(statement)
-            return false
-        }
-        defer { sqlite3_finalize(statement) }
-        sqlite3_bind_text(statement, 1, value, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_text(statement, 2, groupID.uuidString, -1, SQLITE_TRANSIENT)
-        return stepAndReset(statement)
-    }
-
-    private func removeMemberships(for itemID: ClipboardItem.ID) {
-        var statement: OpaquePointer?
-        guard
-            sqlite3_prepare_v2(
-                db, "DELETE FROM pinboard_items WHERE item_id = ?", -1, &statement, nil)
-                == SQLITE_OK,
-            let statement
-        else {
-            sqlite3_finalize(statement)
-            return
-        }
-        defer { sqlite3_finalize(statement) }
-        sqlite3_bind_text(statement, 1, itemID.uuidString, -1, SQLITE_TRANSIENT)
-        guard stepAndReset(statement) else { return }
-        for groupID in groupMemberships.keys {
-            groupMemberships[groupID]?.remove(itemID)
-        }
     }
 
     // MARK: - Private
@@ -1323,7 +1056,6 @@ final class ClipboardStore: ObservableObject {
             sqlite3_exec(db, Self.coreSchema, nil, nil, nil) == SQLITE_OK
         else { return false }
         guard sqlite3_exec(db, Self.searchSchema, nil, nil, nil) == SQLITE_OK else { return false }
-        guard sqlite3_exec(db, Self.groupSchema, nil, nil, nil) == SQLITE_OK else { return false }
         ensureCustomTitleColumn()
         insertStmt = prepare(
             """

@@ -17,14 +17,12 @@ enum Theme {
 
     enum Radius {
         static let panel: CGFloat = 26
-        static let pastPanel: CGFloat = 30
         static let row: CGFloat = 10
         /// Hover highlight behind a popover menu row.
         static let menuRow: CGFloat = 10
         static let menuPanel: CGFloat = 16
         static let thumbnail: CGFloat = 6
         static let card: CGFloat = 10
-        static let shelfCard: CGFloat = 18
         static let keyCap: CGFloat = 6
     }
 
@@ -33,16 +31,6 @@ enum Theme {
         static let panelHeight: CGFloat = 475
         /// Fraction of the active screen's visible height between the top of the visible area and the palette's top edge; the window grows downward from this edge (Spotlight-style upper placement).
         static let paletteTopMarginFraction: CGFloat = 0.18
-        static let pastPanelWidth: CGFloat = 1_320
-        static let pastPanelHeight: CGFloat = 328
-        static let pastPaletteTopMarginFraction: CGFloat = 0.10
-        static let shelfHeaderHeight: CGFloat = 64
-        static let shelfInset: CGFloat = 22
-        static let cardWidth: CGFloat = 236
-        static let cardHeight: CGFloat = 236
-        static let cardHeaderHeight: CGFloat = 48
-        static let cardFooterHeight: CGFloat = 28
-        static let cardSpacing: CGFloat = 24
         static let headerHeight: CGFloat = 44
         /// Vertical breathing room above the search row — constant across compact/expanded so the bar never shifts when typing flips the state; also the compact bar's symmetric top/bottom slack.
         static let headerPadding: CGFloat = 10
@@ -54,20 +42,6 @@ enum Theme {
         static let menuWidth: CGFloat = 276
         /// Square slot for a popover-menu row's leading glyph. 20 (not the 16 the artwork suggests) because an `IconCache` app icon only paints ~85% of its canvas: at 20 its visible artwork is 17pt, matching the 17–18pt a `.body` SF Symbol renders at, so symbol and app-icon rows read the same size.
         static let menuIcon: CGFloat = 20
-
-        static func panelSize(for style: PaletteVisualStyle) -> CGSize {
-            switch style {
-            case .daycast: CGSize(width: panelWidth, height: panelHeight)
-            case .past: CGSize(width: pastPanelWidth, height: pastPanelHeight)
-            }
-        }
-
-        static func paletteTopMarginFraction(for style: PaletteVisualStyle) -> CGFloat {
-            switch style {
-            case .daycast: paletteTopMarginFraction
-            case .past: pastPaletteTopMarginFraction
-            }
-        }
     }
 
     /// System text styles (not hardcoded sizes) so the UI honors Dynamic Type.
