@@ -48,7 +48,6 @@ enum PaletteCommand: Equatable {
     case cancel
     case toggleActions
     case pinToScreen
-    case togglePin
     case revealInFinder
     case toggleQuickLook
     case clearQuery
@@ -66,7 +65,6 @@ enum PaletteMenuAction: Equatable {
     case pasteKeepingOpen(ClipboardItem)
     case copy(ClipboardItem)
     case pinToScreen(ClipboardItem)
-    case togglePin(ClipboardItem)
     case revealInFinder(ClipboardItem)
     case delete(ClipboardItem)
     case setKindFilter(ClipboardKindFilter)
@@ -185,7 +183,6 @@ final class PaletteViewModel: ObservableObject {
                 .copy(item),
             ]
             actions.append(.pinToScreen(item))
-            actions.append(.togglePin(item))
             if item.kind == .image {
                 actions.append(.revealInFinder(item))
             }
@@ -287,10 +284,6 @@ final class PaletteViewModel: ObservableObject {
             guard searchReady, let item = actionTarget else { return true }
             overlay = .none
             core.pinToScreen(item)
-        case .togglePin:
-            guard searchReady, let item = actionTarget else { return true }
-            overlay = .none
-            togglePin(item)
         case .revealInFinder:
             guard searchReady, let item = actionTarget, item.kind == .image else { return true }
             overlay = .none
@@ -372,8 +365,6 @@ final class PaletteViewModel: ObservableObject {
             core.copyToClipboard(item)
         case .pinToScreen(let item):
             core.pinToScreen(item)
-        case .togglePin(let item):
-            togglePin(item)
         case .revealInFinder(let item):
             core.revealClipboardImage(item)
         case .delete(let item):
@@ -398,11 +389,6 @@ final class PaletteViewModel: ObservableObject {
         ImageQuickLook.close()
         resetToken = UUID()
         refreshResults(resetSelection: true, blockCommands: true)
-    }
-
-    private func togglePin(_ item: ClipboardItem) {
-        core.clipboardStore.togglePinned(item)
-        select(item.id, follow: true)
     }
 
     private func queryChanged() {

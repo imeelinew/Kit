@@ -59,12 +59,9 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     let createdAt: Date
     /// Bundle ID of the app frontmost when the copy was captured (see `ClipboardManager.poll`).
     let sourceBundleID: String?
-    /// When the entry was pinned. Pinned entries lead the list newest-pin-first and are exempt from retention pruning.
     let pinnedAt: Date?
     /// User-assigned list title. Nil means the visible title is derived from the copied content.
     let customTitle: String?
-
-    var isPinned: Bool { pinnedAt != nil }
 
     /// User-visible type shown in the Information panel and used by the type filter.
     var displayKind: DisplayKind {
@@ -410,7 +407,6 @@ final class ClipboardStore: ObservableObject {
     private var loadStmt: OpaquePointer?
     private var windowFloorStmt: OpaquePointer?
     private var deleteByIDStmt: OpaquePointer?
-    private var pinStmt: OpaquePointer?
     private var staleImagesStmt: OpaquePointer?
     private var deleteStaleStmt: OpaquePointer?
     private var imageByFingerprintStmt: OpaquePointer?
@@ -523,13 +519,8 @@ final class ClipboardStore: ObservableObject {
 
     /// Move an item to the top of history after it is used.
     func promote(_ item: ClipboardItem) {
-        // A pinned row holds its place in the Pinned section, so re-recencying one would rewrite the row and its FTS entry for no visible change.
-        guard !item.isPinned, items.first?.id != item.id else { return }
+        guard items.first?.id != item.id else { return }
         reinsert(item.with(createdAt: Date(), pinnedAt: nil))
-    }
-
-    func togglePinned(_ item: ClipboardItem) {
-        if item.isPinned { unpin(item) } else { pin(item) }
     }
 
     func item(id: ClipboardItem.ID) -> ClipboardItem? {
@@ -571,7 +562,6 @@ final class ClipboardStore: ObservableObject {
         guard !q.isEmpty || displayKind != nil else { return orderedItems }
 
         let resident = items
-        let pinned = pinnedItems
         let path = dbURL.path
         let databaseTask = Task.detached(priority: .userInitiated) {
             () -> [ClipboardItem] in
@@ -595,19 +585,17 @@ final class ClipboardStore: ObservableObject {
         }
         guard !Task.isCancelled else { return [] }
 
-        let residentIDs = Set(residentResult.map(\.id))
-        let pinnedMatches = pinned.filter { residentIDs.contains($0.id) }
-        var seen = Set(pinnedMatches.map(\.id))
-        var unpinned: [ClipboardItem] = []
-        for item in databaseResult where !item.isPinned && seen.insert(item.id).inserted {
-            unpinned.append(item)
+        var seen = Set<ClipboardItem.ID>()
+        var matches: [ClipboardItem] = []
+        for item in databaseResult where seen.insert(item.id).inserted {
+            matches.append(item)
         }
         // Newly captured rows may still be waiting for their persistent pinyin metadata; merge the
         // resident window so they remain searchable immediately.
-        for item in residentResult where !item.isPinned && seen.insert(item.id).inserted {
-            unpinned.append(item)
+        for item in residentResult where seen.insert(item.id).inserted {
+            matches.append(item)
         }
-        return Self.displayOrder(pinnedMatches + unpinned)
+        return Self.displayOrder(matches)
     }
 
     private nonisolated static func queryDatabase(
@@ -801,47 +789,15 @@ final class ClipboardStore: ObservableObject {
         return result
     }
 
-    /// One canonical order for the normal list and every search path: recent pins first, then
-    /// unpinned history by copy time. Original offsets make exact timestamp ties stable.
+    /// One canonical order for the normal list and every search path: newest copy first.
+    /// Original offsets make exact timestamp ties stable.
     private nonisolated static func displayOrder(_ values: [ClipboardItem]) -> [ClipboardItem] {
         values.enumerated().sorted { lhs, rhs in
             let left = lhs.element
             let right = rhs.element
-            if left.isPinned != right.isPinned { return left.isPinned }
-            if left.isPinned {
-                let leftPinned = left.pinnedAt ?? .distantPast
-                let rightPinned = right.pinnedAt ?? .distantPast
-                if leftPinned != rightPinned { return leftPinned > rightPinned }
-            }
             if left.createdAt != right.createdAt { return left.createdAt > right.createdAt }
             return lhs.offset < rhs.offset
         }.map(\.element)
-    }
-
-    private var pinnedItems: [ClipboardItem] {
-        Self.displayOrder(items.filter(\.isPinned))
-    }
-
-    /// The row gains a fresh stamp, which puts it at the head of the Pinned section.
-    private func pin(_ item: ClipboardItem) {
-        let stamp = Date()
-        let pinned = item.with(pinnedAt: stamp)
-        guard let stmt = pinStmt else { return }
-        sqlite3_bind_double(stmt, 1, stamp.timeIntervalSince1970)
-        sqlite3_bind_text(stmt, 2, item.id.uuidString, -1, SQLITE_TRANSIENT)
-        guard stepAndReset(stmt) else { return }
-        if let index = items.firstIndex(where: { $0.id == item.id }) {
-            items[index] = pinned
-        } else {
-            // Pinned from an FTS hit older than the in-memory window: splice it in at its recency position, since the Pinned section can only show resident rows.
-            let index = items.firstIndex { $0.createdAt < pinned.createdAt } ?? items.count
-            items.insert(pinned, at: index)
-        }
-    }
-
-    /// Unpinning rejoins history as its newest entry so the selected row stays visible.
-    private func unpin(_ item: ClipboardItem) {
-        reinsert(item.with(createdAt: Date(), pinnedAt: nil))
     }
 
     /// Rewrite a row under the same id so it leads the history: stored order is rowid, so this is a delete + re-insert, and the fresh `createdAt` keeps the date buckets descending. The image blob is never touched.
@@ -863,11 +819,10 @@ final class ClipboardStore: ObservableObject {
         scheduleSearchMetadataUpdate(for: updated)
     }
 
-    /// Cap the in-memory window, but never drop a pinned row: those render however old they are.
+    /// Cap the in-memory window.
     private func trimWindow() {
-        guard items.count > Self.memoryWindow, let index = items.lastIndex(where: { !$0.isPinned })
-        else { return }
-        items.remove(at: index)
+        guard items.count > Self.memoryWindow else { return }
+        items.removeLast()
     }
 
     @discardableResult
@@ -995,9 +950,8 @@ final class ClipboardStore: ObservableObject {
                 }
             }
         }
-        // Checked against the oldest *unpinned* row: an exempt pin sitting at the tail would otherwise make this guard permanently true and re-scan the window on every capture.
-        if items.last(where: { !$0.isPinned }).map({ $0.createdAt < cutoff }) == true {
-            items.removeAll { $0.createdAt < cutoff && !$0.isPinned }
+        if items.last.map({ $0.createdAt < cutoff }) == true {
+            items.removeAll { $0.createdAt < cutoff }
         }
     }
 
@@ -1043,27 +997,21 @@ final class ClipboardStore: ObservableObject {
             ) VALUES(?,?,?,?,?,?,?,?,?)
             """
         )
-        // Every pinned row plus the newest `memoryWindow` unpinned ones, keyed off the floor rowid `windowFloor` looks up. Two indexed branches rather than one `pinned_at IS NOT NULL OR rowid >= ?`: the planner can't drive an OR from an index while holding the row order, so that form reads the whole table.
         loadStmt = prepare(
             """
             SELECT id, kind, text, image_path, created_at, source_app, pinned_at,
-                   image_fingerprint, custom_title FROM (
-              SELECT rowid AS rid, * FROM items WHERE rowid >= ?1
-              UNION ALL
-              SELECT rowid AS rid, * FROM items WHERE pinned_at IS NOT NULL AND rowid < ?1
-            ) ORDER BY rid DESC
+                   image_fingerprint, custom_title
+            FROM items WHERE rowid >= ? ORDER BY rowid DESC
             """)
         windowFloorStmt = prepare(
-            "SELECT rowid FROM items WHERE pinned_at IS NULL ORDER BY rowid DESC LIMIT 1 OFFSET ?")
+            "SELECT rowid FROM items ORDER BY rowid DESC LIMIT 1 OFFSET ?")
         deleteByIDStmt = prepare("DELETE FROM items WHERE id = ?")
-        // Only ever sets a stamp: unpinning rewrites the whole row so it leads the history again.
-        pinStmt = prepare("UPDATE items SET pinned_at = ? WHERE id = ?")
         staleImagesStmt = prepare(
             """
             SELECT image_path FROM items
-            WHERE created_at < ? AND pinned_at IS NULL AND image_path IS NOT NULL
+            WHERE created_at < ? AND image_path IS NOT NULL
             """)
-        deleteStaleStmt = prepare("DELETE FROM items WHERE created_at < ? AND pinned_at IS NULL")
+        deleteStaleStmt = prepare("DELETE FROM items WHERE created_at < ?")
         imageByFingerprintStmt = prepare(
             """
             SELECT id, kind, text, image_path, created_at, source_app, pinned_at,
@@ -1077,7 +1025,7 @@ final class ClipboardStore: ObservableObject {
             FROM items WHERE id = ? LIMIT 1
             """)
         return insertStmt != nil && loadStmt != nil && windowFloorStmt != nil
-            && deleteByIDStmt != nil && pinStmt != nil && staleImagesStmt != nil
+            && deleteByIDStmt != nil && staleImagesStmt != nil
             && deleteStaleStmt != nil && imageByFingerprintStmt != nil
             && itemByIDStmt != nil
     }
@@ -1115,14 +1063,13 @@ final class ClipboardStore: ObservableObject {
 
     private func closeDatabase() {
         [
-            insertStmt, loadStmt, windowFloorStmt, deleteByIDStmt, pinStmt,
-            staleImagesStmt, deleteStaleStmt,             imageByFingerprintStmt, itemByIDStmt,
+            insertStmt, loadStmt, windowFloorStmt, deleteByIDStmt,
+            staleImagesStmt, deleteStaleStmt, imageByFingerprintStmt, itemByIDStmt,
         ].forEach { sqlite3_finalize($0) }
         insertStmt = nil
         loadStmt = nil
         windowFloorStmt = nil
         deleteByIDStmt = nil
-        pinStmt = nil
         staleImagesStmt = nil
         deleteStaleStmt = nil
         imageByFingerprintStmt = nil

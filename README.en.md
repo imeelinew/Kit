@@ -55,7 +55,6 @@ Press `Option + W` to show or hide the palette. Type to search, move with the ar
 
 - `Return`: paste and close the palette
 - `Command + Return`: copy the selected item
-- `Command + P`: pin or unpin an item
 - `Space`: preview an image
 - Action menu: paste while keeping the palette open, reveal images in Finder, delete entries, and more
 
@@ -63,13 +62,13 @@ The global shortcut is configurable. Kit can also switch to an English input sou
 
 ## Local Storage and Privacy
 
-The clipboard database and image files stay on the Mac; no cloud service is required. Retention can be set from one day to forever, and pinned items are exempt from automatic pruning.
+The clipboard database and image files stay on the Mac; no cloud service is required. Retention can be set from one day to forever.
 
 Applications can be excluded from capture. Keychain Access and Passwords are excluded by default so sensitive content does not enter history. Accessibility permission is required to deliver the selected item reliably to the original target app.
 
 ## More Features
 
-- Sections for pinned, today, yesterday, past seven days, past thirty days, and earlier
+- Sections for today, yesterday, past seven days, past thirty days, and earlier
 - Code syntax highlighting and link recognition
 - Memory-bounded image caches with background downsampling
 - Launch at login

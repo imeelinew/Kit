@@ -61,9 +61,6 @@ final class PalettePanel: NSPanel {
         if PaletteShortcut.pinToScreen.matches(shortcut) {
             return handleOnce(.pinToScreen, event: event)
         }
-        if PaletteShortcut.togglePin.matches(shortcut) {
-            return handleOnce(.togglePin, event: event)
-        }
         if PaletteShortcut.showInFinder.matches(shortcut) {
             return handleOnce(.revealInFinder, event: event)
         }

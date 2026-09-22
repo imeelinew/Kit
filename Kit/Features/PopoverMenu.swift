@@ -57,10 +57,6 @@ struct PopoverMenuItem {
             title = "Pin to Screen"
             icon = .symbol("pin")
             shortcut = PaletteShortcut.pinToScreen.displayString
-        case .togglePin(let item):
-            title = item.isPinned ? "Unpin Entry" : "Pin Entry"
-            icon = .symbol(item.isPinned ? "bookmark.slash" : "bookmark")
-            shortcut = PaletteShortcut.togglePin.displayString
         case .revealInFinder:
             title = "Show in Finder"
             icon = .symbol("folder")

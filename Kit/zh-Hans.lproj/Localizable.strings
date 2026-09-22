@@ -68,7 +68,6 @@
 "Paste will stop monitoring the clipboard until you open it again." = "退出后，Kit 将停止监控剪贴板";
 "Past 30 Days" = "过去 30 天";
 "Past 7 Days" = "过去 7 天";
-"Pin Entry" = "固定项目";
 "Pin to Screen" = "钉到屏幕上";
 "Pinned Cards" = "钉选卡片";
 "Pinned Code" = "钉选代码";
@@ -94,7 +93,6 @@
 "Zoom Out Pinned Image" = "缩小钉选图片";
 "Fit Pinned Image to Screen" = "使钉选图片适合屏幕";
 "Hide Pinned Cards" = "隐藏钉选卡片";
-"Pinned" = "已固定";
 "Quit" = "退出";
 "Quit Paste" = "退出 Kit";
 "Quit Paste?" = "要退出 Kit 吗？";
@@ -120,7 +118,6 @@
 "Today" = "今天";
 "Type" = "类型";
 "Search" = "搜索";
-"Unpin Entry" = "取消固定";
 "Updates" = "更新";
 "Version" = "版本";
 "Visual Style" = "视觉风格";

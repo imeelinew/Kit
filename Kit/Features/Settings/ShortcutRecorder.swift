@@ -15,10 +15,6 @@ extension KeyboardShortcuts.Name {
         default: .init(.return, modifiers: [.command])
     )
     static let palettePinToScreen = Self("palettePinToScreen")
-    static let paletteTogglePin = Self(
-        "paletteTogglePin",
-        default: .init(.p, modifiers: [.command])
-    )
     static let paletteShowInFinder = Self("paletteShowInFinder")
     static let pinnedImageClose = Self(
         "pinnedImageClose",
@@ -58,13 +54,11 @@ enum PaletteShortcut {
     case actions
     case copyToClipboard
     case pinToScreen
-    case togglePin
     case showInFinder
 
     private static let actionsName = local(.paletteActions)
     private static let copyToClipboardName = local(.paletteCopyToClipboard)
     private static let pinToScreenName = local(.palettePinToScreen)
-    private static let togglePinName = local(.paletteTogglePin)
     private static let showInFinderName = local(.paletteShowInFinder)
 
     var name: KeyboardShortcuts.Name {
@@ -72,7 +66,6 @@ enum PaletteShortcut {
         case .actions: Self.actionsName
         case .copyToClipboard: Self.copyToClipboardName
         case .pinToScreen: Self.pinToScreenName
-        case .togglePin: Self.togglePinName
         case .showInFinder: Self.showInFinderName
         }
     }
@@ -170,7 +163,6 @@ struct ShortcutsSettingsView: View {
             shortcutRow("Actions", shortcut: .actions)
             shortcutRow("Copy to Clipboard", shortcut: .copyToClipboard)
             shortcutRow("Pin to Screen", shortcut: .pinToScreen)
-            shortcutRow("Pin Entry", shortcut: .togglePin)
             shortcutRow("Show in Finder", shortcut: .showInFinder)
 
             PreferencesDivider()

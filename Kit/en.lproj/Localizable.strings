@@ -68,7 +68,6 @@
 "Paste will stop monitoring the clipboard until you open it again." = "Kit will stop monitoring the clipboard";
 "Past 30 Days" = "Past 30 Days";
 "Past 7 Days" = "Past 7 Days";
-"Pin Entry" = "Pin Entry";
 "Pin to Screen" = "Pin to Screen";
 "Pinned Cards" = "Pinned Cards";
 "Pinned Code" = "Pinned Code";
@@ -94,7 +93,6 @@
 "Zoom Out Pinned Image" = "Zoom Out Pinned Image";
 "Fit Pinned Image to Screen" = "Fit Pinned Image to Screen";
 "Hide Pinned Cards" = "Hide Pinned Cards";
-"Pinned" = "Pinned";
 "Quit" = "Quit";
 "Quit Paste" = "Quit Kit";
 "Quit Paste?" = "Quit Kit?";
@@ -120,7 +118,6 @@
 "Today" = "Today";
 "Type" = "Type";
 "Search" = "Search";
-"Unpin Entry" = "Unpin Entry";
 "Updates" = "Updates";
 "Version" = "Version";
 "Visual Style" = "Visual Style";

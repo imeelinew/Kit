@@ -38,11 +38,10 @@ private struct ClipboardTableGeometry: Equatable {
 }
 
 private enum ClipboardTableSection: Int, CaseIterable {
-    case pinned, today, yesterday, pastSevenDays, pastThirtyDays, earlier
+    case today, yesterday, pastSevenDays, pastThirtyDays, earlier
 
     var title: String {
         switch self {
-        case .pinned: return "Pinned"
         case .today: return "Today"
         case .yesterday: return "Yesterday"
         case .pastSevenDays: return "Past 7 Days"
@@ -54,7 +53,6 @@ private enum ClipboardTableSection: Int, CaseIterable {
     static func section(
         for item: ClipboardItem, today: Date, calendar: Calendar
     ) -> ClipboardTableSection {
-        guard !item.isPinned else { return .pinned }
         let itemDay = calendar.startOfDay(for: item.createdAt)
         let elapsedDays = max(
             0, calendar.dateComponents([.day], from: itemDay, to: today).day ?? .max)
@@ -434,7 +432,6 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
 
         private static func localized(_ title: String, locale: Locale) -> String {
             switch title {
-            case "Pinned": return String(localized: "Pinned", locale: locale)
             case "Today": return String(localized: "Today", locale: locale)
             case "Yesterday": return String(localized: "Yesterday", locale: locale)
             case "Past 7 Days": return String(localized: "Past 7 Days", locale: locale)
