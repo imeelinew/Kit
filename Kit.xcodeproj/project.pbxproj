@@ -38,7 +38,6 @@
 		765DF848224FB5BC506F2CDC /* PaletteWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8738F70AF4AB873CA45EE200 /* PaletteWindowController.swift */; };
 		8D646A86A4AD889296D77961 /* VisualEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EC0E3B9B5C98ACD47608094 /* VisualEffectView.swift */; };
 		8EC84542AD80277CDB7E1C1B /* SearchHighlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E2953B3533B91377E5CD791 /* SearchHighlight.swift */; };
-		AA2000000000000000000002 /* LucideIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000000000000001 /* LucideIcon.swift */; };
 		9D0896797DC58B6F1EFD765F /* NotificationToken.swift in Sources */ = {isa = PBXBuildFile; fileRef = F56E6A15E84064E62E40BD93 /* NotificationToken.swift */; };
 		A63F872BC0264BB99231BC52 /* MarkdownPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = F94E5C69B11642BE89C7B40A /* MarkdownPreview.swift */; };
 		A9BFCCAECCC68D9444932887 /* ClipboardManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08EBA3DF42E6A3D8518C909 /* ClipboardManager.swift */; };
@@ -95,7 +94,6 @@
 		94A422E6E59C06BEAFB4BFA2 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9DD90436D7A4A7E354F421DD /* SettingsComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsComponents.swift; sourceTree = "<group>"; };
 		9E2953B3533B91377E5CD791 /* SearchHighlight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchHighlight.swift; sourceTree = "<group>"; };
-		AA2000000000000000000001 /* LucideIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LucideIcon.swift; sourceTree = "<group>"; };
 		A08EBA3DF42E6A3D8518C909 /* ClipboardManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardManager.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B5C /* PinnedImageWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImageWindow.swift; sourceTree = "<group>"; };
 		A490C2CECA4C191B712DB9F2 /* LaunchAtLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLogin.swift; sourceTree = "<group>"; };
@@ -201,7 +199,6 @@
 				F94E5C69B11642BE89C7B40A /* MarkdownPreview.swift */,
 				908045C0E8EF72DB68603149 /* NerdSymbolsFont.swift */,
 				9E2953B3533B91377E5CD791 /* SearchHighlight.swift */,
-				AA2000000000000000000001 /* LucideIcon.swift */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -429,7 +426,6 @@
 				62F5E9E05B1CB111BC22F982 /* RootPaletteView.swift in Sources */,
 				423227345830781DFEB25653 /* ScrollIntent.swift in Sources */,
 				8EC84542AD80277CDB7E1C1B /* SearchHighlight.swift in Sources */,
-				AA2000000000000000000002 /* LucideIcon.swift in Sources */,
 				C149825C332C2AE4CE7AFE86 /* SettingsComponents.swift in Sources */,
 				4D294A32FFE66B9E795811C7 /* SettingsRootView.swift in Sources */,
 				3119CFF1D7E49ACADC6267D9 /* ShortcutRecorder.swift in Sources */,

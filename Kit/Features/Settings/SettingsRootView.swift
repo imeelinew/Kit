@@ -30,15 +30,15 @@ enum SettingsTab: Int, CaseIterable, Hashable, Identifiable {
         }
     }
 
-    var lucideIcon: LucideIconName {
+    var symbolName: String {
         switch self {
-        case .general: return .settings
-        case .shortcuts: return .keyboard
-        case .appearance: return .glasses
-        case .sound: return .volume2
-        case .clipboard: return .clipboard
-        case .history: return .clock
-        case .about: return .info
+        case .general: return "gearshape"
+        case .shortcuts: return "keyboard"
+        case .appearance: return "eyeglasses"
+        case .sound: return "speaker.wave.2"
+        case .clipboard: return "clipboard"
+        case .history: return "clock"
+        case .about: return "info.circle"
         }
     }
 

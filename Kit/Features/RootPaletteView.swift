@@ -24,7 +24,6 @@ private struct DaycastPaletteView: View {
 
     private var showAppMenu: Bool { vm.overlay == .appMenu }
     private var showTypeFilter: Bool { vm.overlay == .typeFilter }
-    private var showRename: Bool { vm.renamingID != nil }
 
     @MainActor
     private var menuItems: [PopoverMenuItem] {
@@ -51,12 +50,9 @@ private struct DaycastPaletteView: View {
                         selectedID: vm.selectedID,
                         query: vm.query,
                         scroll: scroll,
-                        hoverEnabled: !vm.menuOpen && !showRename,
+                        hoverEnabled: !vm.menuOpen,
                         onSelect: { vm.select($0.id) },
-                        onActions: { item in vm.openActions(for: item.id) },
-                        renamingID: vm.renamingID,
-                        renameDraft: vm.renameDraft,
-                        onCommitRename: { vm.commitOpenRename($0) }
+                        onActions: { item in vm.openActions(for: item.id) }
                     )
                     .frame(width: Theme.Size.clipboardListWidth)
                     Rectangle()
@@ -69,7 +65,6 @@ private struct DaycastPaletteView: View {
         .safeAreaInset(edge: .top, spacing: 0) { header }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomBar(showActionGroup: selected != nil)
-                .allowsHitTesting(!showRename)
         }
         .overlay {
             if vm.menuOpen {
@@ -125,10 +120,9 @@ private struct DaycastPaletteView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: Theme.Spacing.md) {
-            PaletteSearchField(text: $vm.query, enabled: !showRename, fontSize: 20)
+            PaletteSearchField(text: $vm.query, enabled: true, fontSize: 20)
                 .frame(maxWidth: .infinity)
             typeFilterControl
-                .allowsHitTesting(!showRename)
         }
         .padding(.horizontal, Theme.Spacing.md * 2)
         .frame(height: Theme.Size.headerHeight)
@@ -139,28 +133,14 @@ private struct DaycastPaletteView: View {
     private var typeFilterControl: some View {
         BarButton(pressed: showTypeFilter, action: { vm.toggleTypeFilter() }) {
             HStack(spacing: Theme.Spacing.sm) {
-                LucideIconShape(name: vm.kindFilter.icon)
-                    .stroke(
-                        style: StrokeStyle(
-                            lineWidth: LucideIcon.strokeWidth,
-                            lineCap: .round,
-                            lineJoin: .round
-                        )
-                    )
-                    .frame(width: LucideIcon.size, height: LucideIcon.size)
+                Image(systemName: vm.kindFilter.symbolName)
+                    .font(.system(size: 16, weight: .regular))
                     .foregroundStyle(Theme.Colors.textSecondary)
                 Text(vm.kindFilter.title)
                     .font(Theme.Typography.bar)
                     .foregroundStyle(.primary)
-                LucideIconShape(name: .chevronDown)
-                    .stroke(
-                        style: StrokeStyle(
-                            lineWidth: LucideIcon.strokeWidth,
-                            lineCap: .round,
-                            lineJoin: .round
-                        )
-                    )
-                    .frame(width: 12, height: 12)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.Colors.textSecondary)
             }
         }

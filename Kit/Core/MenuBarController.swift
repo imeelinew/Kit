@@ -3,7 +3,7 @@ import AVFoundation
 import Combine
 import QuartzCore
 
-/// Menu bar status item: `arrow.clockwise` template icon, left-click toggles the palette,
+/// Menu bar status item: `arrow.trianglehead.clockwise` template icon, left-click toggles the palette,
 /// right-click offers Show Paste / Settings / Quit. Spins clockwise on new clipboard inserts.
 @MainActor
 final class MenuBarController: NSObject {
@@ -46,7 +46,8 @@ final class MenuBarController: NSObject {
 
     private func installIfNeeded() {
         if statusItem != nil { return }
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        let symbol = MenuBarIconView.symbolImage
+        let item = NSStatusBar.system.statusItem(withLength: symbol.size.width)
         guard let button = item.button else {
             NSStatusBar.system.removeStatusItem(item)
             return
@@ -57,7 +58,8 @@ final class MenuBarController: NSObject {
         button.action = #selector(handleClick(_:))
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
 
-        let icon = MenuBarIconView(frame: button.bounds)
+        let icon = MenuBarIconView(symbol: symbol)
+        icon.frame = button.bounds
         icon.autoresizingMask = [.width, .height]
         button.addSubview(icon)
 
@@ -144,12 +146,12 @@ final class MenuBarController: NSObject {
 private final class MenuBarIconView: NSView {
     private let imageView = PassthroughImageView()
 
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
+    init(symbol: NSImage) {
+        super.init(frame: .zero)
         wantsLayer = true
         imageView.wantsLayer = true
-        imageView.imageScaling = .scaleProportionallyDown
-        imageView.image = Self.symbolImage
+        imageView.imageScaling = .scaleNone
+        imageView.image = symbol
         imageView.contentTintColor = .labelColor
         addSubview(imageView)
     }
@@ -166,7 +168,13 @@ private final class MenuBarIconView: NSView {
 
     override func layout() {
         super.layout()
-        imageView.frame = bounds
+        let size = imageView.image?.size ?? .zero
+        imageView.frame = NSRect(
+            x: (bounds.width - size.width) / 2,
+            y: (bounds.height - size.height) / 2,
+            width: size.width,
+            height: size.height
+        )
         centerAnchor()
     }
 
@@ -191,14 +199,24 @@ private final class MenuBarIconView: NSView {
         CATransaction.commit()
     }
 
-    private static var symbolImage: NSImage {
-        let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
-        let image =
-            NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: nil)?
-            .withSymbolConfiguration(configuration)
-            ?? NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: nil)
-        image?.isTemplate = true
-        return image ?? NSImage()
+    fileprivate static var symbolImage: NSImage {
+        guard
+            let base = NSImage(
+                systemSymbolName: "arrow.trianglehead.clockwise",
+                accessibilityDescription: nil
+            )
+        else { return NSImage() }
+        let configuration = NSImage.SymbolConfiguration(
+            pointSize: base.size.height * 0.85,
+            weight: .medium
+        )
+        let symbol = base.withSymbolConfiguration(configuration) ?? base
+        let image = NSImage(size: symbol.size, flipped: false) { bounds in
+            symbol.draw(in: bounds)
+            return true
+        }
+        image.isTemplate = true
+        return image
     }
 }
 

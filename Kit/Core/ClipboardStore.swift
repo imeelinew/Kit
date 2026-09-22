@@ -415,7 +415,6 @@ final class ClipboardStore: ObservableObject {
     private var deleteStaleStmt: OpaquePointer?
     private var imageByFingerprintStmt: OpaquePointer?
     private var itemByIDStmt: OpaquePointer?
-    private var updateTitleStmt: OpaquePointer?
     private var pendingSearchMetadata: [SearchMetadataUpdate] = []
     private var searchMetadataTask: Task<Void, Never>?
 
@@ -536,27 +535,6 @@ final class ClipboardStore: ObservableObject {
     func item(id: ClipboardItem.ID) -> ClipboardItem? {
         if let item = items.first(where: { $0.id == id }) { return item }
         return loadItem(id: id)
-    }
-
-    /// Persist a user-assigned title. Empty or whitespace-only values restore the automatic title.
-    func setCustomTitle(_ title: String?, for id: ClipboardItem.ID) {
-        let trimmed = title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let stored = (trimmed?.isEmpty == false) ? trimmed : nil
-        let current = item(id: id)
-        guard let current, current.customTitle != stored else { return }
-        guard let stmt = updateTitleStmt else { return }
-        if let stored {
-            sqlite3_bind_text(stmt, 1, stored, -1, SQLITE_TRANSIENT)
-        } else {
-            sqlite3_bind_null(stmt, 1)
-        }
-        sqlite3_bind_text(stmt, 2, id.uuidString, -1, SQLITE_TRANSIENT)
-        guard stepAndReset(stmt) else { return }
-        if let index = items.firstIndex(where: { $0.id == id }) {
-            items[index] = items[index].withCustomTitle(stored)
-        } else {
-            revision &+= 1
-        }
     }
 
     func remove(_ item: ClipboardItem) {
@@ -1098,11 +1076,10 @@ final class ClipboardStore: ObservableObject {
                    image_fingerprint, custom_title
             FROM items WHERE id = ? LIMIT 1
             """)
-        updateTitleStmt = prepare("UPDATE items SET custom_title = ? WHERE id = ?")
         return insertStmt != nil && loadStmt != nil && windowFloorStmt != nil
             && deleteByIDStmt != nil && pinStmt != nil && staleImagesStmt != nil
             && deleteStaleStmt != nil && imageByFingerprintStmt != nil
-            && itemByIDStmt != nil && updateTitleStmt != nil
+            && itemByIDStmt != nil
     }
 
     private func ensureCustomTitleColumn() {
@@ -1139,8 +1116,7 @@ final class ClipboardStore: ObservableObject {
     private func closeDatabase() {
         [
             insertStmt, loadStmt, windowFloorStmt, deleteByIDStmt, pinStmt,
-            staleImagesStmt, deleteStaleStmt, imageByFingerprintStmt, itemByIDStmt,
-            updateTitleStmt,
+            staleImagesStmt, deleteStaleStmt,             imageByFingerprintStmt, itemByIDStmt,
         ].forEach { sqlite3_finalize($0) }
         insertStmt = nil
         loadStmt = nil
@@ -1151,7 +1127,6 @@ final class ClipboardStore: ObservableObject {
         deleteStaleStmt = nil
         imageByFingerprintStmt = nil
         itemByIDStmt = nil
-        updateTitleStmt = nil
         sqlite3_close_v2(db)
         db = nil
     }

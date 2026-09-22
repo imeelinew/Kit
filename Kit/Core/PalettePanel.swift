@@ -18,7 +18,6 @@ final class PalettePanel: NSPanel {
     }
 
     private weak var searchField: NSTextField?
-    private weak var renameField: NSTextField?
     private var pendingSearchFocusRequest: UUID?
 
     private static let relevantModifiers: NSEvent.ModifierFlags = [
@@ -26,9 +25,6 @@ final class PalettePanel: NSPanel {
     ]
 
     override func sendEvent(_ event: NSEvent) {
-        if event.type == .leftMouseDown || event.type == .rightMouseDown {
-            commitRenameIfClickIsOutside(event)
-        }
         if event.type == .keyDown, route(event) { return }
         super.sendEvent(event)
     }
@@ -52,10 +48,6 @@ final class PalettePanel: NSPanel {
             }
         }
 
-        if paletteViewModel.renamingID != nil {
-            return routeRename(event, keyCode: keyCode, modifiers: modifiers)
-        }
-
         if modifiers == .command, keyCode == kVK_Delete {
             return paletteViewModel.handle(.clearQuery)
         }
@@ -65,9 +57,6 @@ final class PalettePanel: NSPanel {
         }
         if PaletteShortcut.copyToClipboard.matches(shortcut) {
             return handleOnce(.copy, event: event)
-        }
-        if PaletteShortcut.rename.matches(shortcut) {
-            return handleOnce(.rename, event: event)
         }
         if PaletteShortcut.pinToScreen.matches(shortcut) {
             return handleOnce(.pinToScreen, event: event)
@@ -117,32 +106,6 @@ final class PalettePanel: NSPanel {
         return paletteViewModel.menuOpen
     }
 
-    private func routeRename(
-        _ event: NSEvent, keyCode: Int, modifiers: NSEvent.ModifierFlags
-    ) -> Bool {
-        if modifiers == .command {
-            switch keyCode {
-            case kVK_ANSI_C, kVK_ANSI_X, kVK_ANSI_V, kVK_ANSI_A:
-                return handleEditingShortcut(keyCode)
-            default:
-                break
-            }
-        }
-        if modifiers.isEmpty {
-            switch keyCode {
-            case kVK_Return, kVK_ANSI_KeypadEnter:
-                // Let the active NSTextField finish editing so marked text is finalized and the
-                // row editor commits its actual value instead of a separately mirrored draft.
-                return false
-            case kVK_Escape:
-                return paletteViewModel?.handle(.cancel) ?? false
-            default:
-                return false
-            }
-        }
-        return false
-    }
-
     private func handleOnce(_ command: PaletteCommand, event: NSEvent) -> Bool {
         if event.isARepeat { return true }
         return paletteViewModel?.handle(command) ?? false
@@ -151,10 +114,6 @@ final class PalettePanel: NSPanel {
     func registerSearchField(_ field: NSTextField) {
         searchField = field
         schedulePendingSearchFocus()
-    }
-
-    func registerRenameField(_ field: NSTextField) {
-        renameField = field
     }
 
     func requestSearchFocus() {
@@ -177,27 +136,11 @@ final class PalettePanel: NSPanel {
     @discardableResult
     private func focusSearch(for request: UUID) -> Bool {
         guard pendingSearchFocusRequest == request, isVisible, isKeyWindow,
-            paletteViewModel?.renamingID == nil, let searchField, searchField.isEnabled
+            let searchField, searchField.isEnabled
         else { return false }
         guard makeFirstResponder(searchField) else { return false }
         pendingSearchFocusRequest = nil
         return true
-    }
-
-    private func commitRenameIfClickIsOutside(_ event: NSEvent) {
-        guard let paletteViewModel, paletteViewModel.renamingID != nil,
-            let renameField
-        else { return }
-
-        let frameInWindow = renameField.convert(renameField.bounds, to: nil)
-        if !renameField.isHidden, frameInWindow.contains(event.locationInWindow) { return }
-
-        if renameField.currentEditor() != nil {
-            _ = makeFirstResponder(nil)
-        }
-        if paletteViewModel.renamingID != nil {
-            paletteViewModel.commitOpenRename(renameField.stringValue)
-        }
     }
 
     private func setSearchCaretHidden(_ hidden: Bool) {

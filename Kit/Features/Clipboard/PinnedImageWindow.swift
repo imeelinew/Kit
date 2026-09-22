@@ -1690,73 +1690,18 @@ private struct PinnedCardTitle: View {
 
     @ObservedObject private var store = AppCore.shared.clipboardStore
     @ObservedObject private var settings = AppCore.shared.settings
-    @State private var isEditing = false
-    @State private var draft = ""
-    @State private var skipCommitOnBlur = false
-    @FocusState private var focused: Bool
 
     private var title: String {
         store.item(id: itemID)?.displayTitle(locale: settings.language.locale) ?? ""
     }
 
     var body: some View {
-        Group {
-            if isEditing {
-                TextField("", text: $draft)
-                    .textFieldStyle(.plain)
-                    .multilineTextAlignment(.center)
-                    .font(.system(size: 12, weight: .semibold))
-                    .focused($focused)
-                    .onSubmit(commit)
-                    .onExitCommand(perform: cancel)
-            } else {
-                Button(action: beginEditing) {
-                    Text(title)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                .buttonStyle(.plain)
-                .help(Text("Rename"))
-                .accessibilityLabel(Text("Rename"))
-            }
-        }
-        .frame(minWidth: 0, maxWidth: 280)
-        .onChange(of: isEditing) {
-            if isEditing {
-                focused = true
-            }
-        }
-        .onChange(of: focused) {
-            if isEditing, !focused {
-                if skipCommitOnBlur {
-                    skipCommitOnBlur = false
-                    isEditing = false
-                } else {
-                    commit()
-                }
-            }
-        }
-    }
-
-    private func beginEditing() {
-        skipCommitOnBlur = false
-        draft = title
-        isEditing = true
-    }
-
-    private func commit() {
-        guard isEditing else { return }
-        isEditing = false
-        skipCommitOnBlur = false
-        focused = false
-        store.setCustomTitle(draft, for: itemID)
-    }
-
-    private func cancel() {
-        skipCommitOnBlur = true
-        focused = false
+        Text(title)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(minWidth: 0, maxWidth: 280)
     }
 }
 

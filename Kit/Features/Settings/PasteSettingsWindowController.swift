@@ -206,6 +206,32 @@ private final class CommandWCloseView: NSView {
     }
 }
 
+extension SettingsTab {
+    /// Template image for the settings toolbar. The toolbar scales a 32pt slot, so the symbol stays centered inside that canvas.
+    func settingsTabImage() -> NSImage {
+        let canvas: CGFloat = 32
+        let configuration = NSImage.SymbolConfiguration(pointSize: 17, weight: .regular)
+        guard
+            let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
+                .withSymbolConfiguration(configuration)
+        else { return NSImage() }
+        let image = NSImage(size: NSSize(width: canvas, height: canvas), flipped: false) { _ in
+            let rect = NSRect(
+                x: (canvas - symbol.size.width) / 2,
+                y: (canvas - symbol.size.height) / 2,
+                width: symbol.size.width,
+                height: symbol.size.height
+            )
+            symbol.draw(
+                in: rect, from: .zero, operation: .sourceOver, fraction: 1,
+                respectFlipped: true, hints: nil)
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+}
+
 /// Hosts a SwiftUI settings pane inside `MacAppSettingsUI`'s `SettingsPaneViewController`.
 private final class SwiftUISettingsPaneController: SettingsPaneViewController {
     private let rootView: AnyView
@@ -223,7 +249,7 @@ private final class SwiftUISettingsPaneController: SettingsPaneViewController {
         self.paneHeight = tab.preferredPaneHeight
         super.init(nibName: nil, bundle: nil)
         tabName = String(localized: tab.localizationKey, locale: locale)
-        tabImage = tab.lucideIcon.settingsTabImage()
+        tabImage = tab.settingsTabImage()
         tabIdentifier = tab.tabIdentifier
         isResizableView = false
     }

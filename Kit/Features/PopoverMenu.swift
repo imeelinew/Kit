@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// A menu row's optional leading glyph: a Lucide vector icon, an SF Symbol fallback, or a real app icon drawn from `IconCache`.
+/// A menu row's optional leading glyph: an SF Symbol, or a real app icon drawn from `IconCache`.
 enum PopoverMenuIcon: Equatable {
-    case lucide(LucideIconName)
     case symbol(String)
     case file(path: String)
 
@@ -29,18 +28,18 @@ struct PopoverMenuItem {
         switch action {
         case .about:
             title = "About Paste"
-            icon = .lucide(.info)
+            icon = nil
         case .checkForUpdates:
             title = "Check for Updates"
-            icon = .lucide(.refreshCw)
+            icon = nil
             isEnabled = AppCore.shared.updateService.canCheckForUpdates
         case .settings:
             title = "Settings"
-            icon = .lucide(.settings)
+            icon = nil
             shortcut = "⌘,"
         case .quit:
             title = "Quit Paste"
-            icon = .lucide(.power)
+            icon = nil
             shortcut = "⌘Q"
             isDestructive = true
         case .paste:
@@ -52,31 +51,27 @@ struct PopoverMenuItem {
             icon = PopoverMenuIcon.paste(target)
         case .copy:
             title = "Copy to Clipboard"
-            icon = .lucide(.copy)
+            icon = .symbol("doc.on.doc")
             shortcut = PaletteShortcut.copyToClipboard.displayString
-        case .rename:
-            title = "Rename"
-            icon = .lucide(.pencil)
-            shortcut = PaletteShortcut.rename.displayString
         case .pinToScreen:
             title = "Pin to Screen"
-            icon = .lucide(.pin)
+            icon = .symbol("pin")
             shortcut = PaletteShortcut.pinToScreen.displayString
         case .togglePin(let item):
             title = item.isPinned ? "Unpin Entry" : "Pin Entry"
-            icon = .lucide(item.isPinned ? .bookmarkMinus : .bookmark)
+            icon = .symbol(item.isPinned ? "bookmark.slash" : "bookmark")
             shortcut = PaletteShortcut.togglePin.displayString
         case .revealInFinder:
             title = "Show in Finder"
-            icon = .lucide(.folder)
+            icon = .symbol("folder")
             shortcut = PaletteShortcut.showInFinder.displayString
         case .delete:
             title = "Delete Entry"
-            icon = .lucide(.trash2)
+            icon = .symbol("trash")
             isDestructive = true
         case .setKindFilter(let filter):
             title = filter.title
-            icon = .lucide(filter.icon)
+            icon = .symbol(filter.symbolName)
             isChecked = filter == kindFilter
         }
     }
@@ -127,9 +122,6 @@ private struct PopoverMenuRow: View {
             HStack(spacing: Theme.Spacing.sm) {
                 if let icon = item.icon {
                     switch icon {
-                    case .lucide(let name):
-                        LucideIcon(name: name)
-                            .foregroundStyle(item.isDestructive ? Color.red : Color.secondary)
                     case .symbol(let name):
                         Image(systemName: name)
                             .font(Theme.Typography.menuIcon)
@@ -148,8 +140,10 @@ private struct PopoverMenuRow: View {
                     .foregroundStyle(item.isDestructive ? Color.red : Color.primary)
                 Spacer(minLength: Theme.Spacing.sm)
                 if item.isChecked {
-                    LucideIcon(name: .check)
+                    Image(systemName: "checkmark")
+                        .font(Theme.Typography.menuIcon)
                         .foregroundStyle(.secondary)
+                        .frame(width: Theme.Size.menuIcon, height: Theme.Size.menuIcon)
                 } else if let shortcut = item.shortcut {
                     HStack(spacing: Theme.Spacing.xxs) {
                         ForEach(Array(shortcut.enumerated()), id: \.offset) { _, glyph in

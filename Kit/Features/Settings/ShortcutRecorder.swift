@@ -14,10 +14,6 @@ extension KeyboardShortcuts.Name {
         "paletteCopyToClipboard",
         default: .init(.return, modifiers: [.command])
     )
-    static let paletteRename = Self(
-        "paletteRename",
-        default: .init(.r, modifiers: [.command])
-    )
     static let palettePinToScreen = Self("palettePinToScreen")
     static let paletteTogglePin = Self(
         "paletteTogglePin",
@@ -61,14 +57,12 @@ extension KeyboardShortcuts.Name {
 enum PaletteShortcut {
     case actions
     case copyToClipboard
-    case rename
     case pinToScreen
     case togglePin
     case showInFinder
 
     private static let actionsName = local(.paletteActions)
     private static let copyToClipboardName = local(.paletteCopyToClipboard)
-    private static let renameName = local(.paletteRename)
     private static let pinToScreenName = local(.palettePinToScreen)
     private static let togglePinName = local(.paletteTogglePin)
     private static let showInFinderName = local(.paletteShowInFinder)
@@ -77,7 +71,6 @@ enum PaletteShortcut {
         switch self {
         case .actions: Self.actionsName
         case .copyToClipboard: Self.copyToClipboardName
-        case .rename: Self.renameName
         case .pinToScreen: Self.pinToScreenName
         case .togglePin: Self.togglePinName
         case .showInFinder: Self.showInFinderName
@@ -176,7 +169,6 @@ struct ShortcutsSettingsView: View {
 
             shortcutRow("Actions", shortcut: .actions)
             shortcutRow("Copy to Clipboard", shortcut: .copyToClipboard)
-            shortcutRow("Rename", shortcut: .rename)
             shortcutRow("Pin to Screen", shortcut: .pinToScreen)
             shortcutRow("Pin Entry", shortcut: .togglePin)
             shortcutRow("Show in Finder", shortcut: .showInFinder)

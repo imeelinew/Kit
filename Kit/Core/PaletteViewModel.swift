@@ -45,7 +45,6 @@ enum PaletteCommand: Equatable {
     case move(Int)
     case activate
     case copy
-    case rename
     case cancel
     case toggleActions
     case pinToScreen
@@ -66,7 +65,6 @@ enum PaletteMenuAction: Equatable {
     case paste(ClipboardItem)
     case pasteKeepingOpen(ClipboardItem)
     case copy(ClipboardItem)
-    case rename(ClipboardItem)
     case pinToScreen(ClipboardItem)
     case togglePin(ClipboardItem)
     case revealInFinder(ClipboardItem)
@@ -75,13 +73,13 @@ enum PaletteMenuAction: Equatable {
 }
 
 extension ClipboardItem.DisplayKind {
-    var lucideIcon: LucideIconName {
+    var symbolName: String {
         switch self {
-        case .text: .type
-        case .markdown: .hash
-        case .code: .code
-        case .link: .link
-        case .image: .image
+        case .text: "textformat"
+        case .markdown: "number"
+        case .code: "chevron.left.forwardslash.chevron.right"
+        case .link: "link"
+        case .image: "photo"
         }
     }
 }
@@ -93,8 +91,8 @@ enum ClipboardKindFilter: Equatable, CaseIterable {
         LocalizedStringKey(displayKind?.typeLabel ?? "All Types")
     }
 
-    var icon: LucideIconName {
-        displayKind?.lucideIcon ?? .list
+    var symbolName: String {
+        displayKind?.symbolName ?? "list.bullet"
     }
 
     var displayKind: ClipboardItem.DisplayKind? {
@@ -120,7 +118,6 @@ final class PaletteViewModel: ObservableObject {
     @Published private(set) var results: [ClipboardItem] = []
     @Published private(set) var selectedID: ClipboardItem.ID?
     @Published private(set) var searchReady = true
-    @Published private(set) var renamingID: ClipboardItem.ID?
     @Published var resetToken = UUID()
     @Published var followToken = UUID()
     @Published var pasteTarget: PasteTarget?
@@ -137,7 +134,6 @@ final class PaletteViewModel: ObservableObject {
         }
     }
     @Published var menuSelection = 0
-    private(set) var renameDraft = ""
 
     var onMenuOpenChanged: ((Bool) -> Void)?
     var onSearchFocusRequested: (() -> Void)?
@@ -187,7 +183,6 @@ final class PaletteViewModel: ObservableObject {
                 .paste(item),
                 .pasteKeepingOpen(item),
                 .copy(item),
-                .rename(item),
             ]
             actions.append(.pinToScreen(item))
             actions.append(.togglePin(item))
@@ -204,7 +199,6 @@ final class PaletteViewModel: ObservableObject {
     func prepare() {
         searchTask?.cancel()
         overlay = .none
-        renamingID = nil
         menuSelection = 0
         imageQuickLookOpen = false
         query = ""
@@ -213,7 +207,6 @@ final class PaletteViewModel: ObservableObject {
     }
 
     func select(_ id: ClipboardItem.ID, follow: Bool = false) {
-        if let renamingID, id != renamingID { return }
         selectedID = id
         imageQuickLookOpen = false
         if follow { followToken = UUID() }
@@ -264,9 +257,7 @@ final class PaletteViewModel: ObservableObject {
                 moveSelection(delta)
             }
         case .activate:
-            if renamingID != nil {
-                commitRename()
-            } else if menuOpen {
+            if menuOpen {
                 activateMenuItem(at: menuSelection)
             } else if searchReady, let item = selectedItem {
                 core.paste(item)
@@ -275,15 +266,10 @@ final class PaletteViewModel: ObservableObject {
             guard searchReady, let item = actionTarget else { return true }
             overlay = .none
             core.copyToClipboard(item)
-        case .rename:
-            guard searchReady, let item = actionTarget else { return true }
-            beginRename(item)
         case .cancel:
             if imageQuickLookOpen {
                 imageQuickLookOpen = false
                 ImageQuickLook.close()
-            } else if renamingID != nil {
-                endRename()
             } else if menuOpen {
                 overlay = .none
                 menuSelection = 0
@@ -384,8 +370,6 @@ final class PaletteViewModel: ObservableObject {
             core.pasteKeepingWindowOpen(item)
         case .copy(let item):
             core.copyToClipboard(item)
-        case .rename(let item):
-            beginRename(item)
         case .pinToScreen(let item):
             core.pinToScreen(item)
         case .togglePin(let item):
@@ -419,31 +403,6 @@ final class PaletteViewModel: ObservableObject {
     private func togglePin(_ item: ClipboardItem) {
         core.clipboardStore.togglePinned(item)
         select(item.id, follow: true)
-    }
-
-    private func beginRename(_ item: ClipboardItem) {
-        renameDraft = item.displayTitle(locale: core.settings.language.locale)
-        if overlay != .none { overlay = .none }
-        if selectedID != item.id { selectedID = item.id }
-        renamingID = item.id
-    }
-
-    func commitOpenRename(_ title: String) {
-        renameDraft = title
-        commitRename()
-    }
-
-    private func commitRename() {
-        guard let id = renamingID else { return }
-        renamingID = nil
-        core.clipboardStore.setCustomTitle(renameDraft, for: id)
-        onSearchFocusRequested?()
-    }
-
-    private func endRename() {
-        guard renamingID != nil else { return }
-        renamingID = nil
-        onSearchFocusRequested?()
     }
 
     private func queryChanged() {
@@ -498,7 +457,6 @@ final class PaletteViewModel: ObservableObject {
         guard !newResults.isEmpty else {
             selectedID = nil
             overlay = .none
-            if renamingID != nil { endRename() }
             return
         }
         if resetSelection {
@@ -519,9 +477,6 @@ final class PaletteViewModel: ObservableObject {
             }
         case .none, .appMenu, .typeFilter:
             break
-        }
-        if let renamingID, !newResults.contains(where: { $0.id == renamingID }) {
-            endRename()
         }
     }
 }
