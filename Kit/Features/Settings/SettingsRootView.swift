@@ -45,7 +45,7 @@ enum SettingsTab: Int, CaseIterable, Hashable, Identifiable {
     var preferredPaneHeight: CGFloat {
         switch self {
         case .general: return 300
-        case .shortcuts: return 800
+        case .shortcuts: return 580
         case .appearance: return 500
         case .sound: return 200
         case .clipboard: return 360

@@ -774,13 +774,14 @@ private final class ClipboardItemCellView: NSTableCellView {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        highlightView.layer?.removeAnimation(forKey: "hoverFade")
         titleLabel.isHidden = false
         thumbnailView.prepareForReuse()
     }
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
-        updateSelectionColor()
+        updateHighlightColor()
         thumbnailView.refreshAppearance()
     }
 
@@ -788,7 +789,7 @@ private final class ClipboardItemCellView: NSTableCellView {
         item: ClipboardItem, selected: Bool, query: String, imageURL: URL?, locale: Locale
     ) {
         self.selected = selected
-        updateSelectionColor()
+        updateSelectionVisibility(animated: false)
         titleLabel.attributedStringValue = SearchHighlight.nsAttributed(
             item.displayTitle(locale: locale),
             query: query,
@@ -799,12 +800,34 @@ private final class ClipboardItemCellView: NSTableCellView {
     func setSelected(_ selected: Bool) {
         guard self.selected != selected else { return }
         self.selected = selected
-        updateSelectionColor()
+        updateSelectionVisibility(animated: true)
     }
 
     private func updateSelectionColor() {
+        updateSelectionVisibility(animated: false)
+    }
+
+    private func updateHighlightColor() {
         highlightView.layer?.backgroundColor =
-            selected ? NSColor.labelColor.withAlphaComponent(0.10).cgColor : NSColor.clear.cgColor
+            NSColor.labelColor.withAlphaComponent(0.10).cgColor
+    }
+
+    private func updateSelectionVisibility(animated: Bool) {
+        updateHighlightColor()
+        let alpha: Float = selected ? 1 : 0
+        guard let layer = highlightView.layer else { return }
+        if !animated {
+            layer.removeAnimation(forKey: "hoverFade")
+            layer.opacity = alpha
+            return
+        }
+        let animation = CABasicAnimation(keyPath: "opacity")
+        animation.fromValue = layer.presentation()?.opacity ?? layer.opacity
+        animation.toValue = alpha
+        animation.duration = 0.22
+        animation.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
+        layer.add(animation, forKey: "hoverFade")
+        layer.opacity = alpha
     }
 }
 

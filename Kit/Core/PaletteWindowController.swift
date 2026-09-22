@@ -8,6 +8,8 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     private var panel: PalettePanel?
     private var panelStyle: PaletteVisualStyle?
     private var styleObserver: AnyCancellable?
+    private var showToken = 0
+    private var hiding = false
     private(set) var previousApp: NSRunningApplication?
 
     init(core: AppCore) {
@@ -41,7 +43,17 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         }
 
         let panel = ensurePanel()
-        position(panel)
+        showToken += 1
+        let token = showToken
+        hiding = false
+        guard let finalFrame = positionedFrame() else { return }
+        let alreadyShown = panel.isVisible && panel.alphaValue > 0.9
+        if !alreadyShown {
+            panel.alphaValue = 0
+            panel.setFrame(Self.scaledFrame(finalFrame, scale: 0.97), display: false)
+        } else {
+            panel.setFrame(finalFrame, display: false)
+        }
         panel.contentView?.layoutSubtreeIfNeeded()
         if core.settings.switchToEnglishInputOnOpen {
             InputSourceSwitcher.selectEnglish()
@@ -50,20 +62,52 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         panel.makeFirstResponder(nil)
         panel.orderFrontRegardless()
         panel.requestSearchFocus()
+        if !alreadyShown {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.22
+                context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
+                panel.animator().alphaValue = 1
+                panel.animator().setFrame(finalFrame, display: true)
+            }
+        }
         DispatchQueue.main.async { [weak panel] in
-            guard let panel, panel.isVisible, !panel.isKeyWindow else { return }
+            guard let panel, panel.isVisible, !panel.isKeyWindow, token == self.showToken else {
+                return
+            }
             panel.makeKeyAndOrderFront(nil)
             panel.requestSearchFocus()
         }
     }
 
     func hide(restoreFocus: Bool) {
-        panel?.orderOut(nil)
-        ImageThumbnail.purgePreviews()
+        guard let panel else { return }
+        if !panel.isVisible && !hiding {
+            ImageThumbnail.purgePreviews()
+            if restoreFocus { previousApp?.activate() }
+            return
+        }
+        if hiding { return }
+        hiding = true
+        let token = showToken
         if core.settings.switchToEnglishInputOnOpen {
             InputSourceSwitcher.restore()
         }
-        if restoreFocus { previousApp?.activate() }
+        let frame = panel.frame
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.16
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().alphaValue = 0
+            panel.animator().setFrame(Self.scaledFrame(frame, scale: 0.97), display: true)
+        } completionHandler: { [weak self, weak panel] in
+            Task { @MainActor in
+                guard let self, let panel, token == self.showToken, self.hiding else { return }
+                panel.orderOut(nil)
+                panel.alphaValue = 1
+                self.hiding = false
+                ImageThumbnail.purgePreviews()
+                if restoreFocus { self.previousApp?.activate() }
+            }
+        }
     }
 
     func windowDidResignKey(_ notification: Notification) {
@@ -96,19 +140,26 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         if visible { show() }
     }
 
-    private func position(_ panel: PalettePanel) {
-        guard let screen = targetScreen() else { return }
+    private func positionedFrame() -> NSRect? {
+        guard let screen = targetScreen() else { return nil }
         let visible = screen.visibleFrame
         let width = min(Theme.Size.panelWidth, max(1, visible.width - 32))
         let height = min(Theme.Size.panelHeight, max(1, visible.height - 32))
         let topEdge = visible.maxY - visible.height * Theme.Size.paletteTopMarginFraction
-        panel.setFrame(
-            NSRect(
-                x: visible.midX - width / 2,
-                y: topEdge - height,
-                width: width,
-                height: height),
-            display: true)
+        return NSRect(
+            x: visible.midX - width / 2,
+            y: topEdge - height,
+            width: width,
+            height: height)
+    }
+
+    private static func scaledFrame(_ frame: NSRect, scale: CGFloat) -> NSRect {
+        let size = CGSize(width: frame.width * scale, height: frame.height * scale)
+        return NSRect(
+            x: frame.midX - size.width / 2,
+            y: frame.midY - size.height / 2,
+            width: size.width,
+            height: size.height)
     }
 
     private func targetScreen() -> NSScreen? {

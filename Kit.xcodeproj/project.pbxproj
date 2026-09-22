@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		KK1000000000000000000001 /* Kit.icon in Resources */ = {isa = PBXBuildFile; fileRef = KK1000000000000000000002 /* Kit.icon */; };
 		02CB1E90666F628DBF9C7C78 /* EdgeDissolve.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6853210949502E0C47D69B9 /* EdgeDissolve.swift */; };
 		068B6C43C18DB6110AED985B /* PopoverMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C234D84C11C94266A6B560D /* PopoverMenu.swift */; };
 		07650D1993A6D4C0D5B7ACD8 /* PalettePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123A20E6FCB60D259A0CC145 /* PalettePanel.swift */; };
@@ -45,6 +44,11 @@
 		AA1000000000000000000003 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = AA1000000000000000000004 /* Sparkle */; };
 		B1C2D3E4F5061728394A5B6C /* PinnedImageWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* PinnedImageWindow.swift */; };
 		B9424F6046260D72728A48DD /* GeneralSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1779D1C157B1B6F9C37365 /* GeneralSettingsView.swift */; };
+		BB41A0000000000000000002 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB41A0000000000000000001 /* MenuBarController.swift */; };
+		BB41B0000000000000000002 /* sound-effect-1.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000001 /* sound-effect-1.mp3 */; };
+		BB41B0000000000000000004 /* sound-effect-2.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000003 /* sound-effect-2.mp3 */; };
+		BB41B0000000000000000006 /* sound-effect-3.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000005 /* sound-effect-3.mp3 */; };
+		BB41B0000000000000000008 /* sound-effect-4.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000007 /* sound-effect-4.mp3 */; };
 		C149825C332C2AE4CE7AFE86 /* SettingsComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD90436D7A4A7E354F421DD /* SettingsComponents.swift */; };
 		C4F6DA55540713BDACAC260D /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = F7DB5B5DB847C967C5B56092 /* Localizable.strings */; };
 		CE1562B33E657CF448D04DDC /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = 40E3D8D2C77ADCC20CD390CC /* KeyboardShortcuts */; };
@@ -59,15 +63,10 @@
 		F1E4B87385492A86C5F5CDFE /* ImageThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2FD6AB5017BBFF5EE420A4 /* ImageThumbnail.swift */; };
 		F2793D8EFF543BEDD5DF57C1 /* PaletteViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11927303CFC909AE918568B6 /* PaletteViewModel.swift */; };
 		F3C7ADFBEBBA4EF387C9A15F /* MarkdownAttributedRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81D51FA4C7914F68805A9D72 /* MarkdownAttributedRenderer.swift */; };
-		BB41A0000000000000000002 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB41A0000000000000000001 /* MenuBarController.swift */; };
-		BB41B0000000000000000002 /* sound-effect-1.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000001 /* sound-effect-1.mp3 */; };
-		BB41B0000000000000000004 /* sound-effect-2.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000003 /* sound-effect-2.mp3 */; };
-		BB41B0000000000000000006 /* sound-effect-3.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000005 /* sound-effect-3.mp3 */; };
-		BB41B0000000000000000008 /* sound-effect-4.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000007 /* sound-effect-4.mp3 */; };
+		KK1000000000000000000001 /* Kit.icon in Resources */ = {isa = PBXBuildFile; fileRef = KK1000000000000000000002 /* Kit.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		KK1000000000000000000002 /* Kit.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Kit.icon; sourceTree = "<group>"; };
 		0C1D141FBB730290AF3CA00C /* AppCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCore.swift; sourceTree = "<group>"; };
 		11927303CFC909AE918568B6 /* PaletteViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteViewModel.swift; sourceTree = "<group>"; };
 		123A20E6FCB60D259A0CC145 /* PalettePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PalettePanel.swift; sourceTree = "<group>"; };
@@ -104,6 +103,11 @@
 		B83EBAE1FB329C0318507DFB /* PasteTransaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteTransaction.swift; sourceTree = "<group>"; };
 		B8B134FA6B0C91BE3263830E /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		BA150DA7FBE4819BF19B7F31 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		BB41A0000000000000000001 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
+		BB41B0000000000000000001 /* sound-effect-1.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "sound-effect-1.mp3"; sourceTree = "<group>"; };
+		BB41B0000000000000000003 /* sound-effect-2.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "sound-effect-2.mp3"; sourceTree = "<group>"; };
+		BB41B0000000000000000005 /* sound-effect-3.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "sound-effect-3.mp3"; sourceTree = "<group>"; };
+		BB41B0000000000000000007 /* sound-effect-4.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "sound-effect-4.mp3"; sourceTree = "<group>"; };
 		C6853210949502E0C47D69B9 /* EdgeDissolve.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeDissolve.swift; sourceTree = "<group>"; };
 		CE39A396D47F5CC467AA9FA1 /* PasteSettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteSettingsWindowController.swift; sourceTree = "<group>"; };
 		D22A18A2E99B807E7716432E /* InputSourceSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSourceSwitcher.swift; sourceTree = "<group>"; };
@@ -119,11 +123,7 @@
 		FC1779D1C157B1B6F9C37365 /* GeneralSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsView.swift; sourceTree = "<group>"; };
 		FC678FC84A80AE731726D744 /* Paster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Paster.swift; sourceTree = "<group>"; };
 		FCFFE5C6B9CC83C972FD0B0D /* ClipboardStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardStore.swift; sourceTree = "<group>"; };
-		BB41A0000000000000000001 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
-		BB41B0000000000000000001 /* sound-effect-1.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "sound-effect-1.mp3"; sourceTree = "<group>"; };
-		BB41B0000000000000000003 /* sound-effect-2.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "sound-effect-2.mp3"; sourceTree = "<group>"; };
-		BB41B0000000000000000005 /* sound-effect-3.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "sound-effect-3.mp3"; sourceTree = "<group>"; };
-		BB41B0000000000000000007 /* sound-effect-4.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "sound-effect-4.mp3"; sourceTree = "<group>"; };
+		KK1000000000000000000002 /* Kit.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Kit.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -250,6 +250,17 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		BB41B0000000000000000009 /* Sounds */ = {
+			isa = PBXGroup;
+			children = (
+				BB41B0000000000000000001 /* sound-effect-1.mp3 */,
+				BB41B0000000000000000003 /* sound-effect-2.mp3 */,
+				BB41B0000000000000000005 /* sound-effect-3.mp3 */,
+				BB41B0000000000000000007 /* sound-effect-4.mp3 */,
+			);
+			path = Sounds;
+			sourceTree = "<group>";
+		};
 		C31CC5D1FB66A5DCF6100242 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
@@ -286,17 +297,6 @@
 				2B0977782F9197A6D1FEF7AF /* RootPaletteView.swift */,
 			);
 			path = Features;
-			sourceTree = "<group>";
-		};
-		BB41B0000000000000000009 /* Sounds */ = {
-			isa = PBXGroup;
-			children = (
-				BB41B0000000000000000001 /* sound-effect-1.mp3 */,
-				BB41B0000000000000000003 /* sound-effect-2.mp3 */,
-				BB41B0000000000000000005 /* sound-effect-3.mp3 */,
-				BB41B0000000000000000007 /* sound-effect-4.mp3 */,
-			);
-			path = Sounds;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -522,6 +522,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 41;
 				INFOPLIST_FILE = Kit/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -614,6 +615,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 41;
 				INFOPLIST_FILE = Kit/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
