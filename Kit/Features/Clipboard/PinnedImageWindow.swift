@@ -7,19 +7,7 @@ import SwiftUI
 private enum PinnedImageCommand {
     case close
     case closeAll
-    case dismiss
     case copy
-    case zoomIn
-    case zoomOut
-    case resetSize
-
-    var allowsKeyRepeat: Bool {
-        self == .zoomIn || self == .zoomOut
-    }
-}
-
-private enum PinnedCommandContext {
-    case image(url: URL, imageSize: CGSize, preferredLongEdge: () -> CGFloat)
 }
 
 private struct PinnedCardRecord: Codable, Identifiable {
@@ -332,12 +320,7 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
             )
         )
         panel.onCommand = { [weak self] command in
-            self?.handle(
-                command,
-                itemID: itemID,
-                context: .image(
-                    url: contentURL, imageSize: imageSize, preferredLongEdge: preferredLongEdge)
-            )
+            self?.handle(command, itemID: itemID, url: contentURL)
         }
 
         install(
@@ -381,14 +364,7 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
             )
         )
         panel.onCommand = { [weak self] command in
-            self?.handle(
-                command,
-                itemID: record.id,
-                context: .image(
-                    url: url,
-                    imageSize: imageSize,
-                    preferredLongEdge: preferredLongEdge)
-            )
+            self?.handle(command, itemID: record.id, url: url)
         }
         install(
             PinnedImageContent(
@@ -666,59 +642,19 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func handle(
-        _ command: PinnedImageCommand,
-        itemID: ClipboardItem.ID,
-        context: PinnedCommandContext
-    ) {
-        guard let panel = panels[itemID] else { return }
+    private func handle(_ command: PinnedImageCommand, itemID: ClipboardItem.ID, url: URL) {
+        guard panels[itemID] != nil else { return }
 
         switch command {
-        case .close, .dismiss:
+        case .close:
             close(itemID)
         case .closeAll:
             for id in Array(panels.keys) {
                 close(id)
             }
         case .copy:
-            copy(context: context)
-        case .zoomIn:
-            panel.resize(by: 1.1)
-        case .zoomOut:
-            panel.resize(by: 0.9)
-        case .resetSize:
-            resetSize(of: panel, context: context)
-        }
-    }
-
-    private func copy(context: PinnedCommandContext) {
-        switch context {
-        case .image(let url, _, _):
             Task { _ = await Paster.copyImage(at: url) }
         }
-    }
-
-    private func resetSize(of panel: PinnedImagePanel, context: PinnedCommandContext) {
-        let visibleFrame = panel.screen?.visibleFrame ?? targetVisibleFrame()
-        let size: CGSize
-        switch context {
-        case .image(_, let imageSize, let preferredLongEdge):
-            size = PinnedImageLayout.initialSize(
-                imageSize: imageSize,
-                visibleFrame: visibleFrame,
-                preferredLongEdge: preferredLongEdge()
-            )
-        }
-        resetFrame(of: panel, to: size, in: visibleFrame)
-    }
-
-    private func resetFrame(of panel: PinnedImagePanel, to size: CGSize, in visibleFrame: CGRect) {
-        let center = CGPoint(x: panel.frame.midX, y: panel.frame.midY)
-        let origin = CGPoint(
-            x: min(max(center.x - size.width / 2, visibleFrame.minX), visibleFrame.maxX - size.width),
-            y: min(max(center.y - size.height / 2, visibleFrame.minY), visibleFrame.maxY - size.height)
-        )
-        panel.setFrame(NSRect(origin: origin, size: size), display: true, animate: true)
     }
 
     private func cardTitle(for itemID: ClipboardItem.ID, fallback: String) -> String {
@@ -1081,7 +1017,7 @@ private final class PinnedImagePanel: NSPanel {
                 return
             }
             if let command = command(for: event) {
-                if !event.isARepeat || command.allowsKeyRepeat {
+                if !event.isARepeat {
                     onCommand?(command)
                 }
                 return
@@ -1156,11 +1092,7 @@ private final class PinnedImagePanel: NSPanel {
         let shortcut = KeyboardShortcuts.Shortcut(event: event)
         if PinnedImageShortcut.close.matches(shortcut) { return .close }
         if PinnedImageShortcut.closeAll.matches(shortcut) { return .closeAll }
-        if PinnedImageShortcut.dismiss.matches(shortcut) { return .dismiss }
         if PinnedImageShortcut.copy.matches(shortcut) { return .copy }
-        if PinnedImageShortcut.zoomIn.matches(shortcut) { return .zoomIn }
-        if PinnedImageShortcut.zoomOut.matches(shortcut) { return .zoomOut }
-        if PinnedImageShortcut.resetSize.matches(shortcut) { return .resetSize }
         return nil
     }
 }
