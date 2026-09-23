@@ -226,7 +226,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             self.query = query
             self.locale = locale
 
-            let reloadRequired = contentChanged || titleChanged || appearanceChanged
+            let reloadRequired = contentChanged || titleChanged
             let wasApplyingSelection = applyingSelection
             if reloadRequired {
                 // AppKit temporarily chooses the first selectable row during reload. Suppress
@@ -234,6 +234,8 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 tableView.clearHover()
                 applyingSelection = true
                 tableView.reloadData()
+            } else if appearanceChanged {
+                updateVisibleText(in: tableView)
             }
             applySelection(selectedID, to: tableView)
             applyingSelection = wasApplyingSelection
@@ -249,6 +251,24 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
 
         private var tableView: ClipboardTableView? {
             hostedContainerView?.tableView
+        }
+
+        private func updateVisibleText(in tableView: ClipboardTableView) {
+            let visibleRows = tableView.rows(in: tableView.visibleRect)
+            guard visibleRows.location != NSNotFound else { return }
+            for row in visibleRows.location..<NSMaxRange(visibleRows) {
+                guard rows.indices.contains(row),
+                    let view = tableView.view(atColumn: 0, row: row, makeIfNecessary: false)
+                else { continue }
+                switch rows[row] {
+                case .header(let section):
+                    (view as? ClipboardSectionCellView)?.configure(
+                        title: Self.localized(section.title, locale: locale), isFirst: row == 0)
+                case .item(let item):
+                    (view as? ClipboardItemCellView)?.updateTitle(
+                        item: item, query: query, locale: locale)
+                }
+            }
         }
 
         private static func makeRows(_ results: [ClipboardItem]) -> [ClipboardTableRow] {
@@ -514,8 +534,6 @@ private final class ClipboardTableView: NSTableView {
     private var lastScreenMouseLocation: NSPoint?
     private var pendingHoverRow: Int?
     private var pendingHoverTask: Task<Void, Never>?
-    private var observedHoverGeneration = -1
-    private var hoverResumeMouseLocation: NSPoint?
 
     override var acceptsFirstResponder: Bool { false }
 
@@ -536,14 +554,12 @@ private final class ClipboardTableView: NSTableView {
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
-        guard canTrackHover(afterMouseMove: false) else { return }
         lastScreenMouseLocation = NSEvent.mouseLocation
         updateHover(at: convert(event.locationInWindow, from: nil), pointerMoved: false)
     }
 
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
-        guard canTrackHover(afterMouseMove: true) else { return }
         let mouseLocation = NSEvent.mouseLocation
         let pointerMoved = lastScreenMouseLocation.map {
             hypot(mouseLocation.x - $0.x, mouseLocation.y - $0.y) >= 0.5
@@ -571,7 +587,6 @@ private final class ClipboardTableView: NSTableView {
     }
 
     func refreshHover() {
-        guard canTrackHover(afterMouseMove: false) else { return }
         guard hoverEnabled, let window else {
             clearHover()
             return
@@ -590,28 +605,6 @@ private final class ClipboardTableView: NSTableView {
         lastPointerLocation = nil
         lastScreenMouseLocation = nil
         cancelPendingHover()
-    }
-
-    private func canTrackHover(afterMouseMove: Bool) -> Bool {
-        guard hoverEnabled, let panel = window as? PalettePanel,
-            panel.allowsHoverSelection
-        else {
-            clearHover()
-            return false
-        }
-        if observedHoverGeneration != panel.hoverGeneration {
-            observedHoverGeneration = panel.hoverGeneration
-            hoverResumeMouseLocation = panel.hoverResumeMouseLocation
-            clearHover()
-        }
-        if let start = hoverResumeMouseLocation {
-            let current = NSEvent.mouseLocation
-            guard afterMouseMove,
-                hypot(current.x - start.x, current.y - start.y) >= 2
-            else { return false }
-            hoverResumeMouseLocation = nil
-        }
-        return true
     }
 
     private func updateHover(at point: NSPoint, pointerMoved: Bool) {
@@ -695,13 +688,9 @@ private final class ClipboardTableView: NSTableView {
         guard pendingHoverRow == row else { return }
         pendingHoverRow = nil
         pendingHoverTask = nil
-        guard hoverEnabled, let panel = window as? PalettePanel,
-            panel.allowsHoverSelection,
-            observedHoverGeneration == panel.hoverGeneration,
-            hoverResumeMouseLocation == nil
-        else { return }
+        guard hoverEnabled, let window else { return }
 
-        let point = convert(panel.mouseLocationOutsideOfEventStream, from: nil)
+        let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
         guard visibleRect.contains(point), pointerHitsTable(at: point), self.row(at: point) == row,
             isItemRow?(row) == true
         else { return }
@@ -866,11 +855,15 @@ private final class ClipboardItemCellView: NSTableCellView {
             setHighlightOpacity(0)
         }
         setSelected(selected)
+        updateTitle(item: item, query: query, locale: locale)
+        thumbnailView.configure(item: item, imageURL: imageURL)
+    }
+
+    func updateTitle(item: ClipboardItem, query: String, locale: Locale) {
         titleLabel.attributedStringValue = SearchHighlight.nsAttributed(
             item.displayTitle(locale: locale),
             query: query,
             font: .preferredFont(forTextStyle: .body))
-        thumbnailView.configure(item: item, imageURL: imageURL)
     }
 
     func setSelected(_ selected: Bool) {
@@ -968,13 +961,12 @@ private final class ClipboardThumbnailView: NSView {
     /// Well above the 48 device pixels needed by the 24pt row slot on a 2× display, leaving enough
     /// source detail for high-quality final downsampling.
     private static let imageMaxPixel: CGFloat = 128
-    private static let markdownCache = NSCache<NSUUID, NSNumber>()
 
     private let symbolView = NSImageView()
     private var representedID: ClipboardItem.ID?
     private var loadTask: Task<Void, Never>?
     private var displayedImage: NSImage?
-    private var placeholderSymbol = "photo"
+    private var placeholderKind: ClipboardItem.Kind = .image
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -985,15 +977,14 @@ private final class ClipboardThumbnailView: NSView {
         layer?.contentsGravity = .resizeAspectFill
 
         symbolView.imageScaling = .scaleProportionallyDown
-        symbolView.contentTintColor = .secondaryLabelColor
         symbolView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(symbolView)
 
         NSLayoutConstraint.activate([
             symbolView.centerXAnchor.constraint(equalTo: centerXAnchor),
             symbolView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            symbolView.widthAnchor.constraint(equalToConstant: 14),
-            symbolView.heightAnchor.constraint(equalToConstant: 14),
+            symbolView.widthAnchor.constraint(equalToConstant: 16),
+            symbolView.heightAnchor.constraint(equalToConstant: 16),
         ])
     }
 
@@ -1036,16 +1027,10 @@ private final class ClipboardThumbnailView: NSView {
         displayedImage = nil
 
         switch item.kind {
-        case .text:
-            showDisplayKind(.text)
-            loadMarkdownIfNeeded(item, stored: .text)
-        case .code:
-            showDisplayKind(.code)
-            loadMarkdownIfNeeded(item, stored: .code)
-        case .link:
-            showDisplayKind(.link)
+        case .text, .markdown, .code, .link:
+            showKind(item.kind)
         case .image:
-            showDisplayKind(.image)
+            showKind(.image)
             guard let imageURL else { return }
             if let cached = ImageThumbnail.cached(
                 imageURL, maxPixel: Self.imageMaxPixel)
@@ -1069,48 +1054,27 @@ private final class ClipboardThumbnailView: NSView {
         loadTask = nil
         representedID = nil
         displayedImage = nil
-        showDisplayKind(.image)
+        showKind(.image)
     }
 
     func refreshAppearance() {
         guard let displayedImage else {
-            showSymbol(placeholderSymbol)
+            showKind(placeholderKind)
             return
         }
         showImage(displayedImage)
     }
 
-    private func loadMarkdownIfNeeded(_ item: ClipboardItem, stored: ClipboardItem.DisplayKind) {
-        guard let source = item.text, !source.isEmpty else { return }
-        let cacheKey = item.id as NSUUID
-        if let cached = Self.markdownCache.object(forKey: cacheKey) {
-            if cached.boolValue { showDisplayKind(.markdown) }
-            return
-        }
-        let id = item.id
-        loadTask = Task { @MainActor [weak self] in
-            let kind = await Task.detached(priority: .utility) {
-                ClipboardItem.DisplayKind.classify(kind: item.kind, text: source)
-            }.value
-            Self.markdownCache.setObject(NSNumber(value: kind == .markdown), forKey: cacheKey)
-            guard !Task.isCancelled, let self, representedID == id else { return }
-            showDisplayKind(kind == .markdown ? .markdown : stored)
-        }
-    }
-
-    private func showDisplayKind(_ kind: ClipboardItem.DisplayKind) {
-        showSymbol(kind.symbolName)
-    }
-
-    private func showSymbol(_ name: String) {
-        placeholderSymbol = name
+    private func showKind(_ kind: ClipboardItem.Kind) {
+        placeholderKind = kind
         displayedImage = nil
         layer?.contents = nil
         layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.08).cgColor
         needsDisplay = true
         symbolView.isHidden = false
-        let configuration = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-        let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+        symbolView.contentTintColor = .labelColor
+        let configuration = NSImage.SymbolConfiguration(pointSize: 15, weight: .medium)
+        let image = NSImage(systemSymbolName: kind.symbolName, accessibilityDescription: nil)?
             .withSymbolConfiguration(configuration)
         image?.isTemplate = true
         symbolView.image = image
@@ -1168,7 +1132,6 @@ struct ClipboardPreview: View {
     @EnvironmentObject private var store: ClipboardStore
     @EnvironmentObject private var vm: PaletteViewModel
     @ObservedObject private var settings = AppCore.shared.settings
-    @State private var codeRendersAsMarkdown = false
 
     var body: some View {
         if let item {
@@ -1178,9 +1141,6 @@ struct ClipboardPreview: View {
                 ClipboardInfoSection(item: item, imageURL: store.imageURL(for: item))
             }
             .padding(.horizontal, 12)
-            .task(id: item.id) {
-                await refreshCodeMarkdown(item)
-            }
         } else {
             Color.clear
         }
@@ -1190,6 +1150,10 @@ struct ClipboardPreview: View {
     private func content(for item: ClipboardItem) -> some View {
         switch item.kind {
         case .text:
+            SelectableAttributedText(
+                attributed: SearchHighlight.attributed(item.text ?? "", query: query)
+            )
+        case .markdown:
             if settings.renderMarkdown {
                 MarkdownPreview(source: item.text ?? "", query: query)
             } else {
@@ -1202,11 +1166,7 @@ struct ClipboardPreview: View {
                 attributed: SearchHighlight.attributed(item.text ?? "", query: query)
             )
         case .code:
-            if settings.renderMarkdown, codeRendersAsMarkdown {
-                MarkdownPreview(source: item.text ?? "", query: query)
-            } else {
-                CodePreview(code: item.text ?? "", query: query)
-            }
+            CodePreview(code: item.text ?? "", query: query)
         case .image:
             let imageURL = store.imageURL(for: item)
             AsyncThumbnail(url: imageURL, maxPixel: Self.previewMaxPixel) {
@@ -1239,18 +1199,6 @@ struct ClipboardPreview: View {
             }
         }
     }
-
-    private func refreshCodeMarkdown(_ item: ClipboardItem) async {
-        guard item.kind == .code, let text = item.text, !text.isEmpty else {
-            codeRendersAsMarkdown = false
-            return
-        }
-        let renders = await Task.detached(priority: .utility) {
-            ClipboardTextClassifier.isMarkdownArticle(text)
-        }.value
-        guard !Task.isCancelled else { return }
-        codeRendersAsMarkdown = renders
-    }
 }
 
 /// The "Information" block under the preview (label/value rows split by hairlines); disk- or full-text-touching details are gathered off the main actor per selection so clicking huge entries never hitches.
@@ -1258,11 +1206,11 @@ private struct ClipboardInfoSection: View {
     let item: ClipboardItem
     let imageURL: URL?
 
+    @EnvironmentObject private var store: ClipboardStore
     @State private var details = Details()
     @ObservedObject private var settings = AppCore.shared.settings
 
     private struct Details: Equatable, Sendable {
-        var typeLabel: String?
         var characters: Int?
         var words: Int?
         var pixelSize: CGSize?
@@ -1330,10 +1278,15 @@ private struct ClipboardInfoSection: View {
         rows.append(
             InfoRow(
                 label: "Type",
-                value: details.typeLabel ?? item.kind.typeLabel,
+                value: item.kind.typeLabel,
                 localizesValue: true))
+        if let stackID = store.stackID(for: item.id),
+            let stack = store.stacks.first(where: { $0.id == stackID })
+        {
+            rows.append(InfoRow(label: "Stack", value: stack.name))
+        }
         switch item.kind {
-        case .text, .code, .link:
+        case .text, .markdown, .code, .link:
             if let characters = details.characters {
                 rows.append(
                     InfoRow(
@@ -1379,9 +1332,6 @@ private struct ClipboardInfoSection: View {
         let url = imageURL
         let loaded = await Task.detached(priority: .userInitiated) {
             var details = Details()
-            details.typeLabel = ClipboardItem.DisplayKind.classify(
-                kind: item.kind, text: text
-            ).typeLabel
             if let text {
                 details.characters = text.count
                 details.words = Self.wordCount(text)

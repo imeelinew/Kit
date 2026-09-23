@@ -39,7 +39,7 @@ private enum MarkdownPreviewCache {
     }()
 }
 
-/// GitHub-flavored Markdown preview for ordinary clipboard text. Parsing and deterministic AppKit
+/// GitHub-flavored Markdown preview for stored Markdown items. Parsing and deterministic AppKit
 /// layout run off the main actor; the raw source remains visible until the result is ready and
 /// remains the payload used by clipboard actions.
 struct MarkdownPreview: View {

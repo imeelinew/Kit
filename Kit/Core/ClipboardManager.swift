@@ -108,8 +108,12 @@ final class ClipboardManager {
 
             switch capture.content {
             case .text(let text):
+                let kind = await Task.detached(priority: .utility) {
+                    ClipboardTextClassifier.kind(for: text)
+                }.value
+                guard !Task.isCancelled else { return }
                 self.store.addText(
-                    text, sourceBundleID: capture.sourceBundleID,
+                    text, kind: kind, sourceBundleID: capture.sourceBundleID,
                     expectedGeneration: capture.generation)
             case .image(let png):
                 await self.store.addImage(

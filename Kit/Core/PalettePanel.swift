@@ -6,19 +6,6 @@ import SwiftUI
 /// The sole keyboard gateway for the palette window. It receives key events before the current
 /// first responder, so embedded AppKit views and SwiftUI focus changes cannot disable commands.
 final class PalettePanel: NSPanel {
-    /// Window motion can move rows under a stationary pointer. Resume hover only after the
-    /// transition finishes, then let the table wait for actual pointer movement.
-    var allowsHoverSelection = false {
-        didSet {
-            if allowsHoverSelection && !oldValue {
-                hoverGeneration &+= 1
-                hoverResumeMouseLocation = NSEvent.mouseLocation
-            }
-        }
-    }
-    private(set) var hoverGeneration = 0
-    private(set) var hoverResumeMouseLocation = NSPoint.zero
-
     weak var paletteViewModel: PaletteViewModel? {
         didSet {
             paletteViewModel?.onMenuOpenChanged = { [weak self] open in

@@ -84,10 +84,10 @@ enum PaletteMenuAction: Equatable {
     case deleteStack(ClipboardStack)
 }
 
-extension ClipboardItem.DisplayKind {
+extension ClipboardItem.Kind {
     var symbolName: String {
         switch self {
-        case .text: "textformat"
+        case .text: "doc.text"
         case .markdown: "number"
         case .code: "chevron.left.forwardslash.chevron.right"
         case .link: "link"
@@ -100,14 +100,14 @@ enum ClipboardKindFilter: Equatable, CaseIterable {
     case all, text, markdown, code, link, image
 
     var title: LocalizedStringKey {
-        LocalizedStringKey(displayKind?.typeLabel ?? "All Types")
+        LocalizedStringKey(kind?.typeLabel ?? "All Types")
     }
 
     var symbolName: String {
-        displayKind?.symbolName ?? "list.bullet"
+        kind?.symbolName ?? "list.bullet"
     }
 
-    var displayKind: ClipboardItem.DisplayKind? {
+    var kind: ClipboardItem.Kind? {
         switch self {
         case .all: nil
         case .text: .text
@@ -634,7 +634,7 @@ final class PaletteViewModel: ObservableObject {
         searchTask = Task { [weak self] in
             guard let self else { return }
             let matches = await core.clipboardStore.searchAsync(
-                query, displayKind: filter.displayKind)
+                query, kind: filter.kind)
             guard !Task.isCancelled,
                 self.query.trimmingCharacters(in: .whitespacesAndNewlines) == query,
                 self.kindFilter == filter,

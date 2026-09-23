@@ -5,46 +5,15 @@ private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.sel
 
 struct ClipboardItem: Identifiable, Hashable, Sendable {
     enum Kind: String, Sendable {
-        case text, code, link, image
-
-        /// Localization key for the stored kind. The Information panel uses `displayKind`.
-        var typeLabel: String {
-            switch self {
-            case .text: "Plain Text"
-            case .code: "Code"
-            case .link: "Link"
-            case .image: "Image"
-            }
-        }
-    }
-
-    /// User-visible type, including Markdown detected by the existing classifiers.
-    enum DisplayKind: Equatable, Sendable {
         case text, markdown, code, link, image
 
         var typeLabel: String {
             switch self {
-            case .text: Kind.text.typeLabel
+            case .text: "Plain Text"
             case .markdown: "Markdown"
-            case .code: Kind.code.typeLabel
-            case .link: Kind.link.typeLabel
-            case .image: Kind.image.typeLabel
-            }
-        }
-
-        /// Same rules as the Information "Type" row: stored kind, with Markdown overlay for text/code.
-        static func classify(kind: Kind, text: String?) -> DisplayKind {
-            switch kind {
-            case .image:
-                return .image
-            case .link:
-                return .link
-            case .text:
-                if let text, MarkdownAttributedRenderer.isMarkdown(text) { return .markdown }
-                return .text
-            case .code:
-                if let text, ClipboardTextClassifier.isMarkdownArticle(text) { return .markdown }
-                return .code
+            case .code: "Code"
+            case .link: "Link"
+            case .image: "Image"
             }
         }
     }
@@ -63,14 +32,9 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     /// User-assigned list title. Nil means the visible title is derived from the copied content.
     let customTitle: String?
 
-    /// User-visible type shown in the Information panel and used by the type filter.
-    var displayKind: DisplayKind {
-        DisplayKind.classify(kind: kind, text: text)
-    }
-
-    init(text: String, sourceBundleID: String?) {
+    init(text: String, kind: Kind, sourceBundleID: String?) {
         self.init(
-            id: UUID(), kind: ClipboardTextClassifier.kind(for: text), text: text,
+            id: UUID(), kind: kind, text: text,
             imagePath: nil, imageFingerprint: nil, createdAt: Date(),
             sourceBundleID: sourceBundleID)
     }
@@ -133,7 +97,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
         switch kind {
         case .image:
             return String(localized: "Image", locale: locale)
-        case .text, .code, .link:
+        case .text, .markdown, .code, .link:
             let text = String((text ?? "").prefix(200)).trimmingCharacters(
                 in: .whitespacesAndNewlines)
             let lineEnd = text.firstIndex(where: { $0.isNewline }) ?? text.endIndex
@@ -382,6 +346,7 @@ final class ClipboardStore: ObservableObject {
           pinyin_initials TEXT
         );
         CREATE INDEX IF NOT EXISTS items_created_at ON items(created_at);
+        CREATE INDEX IF NOT EXISTS items_kind ON items(kind);
         CREATE INDEX IF NOT EXISTS items_pinned_at
           ON items(pinned_at) WHERE pinned_at IS NOT NULL;
         CREATE UNIQUE INDEX IF NOT EXISTS items_image_fingerprint
@@ -501,11 +466,12 @@ final class ClipboardStore: ObservableObject {
 
     @discardableResult
     func addText(
-        _ text: String, sourceBundleID: String?, expectedGeneration: UInt64? = nil
+        _ text: String, kind: ClipboardItem.Kind, sourceBundleID: String?,
+        expectedGeneration: UInt64? = nil
     ) -> ClipboardItem? {
         if let expectedGeneration, expectedGeneration != captureGeneration { return nil }
         if items.first?.kind != .image, items.first?.text == text { return items.first }
-        let item = ClipboardItem(text: text, sourceBundleID: sourceBundleID)
+        let item = ClipboardItem(text: text, kind: kind, sourceBundleID: sourceBundleID)
         return insert(item) ? item : nil
     }
 
@@ -757,10 +723,10 @@ final class ClipboardStore: ObservableObject {
     /// Full-history search for the UI. SQLite work and resident pinyin matching both run outside the
     /// main actor; cancellation discards an obsolete keystroke's result before it reaches SwiftUI.
     func searchAsync(
-        _ query: String, displayKind: ClipboardItem.DisplayKind? = nil
+        _ query: String, kind: ClipboardItem.Kind? = nil
     ) async -> [ClipboardItem] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty || displayKind != nil else { return orderedItems }
+        guard !q.isEmpty || kind != nil else { return orderedItems }
 
         let resident = items
         let path = dbURL.path
@@ -768,14 +734,14 @@ final class ClipboardStore: ObservableObject {
             () -> [ClipboardItem] in
             guard !Task.isCancelled else { return [] }
             return Self.queryDatabase(
-                path: path, query: q, displayKind: displayKind) ?? []
+                path: path, query: q, kind: kind) ?? []
         }
         let residentTask = Task.detached(priority: .userInitiated) {
             () -> [ClipboardItem] in
             guard !Task.isCancelled else { return [] }
             return resident.filter {
                 (q.isEmpty || $0.matches(q))
-                    && (displayKind == nil || $0.displayKind == displayKind)
+                    && (kind == nil || $0.kind == kind)
             }
         }
         let (databaseResult, residentResult) = await withTaskCancellationHandler {
@@ -800,7 +766,7 @@ final class ClipboardStore: ObservableObject {
     }
 
     private nonisolated static func queryDatabase(
-        path: String, query: String, displayKind: ClipboardItem.DisplayKind?
+        path: String, query: String, kind: ClipboardItem.Kind?
     ) -> [ClipboardItem]? {
         var connection: OpaquePointer?
         guard sqlite3_open_v2(path, &connection, SQLITE_OPEN_READONLY, nil) == SQLITE_OK,
@@ -813,26 +779,29 @@ final class ClipboardStore: ObservableObject {
         sqlite3_busy_timeout(connection, 500)
 
         let usesFTS = query.count >= 3
+        let kindWhere = kind == nil ? "" : " WHERE kind = ?"
+        let kindAnd = kind == nil ? "" : " AND kind = ?"
+        let joinedKindAnd = kind == nil ? "" : " AND i.kind = ?"
         let sql = query.isEmpty
             ? """
               SELECT id, kind, text, image_path, created_at, source_app, pinned_at,
                      image_fingerprint, custom_title
-              FROM items ORDER BY rowid DESC
+              FROM items\(kindWhere) ORDER BY rowid DESC
               """
             : usesFTS
             ? """
               SELECT i.id, i.kind, i.text, i.image_path, i.created_at, i.source_app,
                      i.pinned_at, i.image_fingerprint, i.custom_title
               FROM items_fts f JOIN items i ON i.rowid = f.rowid
-              WHERE items_fts MATCH ? ORDER BY f.rowid DESC
+              WHERE items_fts MATCH ?\(joinedKindAnd) ORDER BY f.rowid DESC
               """
             : """
               SELECT id, kind, text, image_path, created_at, source_app, pinned_at,
                      image_fingerprint, custom_title
               FROM items
-              WHERE text LIKE ? ESCAPE '\\' OR pinyin LIKE ? ESCAPE '\\'
+              WHERE (text LIKE ? ESCAPE '\\' OR pinyin LIKE ? ESCAPE '\\'
                  OR pinyin_initials LIKE ? ESCAPE '\\'
-                 OR custom_title LIKE ? ESCAPE '\\'
+                 OR custom_title LIKE ? ESCAPE '\\')\(kindAnd)
               ORDER BY rowid DESC
               """
         var statement: OpaquePointer?
@@ -853,23 +822,27 @@ final class ClipboardStore: ObservableObject {
         if usesFTS {
             let match = "\"" + query.replacingOccurrences(of: "\"", with: "\"\"") + "\""
             sqlite3_bind_text(statement, 1, match, -1, SQLITE_TRANSIENT)
+            if let kind {
+                sqlite3_bind_text(statement, 2, kind.rawValue, -1, SQLITE_TRANSIENT)
+            }
         } else if !query.isEmpty {
             for index in 1...4 {
                 sqlite3_bind_text(statement, Int32(index), pattern, -1, SQLITE_TRANSIENT)
             }
+            if let kind {
+                sqlite3_bind_text(statement, 5, kind.rawValue, -1, SQLITE_TRANSIENT)
+            }
+        } else if let kind {
+            sqlite3_bind_text(statement, 1, kind.rawValue, -1, SQLITE_TRANSIENT)
         }
 
-        // Count accepted types rather than truncating candidates in SQL. Markdown is
-        // derived from content and cannot be filtered by the stored kind alone.
+        // Keep the result cap after applying the stored type filter.
         var results: [ClipboardItem] = []
         var seen = Set<UUID>()
         var status = sqlite3_step(statement)
         while status == SQLITE_ROW {
             if Task.isCancelled { return nil }
-            if let item = row(statement),
-                displayKind == nil || item.displayKind == displayKind,
-                seen.insert(item.id).inserted
-            {
+            if let item = row(statement), seen.insert(item.id).inserted {
                 results.append(item)
                 if results.count == 2000 { break }
             }
@@ -879,7 +852,7 @@ final class ClipboardStore: ObservableObject {
 
         if usesFTS {
             let titleMatches = queryCustomTitles(
-                connection: connection, pattern: pattern, displayKind: displayKind)
+                connection: connection, pattern: pattern, kind: kind)
             guard let titleMatches else { return nil }
             for item in titleMatches where seen.insert(item.id).inserted {
                 results.append(item)
@@ -1086,13 +1059,14 @@ final class ClipboardStore: ObservableObject {
     }
 
     private nonisolated static func queryCustomTitles(
-        connection: OpaquePointer, pattern: String, displayKind: ClipboardItem.DisplayKind?
+        connection: OpaquePointer, pattern: String, kind: ClipboardItem.Kind?
     ) -> [ClipboardItem]? {
+        let kindAnd = kind == nil ? "" : " AND kind = ?"
         let sql = """
             SELECT id, kind, text, image_path, created_at, source_app, pinned_at,
                    image_fingerprint, custom_title
             FROM items
-            WHERE custom_title LIKE ? ESCAPE '\\'
+            WHERE custom_title LIKE ? ESCAPE '\\'\(kindAnd)
             ORDER BY rowid DESC
             """
         var statement: OpaquePointer?
@@ -1104,11 +1078,14 @@ final class ClipboardStore: ObservableObject {
         }
         defer { sqlite3_finalize(statement) }
         sqlite3_bind_text(statement, 1, pattern, -1, SQLITE_TRANSIENT)
+        if let kind {
+            sqlite3_bind_text(statement, 2, kind.rawValue, -1, SQLITE_TRANSIENT)
+        }
         var results: [ClipboardItem] = []
         var status = sqlite3_step(statement)
         while status == SQLITE_ROW {
             if Task.isCancelled { return nil }
-            if let item = row(statement), displayKind == nil || item.displayKind == displayKind {
+            if let item = row(statement) {
                 results.append(item)
                 if results.count == 200 { break }
             }
@@ -1190,6 +1167,7 @@ final class ClipboardStore: ObservableObject {
         else { return false }
         guard sqlite3_exec(db, Self.searchSchema, nil, nil, nil) == SQLITE_OK else { return false }
         ensureCustomTitleColumn()
+        guard migrateMarkdownKinds() else { return false }
         insertStmt = prepare(
             """
             INSERT INTO items(
@@ -1237,6 +1215,75 @@ final class ClipboardStore: ObservableObject {
             && deleteByIDStmt != nil && staleImagesStmt != nil
             && deleteStaleStmt != nil && imageByFingerprintStmt != nil
             && itemByIDStmt != nil
+    }
+
+    /// Classify pre-existing rows once, then persist Markdown as an ordinary `kind` value.
+    /// Updating only `kind` leaves the text FTS index and row order untouched.
+    private func migrateMarkdownKinds() -> Bool {
+        var versionStatement: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "PRAGMA user_version", -1, &versionStatement, nil) == SQLITE_OK
+        else {
+            sqlite3_finalize(versionStatement)
+            return false
+        }
+        let versionStatus = sqlite3_step(versionStatement)
+        let version = sqlite3_column_int(versionStatement, 0)
+        sqlite3_finalize(versionStatement)
+        guard versionStatus == SQLITE_ROW else { return false }
+        guard version < 1 else { return true }
+
+        guard sqlite3_exec(db, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { return false }
+        var committed = false
+        defer {
+            if !committed { sqlite3_exec(db, "ROLLBACK", nil, nil, nil) }
+        }
+
+        var readStatement: OpaquePointer?
+        guard sqlite3_prepare_v2(
+            db, "SELECT rowid, kind, text FROM items WHERE kind IN ('text', 'code')", -1,
+            &readStatement, nil
+        ) == SQLITE_OK else {
+            sqlite3_finalize(readStatement)
+            return false
+        }
+        var markdownRowIDs: [sqlite3_int64] = []
+        var status = sqlite3_step(readStatement)
+        while status == SQLITE_ROW {
+            if let storedKind = Self.columnString(readStatement, 1),
+                let text = Self.columnString(readStatement, 2)
+            {
+                let isMarkdown = storedKind == ClipboardItem.Kind.text.rawValue
+                    ? MarkdownAttributedRenderer.isMarkdown(text)
+                    : ClipboardTextClassifier.kind(for: text) == .markdown
+                if isMarkdown {
+                    markdownRowIDs.append(sqlite3_column_int64(readStatement, 0))
+                }
+            }
+            status = sqlite3_step(readStatement)
+        }
+        sqlite3_finalize(readStatement)
+        guard status == SQLITE_DONE else { return false }
+
+        var updateStatement: OpaquePointer?
+        guard sqlite3_prepare_v2(
+            db, "UPDATE items SET kind = 'markdown' WHERE rowid = ?", -1,
+            &updateStatement, nil
+        ) == SQLITE_OK else {
+            sqlite3_finalize(updateStatement)
+            return false
+        }
+        defer { sqlite3_finalize(updateStatement) }
+        for rowID in markdownRowIDs {
+            sqlite3_bind_int64(updateStatement, 1, rowID)
+            guard sqlite3_step(updateStatement) == SQLITE_DONE else { return false }
+            sqlite3_reset(updateStatement)
+            sqlite3_clear_bindings(updateStatement)
+        }
+        guard sqlite3_exec(db, "PRAGMA user_version = 1", nil, nil, nil) == SQLITE_OK,
+            sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK
+        else { return false }
+        committed = true
+        return true
     }
 
     private func ensureCustomTitleColumn() {
@@ -1316,11 +1363,8 @@ final class ClipboardStore: ObservableObject {
     }
 }
 
-/// Conservative classification for clipboard text. Whole-string http(s) URLs classify as links;
-/// strong syntax forms classify as code on their own; weaker punctuation signals must combine,
-/// keeping prose and ordinary messages as text. Code blocks and inline code inside Markdown are
-/// ignored so an AI answer explaining source stays text. Only a bounded prefix is inspected for
-/// code so a large copy cannot stall capture.
+/// Assign one persistent kind when text is captured: links, code, Markdown, then plain text.
+/// Code checks inspect a bounded prefix and ignore snippets embedded in Markdown prose.
 enum ClipboardTextClassifier {
     private static let sampleLimit = 12_000
     /// Opening fence, optional info string, body, then a matching closing fence.
@@ -1336,13 +1380,9 @@ enum ClipboardTextClassifier {
 
     static func kind(for text: String) -> ClipboardItem.Kind {
         if isLink(text) { return .link }
-        return isCode(text) ? .code : .text
-    }
-
-    /// A Markdown document that embeds source, not a source file. Used to render rows that were
-    /// captured as `.code` before fenced examples were excluded from classification.
-    static func isMarkdownArticle(_ text: String) -> Bool {
-        MarkdownAttributedRenderer.isMarkdown(text) && !isCode(text)
+        if isCode(text) { return .code }
+        if MarkdownAttributedRenderer.isMarkdown(text) { return .markdown }
+        return .text
     }
 
     /// Whole clipboard string is a single http(s) URL (no surrounding prose).
