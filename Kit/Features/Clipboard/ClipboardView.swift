@@ -129,6 +129,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private var applyingSelection = false
         private var lastGeometry = ClipboardTableGeometry()
         private var lastBoundsOrigin: NSPoint?
+        private var hoverRefreshQueued = false
 
         private let itemIdentifier = NSUserInterfaceItemIdentifier("ClipboardItemCell")
         private let headerIdentifier = NSUserInterfaceItemIdentifier("ClipboardHeaderCell")
@@ -150,6 +151,11 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             tableView.dataSource = self
             tableView.delegate = self
             tableView.onRightClick = { [weak self] row in self?.rightClicked(row) }
+            tableView.isItemRow = { [weak self] row in
+                guard let self, self.rows.indices.contains(row) else { return false }
+                if case .item = self.rows[row] { return true }
+                return false
+            }
 
             let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("Clipboard"))
             column.resizingMask = .autoresizingMask
@@ -237,7 +243,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 apply(scroll, selectedID: selectedID, to: tableView)
             }
             tableView.hoverEnabled = hoverEnabled
-            tableView.refreshHover()
+            queueHoverRefresh()
             reportGeometry(scrolling: false)
         }
 
@@ -426,8 +432,18 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private func boundsChanged(_ origin: NSPoint) {
             let scrolling = lastBoundsOrigin.map { $0 != origin } ?? false
             lastBoundsOrigin = origin
-            tableView?.refreshHover()
+            queueHoverRefresh()
             reportGeometry(scrolling: scrolling)
+        }
+
+        private func queueHoverRefresh() {
+            guard !hoverRefreshQueued else { return }
+            hoverRefreshQueued = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.hoverRefreshQueued = false
+                self.tableView?.refreshHover()
+            }
         }
 
         private static func localized(_ title: String, locale: Locale) -> String {
@@ -480,6 +496,7 @@ private final class ClipboardTableView: NSTableView {
     private static let hoverIntentDelay: Duration = .milliseconds(200)
 
     var onRightClick: ((Int) -> Void)?
+    var isItemRow: ((Int) -> Bool)?
     var hoverEnabled = true {
         didSet {
             guard hoverEnabled != oldValue else { return }
@@ -494,6 +511,7 @@ private final class ClipboardTableView: NSTableView {
     private var hoveredRow: Int?
     private var hoverTrackingArea: NSTrackingArea?
     private var lastPointerLocation: NSPoint?
+    private var lastScreenMouseLocation: NSPoint?
     private var pendingHoverRow: Int?
     private var pendingHoverTask: Task<Void, Never>?
     private var observedHoverGeneration = -1
@@ -519,13 +537,19 @@ private final class ClipboardTableView: NSTableView {
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
         guard canTrackHover(afterMouseMove: false) else { return }
-        updateHover(at: convert(event.locationInWindow, from: nil))
+        lastScreenMouseLocation = NSEvent.mouseLocation
+        updateHover(at: convert(event.locationInWindow, from: nil), pointerMoved: false)
     }
 
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
         guard canTrackHover(afterMouseMove: true) else { return }
-        updateHover(at: convert(event.locationInWindow, from: nil))
+        let mouseLocation = NSEvent.mouseLocation
+        let pointerMoved = lastScreenMouseLocation.map {
+            hypot(mouseLocation.x - $0.x, mouseLocation.y - $0.y) >= 0.5
+        } ?? true
+        lastScreenMouseLocation = mouseLocation
+        updateHover(at: convert(event.locationInWindow, from: nil), pointerMoved: pointerMoved)
     }
 
     override func mouseExited(with event: NSEvent) {
@@ -557,12 +581,14 @@ private final class ClipboardTableView: NSTableView {
             clearHover()
             return
         }
-        updateHover(at: point)
+        lastScreenMouseLocation = NSEvent.mouseLocation
+        updateHover(at: point, pointerMoved: false)
     }
 
     func clearHover() {
         hoveredRow = nil
         lastPointerLocation = nil
+        lastScreenMouseLocation = nil
         cancelPendingHover()
     }
 
@@ -588,7 +614,7 @@ private final class ClipboardTableView: NSTableView {
         return true
     }
 
-    private func updateHover(at point: NSPoint) {
+    private func updateHover(at point: NSPoint, pointerMoved: Bool) {
         guard hoverEnabled, pointerHitsTable(at: point) else {
             clearHover()
             return
@@ -604,9 +630,7 @@ private final class ClipboardTableView: NSTableView {
         lastPointerLocation = point
 
         let row = row(at: point)
-        guard row >= 0,
-            view(atColumn: 0, row: row, makeIfNecessary: false) is ClipboardItemCellView
-        else {
+        guard row >= 0, isItemRow?(row) == true else {
             cancelPendingHover()
             return
         }
@@ -620,7 +644,7 @@ private final class ClipboardTableView: NSTableView {
         }
         guard hoveredRow != row else { return }
 
-        if hoveredRow != nil,
+        if pointerMoved, hoveredRow != nil,
             let previousPoint,
             isMovingTowardDetails(from: previousPoint, to: point)
         {
@@ -679,7 +703,7 @@ private final class ClipboardTableView: NSTableView {
 
         let point = convert(panel.mouseLocationOutsideOfEventStream, from: nil)
         guard visibleRect.contains(point), pointerHitsTable(at: point), self.row(at: point) == row,
-            view(atColumn: 0, row: row, makeIfNecessary: false) is ClipboardItemCellView
+            isItemRow?(row) == true
         else { return }
         activateHoverSelection(for: row, at: point)
     }
@@ -748,12 +772,23 @@ private final class ClipboardSectionCellView: NSTableCellView {
 }
 
 private final class ClipboardItemCellView: NSTableCellView {
+    private enum HighlightMotion {
+        static let fillAlpha: CGFloat = 0.11
+        static let briefVisitThreshold: CFTimeInterval = 0.06
+        static let enterDuration: CFTimeInterval = 0.19
+        static let exitDuration: CFTimeInterval = 0.24
+        static let tracePeak: Float = 0.45
+        static let traceDuration: CFTimeInterval = 0.22
+    }
+
     private let highlightView = NSView()
     private let thumbnailView = ClipboardThumbnailView()
     private let titleLabel = NSTextField(labelWithString: "")
+    private var representedID: ClipboardItem.ID?
     private var selected = false
-    /// Invalidates a fade queued from a scroll transaction once the cell is reused or reconfigured.
-    private var hoverFadeToken = 0
+    private var fadeToken = 0
+    private var entranceQueued = false
+    private var selectionBeganAt: CFTimeInterval?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -784,8 +819,8 @@ private final class ClipboardItemCellView: NSTableCellView {
         NSLayoutConstraint.activate([
             highlightView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             highlightView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-            highlightView.topAnchor.constraint(equalTo: topAnchor),
-            highlightView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            highlightView.topAnchor.constraint(equalTo: topAnchor, constant: Theme.Spacing.xxs),
+            highlightView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Theme.Spacing.xxs),
 
             thumbnailView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             thumbnailView.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -799,7 +834,8 @@ private final class ClipboardItemCellView: NSTableCellView {
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             titleLabel.heightAnchor.constraint(lessThanOrEqualToConstant: Theme.Size.rowIcon),
         ])
-        updateSelectionColor()
+        updateHighlightColor()
+        setHighlightOpacity(0)
     }
 
     @available(*, unavailable)
@@ -807,8 +843,9 @@ private final class ClipboardItemCellView: NSTableCellView {
 
     override func prepareForReuse() {
         super.prepareForReuse()
-        hoverFadeToken += 1
-        highlightView.layer?.removeAnimation(forKey: "hoverFade")
+        representedID = nil
+        selected = false
+        setHighlightOpacity(0)
         titleLabel.isHidden = false
         thumbnailView.prepareForReuse()
     }
@@ -822,12 +859,13 @@ private final class ClipboardItemCellView: NSTableCellView {
     func configure(
         item: ClipboardItem, selected: Bool, query: String, imageURL: URL?, locale: Locale
     ) {
-        let selectionChanged = self.selected != selected
-        self.selected = selected
-        if selectionChanged {
-            // A reused row can appear under a stationary pointer while the trackpad scrolls.
-            scheduleHoverFade()
+        if representedID != item.id {
+            // Reused cells must never carry a previous item's highlight or pending fade.
+            representedID = item.id
+            self.selected = false
+            setHighlightOpacity(0)
         }
+        setSelected(selected)
         titleLabel.attributedStringValue = SearchHighlight.nsAttributed(
             item.displayTitle(locale: locale),
             query: query,
@@ -837,46 +875,92 @@ private final class ClipboardItemCellView: NSTableCellView {
 
     func setSelected(_ selected: Bool) {
         guard self.selected != selected else { return }
+        let briefVisit = !selected && (
+            entranceQueued
+                || selectionBeganAt.map {
+                    CACurrentMediaTime() - $0 < HighlightMotion.briefVisitThreshold
+                } == true
+        )
         self.selected = selected
-        scheduleHoverFade()
-    }
-
-    /// Trackpad scrolling updates the hovered row inside the scroll view's disabled action
-    /// transaction, which drops a fade started immediately. Commit it on the next turn.
-    private func scheduleHoverFade() {
-        hoverFadeToken += 1
-        let token = hoverFadeToken
+        entranceQueued = selected
+        selectionBeganAt = selected ? CACurrentMediaTime() : nil
+        fadeToken += 1
+        let token = fadeToken
+        // The scroll view disables layer actions while scrolling. Start the explicit fade after
+        // that transaction, and ignore it if the cell has since been reused or changed again.
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.hoverFadeToken == token else { return }
-            self.updateSelectionVisibility(animated: true)
+            guard let self, self.fadeToken == token else { return }
+            self.entranceQueued = false
+            if briefVisit {
+                self.animateBriefVisit()
+            } else {
+                self.animateHighlight(to: self.selected ? 1 : 0)
+            }
         }
-    }
-
-    private func updateSelectionColor() {
-        updateSelectionVisibility(animated: false)
     }
 
     private func updateHighlightColor() {
-        highlightView.layer?.backgroundColor =
-            NSColor.labelColor.withAlphaComponent(0.10).cgColor
+        guard let layer = highlightView.layer else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.backgroundColor = NSColor.labelColor.withAlphaComponent(HighlightMotion.fillAlpha).cgColor
+        CATransaction.commit()
     }
 
-    private func updateSelectionVisibility(animated: Bool) {
-        updateHighlightColor()
-        let alpha: Float = selected ? 1 : 0
+    private func setHighlightOpacity(_ opacity: Float) {
+        fadeToken += 1
+        entranceQueued = false
+        selectionBeganAt = nil
         guard let layer = highlightView.layer else { return }
-        if !animated {
-            layer.removeAnimation(forKey: "hoverFade")
-            layer.opacity = alpha
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.removeAnimation(forKey: "hoverFade")
+        layer.opacity = opacity
+        CATransaction.commit()
+    }
+
+    private func animateHighlight(to opacity: Float) {
+        guard let layer = highlightView.layer else { return }
+        let current = layer.presentation()?.opacity ?? layer.opacity
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.opacity = opacity
+        layer.removeAnimation(forKey: "hoverFade")
+        guard abs(current - opacity) > 0.01 else {
+            CATransaction.commit()
             return
         }
         let animation = CABasicAnimation(keyPath: "opacity")
-        animation.fromValue = layer.presentation()?.opacity ?? layer.opacity
-        animation.toValue = alpha
-        animation.duration = 0.22
-        animation.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
+        animation.fromValue = current
+        animation.toValue = opacity
+        animation.duration = opacity > current
+            ? HighlightMotion.enterDuration : HighlightMotion.exitDuration
+        animation.timingFunction = opacity > current
+            ? CAMediaTimingFunction(controlPoints: 0.17, 0.82, 0.25, 1)
+            : CAMediaTimingFunction(controlPoints: 0.32, 0, 0.68, 1)
         layer.add(animation, forKey: "hoverFade")
-        layer.opacity = alpha
+        CATransaction.commit()
+    }
+
+    /// A row crossed before its deferred fade begins still gets a soft, short-lived trace.
+    /// This makes rapid pointer sweeps and trackpad scrolling read as a continuous transition.
+    private func animateBriefVisit() {
+        guard let layer = highlightView.layer else { return }
+        let current = layer.presentation()?.opacity ?? layer.opacity
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.opacity = 0
+        layer.removeAnimation(forKey: "hoverFade")
+        let animation = CAKeyframeAnimation(keyPath: "opacity")
+        animation.values = [current, max(current, HighlightMotion.tracePeak), 0]
+        animation.keyTimes = [0, 0.18, 1]
+        animation.duration = HighlightMotion.traceDuration
+        animation.timingFunctions = [
+            CAMediaTimingFunction(controlPoints: 0.17, 0.82, 0.25, 1),
+            CAMediaTimingFunction(controlPoints: 0.32, 0, 0.68, 1),
+        ]
+        layer.add(animation, forKey: "hoverFade")
+        CATransaction.commit()
     }
 }
 

@@ -33,8 +33,11 @@ final class MenuBarController: NSObject {
     }
 
     func spin() {
-        guard let button = statusItem?.button, let image = button.image else { return }
-        let rect = (button.cell as? NSButtonCell)?.imageRect(forBounds: button.bounds)
+        guard iconView == nil, let button = statusItem?.button, let image = button.image else {
+            return
+        }
+        let cellRect = (button.cell as? NSButtonCell)?.imageRect(forBounds: button.bounds)
+        let rect = cellRect.flatMap { $0.isEmpty ? nil : $0 }
             ?? NSRect(
                 x: (button.bounds.width - image.size.width) / 2,
                 y: (button.bounds.height - image.size.height) / 2,
@@ -43,15 +46,17 @@ final class MenuBarController: NSObject {
             )
         let spinner = MenuBarIconView(symbol: image)
         spinner.frame = rect
-        button.image = nil
+        // Keep the variable-length status item at its original width while its icon spins.
+        button.image = NSImage(size: image.size, flipped: false) { _ in true }
         button.addSubview(spinner)
         iconView = spinner
         spinner.spin { [weak self, weak button, weak spinner] in
-            spinner?.removeFromSuperview()
-            button?.image = image
-            button?.imagePosition = .imageOnly
-            button?.imageScaling = .scaleNone
-            self?.iconView = nil
+            guard let self, let button, let spinner,
+                self.statusItem?.button === button, self.iconView === spinner
+            else { return }
+            spinner.removeFromSuperview()
+            button.image = image
+            self.iconView = nil
         }
     }
 
@@ -219,8 +224,11 @@ private final class MenuBarIconView: NSView {
         imageView.imageScaling = .scaleNone
         imageView.image = symbol
         imageView.contentTintColor = .labelColor
+        imageView.frame = NSRect(origin: .zero, size: symbol.size)
         addSubview(imageView)
     }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
@@ -241,12 +249,10 @@ private final class MenuBarIconView: NSView {
             width: size.width,
             height: size.height
         )
-        centerAnchor()
     }
 
     func spin(completion: @escaping () -> Void) {
-        imageView.wantsLayer = true
-        centerAnchor()
+        layoutSubtreeIfNeeded()
         guard let layer = imageView.layer else {
             completion()
             return
@@ -259,15 +265,6 @@ private final class MenuBarIconView: NSView {
         CATransaction.begin()
         CATransaction.setCompletionBlock(completion)
         layer.add(animation, forKey: "spin")
-        CATransaction.commit()
-    }
-
-    private func centerAnchor() {
-        guard let layer = imageView.layer else { return }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
-        layer.position = CGPoint(x: imageView.bounds.midX, y: imageView.bounds.midY)
         CATransaction.commit()
     }
 
