@@ -43,6 +43,14 @@ final class AppCore: ObservableObject {
         }
         pinnedImageWindows.restore()
         clipboardManager.start()
+        let savedPause = settings.savedClipboardPause
+        if savedPause.isPaused {
+            if let until = savedPause.until, until <= Date() {
+                settings.clearClipboardPause()
+            } else {
+                pauseClipboard(until: savedPause.until)
+            }
+        }
         menuBarController.start()
 
         KeyboardShortcuts.onKeyUp(for: .toggleClipboard) { [weak self] in
@@ -97,37 +105,11 @@ final class AppCore: ObservableObject {
         showSettings(tab: .about)
     }
 
-    func createTextItem() {
-        hidePalette(restoreFocus: false)
-        NSApp.activate()
-
-        let editor = NSTextView(frame: NSRect(x: 0, y: 0, width: 360, height: 120))
-        editor.isRichText = false
-        editor.font = .systemFont(ofSize: NSFont.systemFontSize)
-        editor.textContainerInset = NSSize(width: 6, height: 6)
-
-        let scrollView = NSScrollView(frame: editor.frame)
-        scrollView.borderType = .bezelBorder
-        scrollView.hasVerticalScroller = true
-        scrollView.documentView = editor
-
-        let alert = NSAlert()
-        alert.messageText = String(localized: "New Text Item", locale: settings.language.locale)
-        alert.addButton(withTitle: String(localized: "Add", locale: settings.language.locale))
-        alert.addButton(withTitle: String(localized: "Cancel", locale: settings.language.locale))
-        alert.accessoryView = scrollView
-        alert.window.initialFirstResponder = editor
-
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        let text = editor.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        _ = clipboardStore.addText(text, sourceBundleID: Bundle.main.bundleIdentifier)
-    }
-
     func pauseClipboard(until date: Date?) {
         clipboardResumeTask?.cancel()
         clipboardPauseUntil = date
         isClipboardPaused = true
+        settings.saveClipboardPause(until: date)
         clipboardManager.setPaused(true)
 
         guard let date else { return }
@@ -144,6 +126,7 @@ final class AppCore: ObservableObject {
         clipboardResumeTask = nil
         clipboardPauseUntil = nil
         isClipboardPaused = false
+        settings.clearClipboardPause()
         clipboardManager.setPaused(false)
     }
 
@@ -179,15 +162,17 @@ final class AppCore: ObservableObject {
     }
 
     func paste(_ item: ClipboardItem) {
-        let previous = windowController.previousApp
+        guard let previous = windowController.pasteTargetApp else { return }
         startHidingTransfer(item) { [clipboardStore] willDeliver in
             await Paster.paste(
                 item, store: clipboardStore, previousApp: previous, willDeliver: willDeliver)
         }
     }
 
+    var hasPasteTarget: Bool { windowController.pasteTargetApp != nil }
+
     func pasteKeepingWindowOpen(_ item: ClipboardItem) {
-        let previous = windowController.previousApp
+        guard let previous = windowController.pasteTargetApp else { return }
         startTransfer { [weak self] generation in
             guard let self else { return }
             if await Paster.pasteInPlace(item, store: self.clipboardStore, into: previous) {

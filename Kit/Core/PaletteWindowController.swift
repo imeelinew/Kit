@@ -26,16 +26,16 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
+    var pasteTargetApp: NSRunningApplication? {
+        guard let previousApp, !previousApp.isTerminated else { return nil }
+        return previousApp
+    }
+
     func show() {
         let frontmost = NSWorkspace.shared.frontmostApplication
-        if let frontmost, frontmost.processIdentifier != NSRunningApplication.current.processIdentifier, !frontmost.isTerminated {
-            previousApp = frontmost
-        } else if previousApp == nil || previousApp?.isTerminated == true {
-            previousApp = NSWorkspace.shared.runningApplications.first {
-                $0.activationPolicy == .regular
-                && $0.processIdentifier != NSRunningApplication.current.processIdentifier
-                && !$0.isTerminated
-            }
+        previousApp = frontmost.flatMap { app in
+            app.processIdentifier != NSRunningApplication.current.processIdentifier
+                && !app.isTerminated ? app : nil
         }
         let target = PasteTarget(app: previousApp)
         core.palette.pasteTarget = target

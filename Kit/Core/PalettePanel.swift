@@ -42,8 +42,6 @@ final class PalettePanel: NSPanel {
 
         if modifiers == .command {
             switch keyCode {
-            case kVK_ANSI_N:
-                return handleOnce(.newTextItem, event: event)
             case kVK_ANSI_Comma:
                 return handleOnce(.settings, event: event)
             case kVK_ANSI_Q:

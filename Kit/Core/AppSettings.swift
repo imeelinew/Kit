@@ -109,6 +109,8 @@ final class AppSettings: ObservableObject {
     private enum Key {
         static let clipboardRetention = "clipboardRetentionDays"
         static let clipboardDisabledApps = "clipboardDisabledApps"
+        static let clipboardPaused = "clipboardPaused"
+        static let clipboardPauseUntil = "clipboardPauseUntil"
         static let launchAtLogin = "launchAtLogin"
         static let switchToEnglishInputOnOpen = "switchToEnglishInputOnOpen"
         static let renderMarkdown = "renderMarkdown"
@@ -184,6 +186,27 @@ final class AppSettings: ObservableObject {
 
     @Published var copySoundEffect: CopySoundEffect {
         didSet { defaults.set(copySoundEffect.rawValue, forKey: Key.copySoundEffect) }
+    }
+
+    var savedClipboardPause: (isPaused: Bool, until: Date?) {
+        (
+            defaults.bool(forKey: Key.clipboardPaused),
+            defaults.object(forKey: Key.clipboardPauseUntil) as? Date
+        )
+    }
+
+    func saveClipboardPause(until date: Date?) {
+        defaults.set(true, forKey: Key.clipboardPaused)
+        if let date {
+            defaults.set(date, forKey: Key.clipboardPauseUntil)
+        } else {
+            defaults.removeObject(forKey: Key.clipboardPauseUntil)
+        }
+    }
+
+    func clearClipboardPause() {
+        defaults.removeObject(forKey: Key.clipboardPaused)
+        defaults.removeObject(forKey: Key.clipboardPauseUntil)
     }
 
     init() {

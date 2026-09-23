@@ -4,7 +4,7 @@ import Combine
 import QuartzCore
 
 /// Menu bar status item: `arrow.trianglehead.clockwise` template icon, left-click toggles the palette,
-/// right-click offers About, Settings, and Quit. Spins clockwise on new clipboard inserts.
+/// right-click offers About, Settings, clipboard monitoring pause, and Quit. Spins clockwise on new clipboard inserts.
 @MainActor
 final class MenuBarController: NSObject {
     private let settings: AppSettings
@@ -134,6 +134,34 @@ final class MenuBarController: NSObject {
 
         menu.addItem(.separator())
 
+        if AppCore.shared.isClipboardPaused {
+            let resumeItem = NSMenuItem(
+                title: String(localized: "Resume Paste", locale: locale),
+                action: #selector(resumeClipboard),
+                keyEquivalent: ""
+            )
+            resumeItem.target = self
+            menu.addItem(resumeItem)
+        } else {
+            let pauseItem = NSMenuItem(
+                title: String(localized: "Pause Paste", locale: locale),
+                action: nil,
+                keyEquivalent: ""
+            )
+            let pauseMenu = NSMenu()
+            pauseMenu.addItem(pauseOption("Pause", duration: nil, locale: locale))
+            pauseMenu.addItem(.separator())
+            pauseMenu.addItem(pauseOption("For 15 Minutes", duration: 15 * 60, locale: locale))
+            pauseMenu.addItem(pauseOption("For 30 Minutes", duration: 30 * 60, locale: locale))
+            pauseMenu.addItem(pauseOption("For 1 Hour", duration: 60 * 60, locale: locale))
+            pauseMenu.addItem(pauseOption("For 3 Hours", duration: 3 * 60 * 60, locale: locale))
+            pauseMenu.addItem(pauseOption("For 8 Hours", duration: 8 * 60 * 60, locale: locale))
+            pauseItem.submenu = pauseMenu
+            menu.addItem(pauseItem)
+        }
+
+        menu.addItem(.separator())
+
         let quitItem = NSMenuItem(
             title: String(localized: "Quit Paste", locale: locale),
             action: #selector(quit),
@@ -143,6 +171,28 @@ final class MenuBarController: NSObject {
         menu.addItem(quitItem)
 
         NSMenu.popUpContextMenu(menu, with: event, for: button)
+    }
+
+    private func pauseOption(
+        _ title: String.LocalizationValue, duration: TimeInterval?, locale: Locale
+    ) -> NSMenuItem {
+        let item = NSMenuItem(
+            title: String(localized: title, locale: locale),
+            action: #selector(pauseClipboard(_:)),
+            keyEquivalent: ""
+        )
+        item.target = self
+        if let duration { item.representedObject = NSNumber(value: duration) }
+        return item
+    }
+
+    @objc private func pauseClipboard(_ sender: NSMenuItem) {
+        let duration = (sender.representedObject as? NSNumber)?.doubleValue
+        AppCore.shared.pauseClipboard(until: duration.map { Date().addingTimeInterval($0) })
+    }
+
+    @objc private func resumeClipboard() {
+        AppCore.shared.resumeClipboard()
     }
 
     @objc private func showAbout() {

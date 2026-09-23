@@ -59,7 +59,6 @@ enum PaletteCommand: Equatable {
     case revealInFinder
     case toggleQuickLook
     case clearQuery
-    case newTextItem
     case settings
     case quit
 }
@@ -203,6 +202,10 @@ final class PaletteViewModel: ObservableObject {
         return results.first { $0.id == selectedID }
     }
 
+    var canPaste: Bool {
+        pasteTarget != nil && core.hasPasteTarget
+    }
+
     var menuActions: [PaletteMenuAction] {
         switch overlay {
         case .none:
@@ -342,6 +345,12 @@ final class PaletteViewModel: ObservableObject {
     func activateMenuItem(at index: Int) {
         let actions = menuActions
         guard actions.indices.contains(index) else { return }
+        switch actions[index] {
+        case .paste, .pasteKeepingOpen:
+            guard canPaste else { return }
+        default:
+            break
+        }
         if case .newStack = actions[index] {
             beginStackName()
             return
@@ -372,7 +381,7 @@ final class PaletteViewModel: ObservableObject {
         case .activate:
             if menuOpen {
                 activateMenuItem(at: menuSelection)
-            } else if searchReady, let item = selectedItem {
+            } else if searchReady, canPaste, let item = selectedItem {
                 core.paste(item)
             }
         case .copy:
@@ -409,9 +418,6 @@ final class PaletteViewModel: ObservableObject {
         case .clearQuery:
             guard !menuOpen else { return true }
             if !queryIsEmpty { query = "" }
-        case .newTextItem:
-            overlay = .none
-            core.createTextItem()
         case .settings:
             overlay = .none
             core.showSettings()

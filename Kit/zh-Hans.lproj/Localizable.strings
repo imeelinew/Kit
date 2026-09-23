@@ -55,12 +55,15 @@
 "No matching entries" = "没有匹配的项目";
 "Name" = "名称";
 "New Stack" = "新建 Stack";
-"New Text Item" = "新文本项";
 "Paste Menu" = "Kit 菜单";
 "Pause Paste" = "暂停 Kit";
 "Resume Paste" = "继续 Kit";
+"Pause" = "暂停";
 "For 15 Minutes" = "暂停 15 分钟";
+"For 30 Minutes" = "暂停 30 分钟";
 "For 1 Hour" = "暂停 1 小时";
+"For 3 Hours" = "暂停 3 小时";
+"For 8 Hours" = "暂停 8 小时";
 "Until Tomorrow" = "暂停到明天";
 "Indefinitely" = "无限期暂停";
 "Palette" = "面板";

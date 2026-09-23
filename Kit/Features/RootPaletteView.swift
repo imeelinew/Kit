@@ -256,6 +256,7 @@ private struct DaycastPaletteView: View {
                     KeyCapChip(text: "↵", style: .outline)
                 }
             }
+            .disabled(!vm.canPaste)
             BarButton(pressed: showActions, action: { vm.handle(.toggleActions) }) {
                 HStack(spacing: Theme.Spacing.sm) {
                     Text("Actions")

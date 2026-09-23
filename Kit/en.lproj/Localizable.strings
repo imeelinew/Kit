@@ -56,12 +56,15 @@
 "No matching entries" = "No matching entries";
 "Name" = "Name";
 "New Stack" = "New Stack";
-"New Text Item" = "New Text Item";
 "Paste Menu" = "Kit Menu";
 "Pause Paste" = "Pause Kit";
 "Resume Paste" = "Resume Kit";
+"Pause" = "Pause";
 "For 15 Minutes" = "For 15 Minutes";
+"For 30 Minutes" = "For 30 Minutes";
 "For 1 Hour" = "For 1 Hour";
+"For 3 Hours" = "For 3 Hours";
+"For 8 Hours" = "For 8 Hours";
 "Until Tomorrow" = "Until Tomorrow";
 "Indefinitely" = "Indefinitely";
 "Palette" = "Palette";
