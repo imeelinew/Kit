@@ -496,6 +496,8 @@ private final class ClipboardTableView: NSTableView {
     private var lastPointerLocation: NSPoint?
     private var pendingHoverRow: Int?
     private var pendingHoverTask: Task<Void, Never>?
+    private var observedHoverGeneration = -1
+    private var hoverResumeMouseLocation: NSPoint?
 
     override var acceptsFirstResponder: Bool { false }
 
@@ -516,11 +518,13 @@ private final class ClipboardTableView: NSTableView {
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
+        guard canTrackHover(afterMouseMove: false) else { return }
         updateHover(at: convert(event.locationInWindow, from: nil))
     }
 
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
+        guard canTrackHover(afterMouseMove: true) else { return }
         updateHover(at: convert(event.locationInWindow, from: nil))
     }
 
@@ -543,6 +547,7 @@ private final class ClipboardTableView: NSTableView {
     }
 
     func refreshHover() {
+        guard canTrackHover(afterMouseMove: false) else { return }
         guard hoverEnabled, let window else {
             clearHover()
             return
@@ -559,6 +564,28 @@ private final class ClipboardTableView: NSTableView {
         hoveredRow = nil
         lastPointerLocation = nil
         cancelPendingHover()
+    }
+
+    private func canTrackHover(afterMouseMove: Bool) -> Bool {
+        guard hoverEnabled, let panel = window as? PalettePanel,
+            panel.allowsHoverSelection
+        else {
+            clearHover()
+            return false
+        }
+        if observedHoverGeneration != panel.hoverGeneration {
+            observedHoverGeneration = panel.hoverGeneration
+            hoverResumeMouseLocation = panel.hoverResumeMouseLocation
+            clearHover()
+        }
+        if let start = hoverResumeMouseLocation {
+            let current = NSEvent.mouseLocation
+            guard afterMouseMove,
+                hypot(current.x - start.x, current.y - start.y) >= 2
+            else { return false }
+            hoverResumeMouseLocation = nil
+        }
+        return true
     }
 
     private func updateHover(at point: NSPoint) {
@@ -644,9 +671,13 @@ private final class ClipboardTableView: NSTableView {
         guard pendingHoverRow == row else { return }
         pendingHoverRow = nil
         pendingHoverTask = nil
-        guard hoverEnabled, let window else { return }
+        guard hoverEnabled, let panel = window as? PalettePanel,
+            panel.allowsHoverSelection,
+            observedHoverGeneration == panel.hoverGeneration,
+            hoverResumeMouseLocation == nil
+        else { return }
 
-        let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        let point = convert(panel.mouseLocationOutsideOfEventStream, from: nil)
         guard visibleRect.contains(point), pointerHitsTable(at: point), self.row(at: point) == row,
             view(atColumn: 0, row: row, makeIfNecessary: false) is ClipboardItemCellView
         else { return }

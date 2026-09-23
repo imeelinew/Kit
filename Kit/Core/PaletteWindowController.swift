@@ -4,6 +4,12 @@ import SwiftUI
 
 @MainActor
 final class PaletteWindowController: NSObject, NSWindowDelegate {
+    private enum Motion {
+        static let showDuration: TimeInterval = 0.15
+        static let hideDuration: TimeInterval = 0.10
+        static let insetScale: CGFloat = 0.985
+    }
+
     private unowned let core: AppCore
     private var panel: PalettePanel?
     private var panelStyle: PaletteVisualStyle?
@@ -46,13 +52,18 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         let panel = ensurePanel()
         showToken += 1
         let token = showToken
+        let wasHiding = hiding
         hiding = false
         guard let finalFrame = positionedFrame() else { return }
-        let alreadyShown = panel.isVisible && panel.alphaValue > 0.9
+        let continuingPresentation = panel.isVisible && !wasHiding
+        let alreadyShown = continuingPresentation && panel.allowsHoverSelection
         if !alreadyShown {
+            panel.allowsHoverSelection = false
+        }
+        if !continuingPresentation {
             panel.alphaValue = 0
-            panel.setFrame(Self.scaledFrame(finalFrame, scale: 0.97), display: false)
-        } else {
+            panel.setFrame(Self.scaledFrame(finalFrame, scale: Motion.insetScale), display: false)
+        } else if alreadyShown {
             panel.setFrame(finalFrame, display: false)
         }
         panel.contentView?.layoutSubtreeIfNeeded()
@@ -65,10 +76,17 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         panel.requestSearchFocus()
         if !alreadyShown {
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.22
-                context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
+                context.duration = Motion.showDuration
+                context.timingFunction = CAMediaTimingFunction(controlPoints: 0.16, 0.86, 0.24, 1)
                 panel.animator().alphaValue = 1
                 panel.animator().setFrame(finalFrame, display: true)
+            } completionHandler: { [weak self, weak panel] in
+                Task { @MainActor in
+                    guard let self, let panel, token == self.showToken, !self.hiding,
+                        panel.isVisible
+                    else { return }
+                    panel.allowsHoverSelection = true
+                }
             }
         }
         DispatchQueue.main.async { [weak panel] in
@@ -89,16 +107,17 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         }
         if hiding { return }
         hiding = true
+        panel.allowsHoverSelection = false
         let token = showToken
         if core.settings.switchToEnglishInputOnOpen {
             InputSourceSwitcher.restore()
         }
         let frame = panel.frame
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.16
-            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            context.duration = Motion.hideDuration
+            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.55, 0, 0.84, 0.45)
             panel.animator().alphaValue = 0
-            panel.animator().setFrame(Self.scaledFrame(frame, scale: 0.97), display: true)
+            panel.animator().setFrame(Self.scaledFrame(frame, scale: Motion.insetScale), display: true)
         } completionHandler: { [weak self, weak panel] in
             Task { @MainActor in
                 guard let self, let panel, token == self.showToken, self.hiding else { return }
