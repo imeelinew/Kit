@@ -543,7 +543,9 @@ final class ClipboardStore: ObservableObject {
     /// Move an item to the top of history after it is used.
     func promote(_ item: ClipboardItem) {
         guard items.first?.id != item.id else { return }
-        reinsert(item.with(createdAt: Date(), pinnedAt: nil))
+        // An asynchronous paste may finish after the item or its stack was deleted.
+        guard let stored = loadItem(id: item.id) else { return }
+        reinsert(stored.with(createdAt: Date(), pinnedAt: nil))
     }
 
     func item(id: ClipboardItem.ID) -> ClipboardItem? {
@@ -624,27 +626,76 @@ final class ClipboardStore: ObservableObject {
         return true
     }
 
-    func deleteStack(_ id: ClipboardStack.ID) {
-        guard stacks.contains(where: { $0.id == id }) else { return }
-        var deleteStack: OpaquePointer?
-        if sqlite3_prepare_v2(db, "DELETE FROM stacks WHERE id = ?", -1, &deleteStack, nil)
-            == SQLITE_OK, let deleteStack
-        {
-            sqlite3_bind_text(deleteStack, 1, id.uuidString, -1, SQLITE_TRANSIENT)
-            _ = sqlite3_step(deleteStack)
+    /// Remove a stack together with every history row assigned to it.
+    @discardableResult
+    func deleteStack(_ id: ClipboardStack.ID) -> Bool {
+        guard stacks.contains(where: { $0.id == id }),
+            sqlite3_exec(db, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK
+        else { return false }
+        var committed = false
+        defer {
+            if !committed { sqlite3_exec(db, "ROLLBACK", nil, nil, nil) }
         }
-        sqlite3_finalize(deleteStack)
-        var deleteItems: OpaquePointer?
-        if sqlite3_prepare_v2(
-            db, "DELETE FROM stack_items WHERE stack_id = ?", -1, &deleteItems, nil
-        ) == SQLITE_OK, let deleteItems {
-            sqlite3_bind_text(deleteItems, 1, id.uuidString, -1, SQLITE_TRANSIENT)
-            _ = sqlite3_step(deleteItems)
-        }
-        sqlite3_finalize(deleteItems)
+
+        guard let contents = stackContents(id),
+            deleteStackRows(
+                "DELETE FROM items WHERE id IN (SELECT item_id FROM stack_items WHERE stack_id = ?)",
+                stackID: id),
+            deleteStackRows("DELETE FROM stack_items WHERE stack_id = ?", stackID: id),
+            deleteStackRows("DELETE FROM stacks WHERE id = ?", stackID: id),
+            sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK
+        else { return false }
+        committed = true
+
         stacks.removeAll { $0.id == id }
         stackMembership = stackMembership.filter { $0.value != id }
-        revision &+= 1
+        let remaining = items.filter { !contents.itemIDs.contains($0.id) }
+        if remaining.count != items.count {
+            items = remaining
+        } else {
+            revision &+= 1
+        }
+        for url in contents.imageURLs {
+            try? FileManager.default.removeItem(at: url)
+        }
+        return true
+    }
+
+    private func stackContents(
+        _ id: ClipboardStack.ID
+    ) -> (itemIDs: Set<ClipboardItem.ID>, imageURLs: [URL])? {
+        guard let stmt = prepare(
+            """
+            SELECT i.id, i.image_path FROM items i
+            JOIN stack_items s ON s.item_id = i.id
+            WHERE s.stack_id = ?
+            """)
+        else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_bind_text(stmt, 1, id.uuidString, -1, SQLITE_TRANSIENT) == SQLITE_OK
+        else { return nil }
+
+        var itemIDs = Set<ClipboardItem.ID>()
+        var imageURLs: [URL] = []
+        var status = sqlite3_step(stmt)
+        while status == SQLITE_ROW {
+            if let idString = Self.columnString(stmt, 0), let itemID = UUID(uuidString: idString) {
+                itemIDs.insert(itemID)
+            }
+            if let path = Self.columnString(stmt, 1), let url = managedBlobURL(for: path) {
+                imageURLs.append(url)
+            }
+            status = sqlite3_step(stmt)
+        }
+        return status == SQLITE_DONE ? (itemIDs, imageURLs) : nil
+    }
+
+    private func deleteStackRows(_ sql: String, stackID: ClipboardStack.ID) -> Bool {
+        guard let stmt = prepare(sql) else { return false }
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_bind_text(stmt, 1, stackID.uuidString, -1, SQLITE_TRANSIENT) == SQLITE_OK
+        else { return false }
+        return sqlite3_step(stmt) == SQLITE_DONE
     }
 
     private func loadStackState() {

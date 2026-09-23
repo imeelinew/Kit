@@ -43,7 +43,7 @@
 "Image" = "Image";
 "Icon Animation" = "Icon Animation";
 "Information" = "Information";
-"Items in this stack return to the clipboard." = "Items in this stack return to the clipboard.";
+"Items in this stack will also be deleted. This can't be undone." = "Items in this stack will also be deleted. This can't be undone.";
 "Rename" = "Rename";
 "Input Method" = "Input Method";
 "Keep history for" = "Keep history for";

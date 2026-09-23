@@ -43,7 +43,7 @@
 "Image" = "图像";
 "Icon Animation" = "图标动画";
 "Information" = "信息";
-"Items in this stack return to the clipboard." = "删除后，其中的记录会回到剪贴板。";
+"Items in this stack will also be deleted. This can't be undone." = "其中的所有记录也会被删除，此操作无法撤销。";
 "Input Method" = "输入法";
 "Keep history for" = "历史保留时长";
 "Language" = "语言";

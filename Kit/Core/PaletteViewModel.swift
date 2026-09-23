@@ -571,16 +571,16 @@ final class PaletteViewModel: ObservableObject {
             stack.name
         )
         alert.informativeText = String(
-            localized: "Items in this stack return to the clipboard.",
+            localized: "Items in this stack will also be deleted. This can't be undone.",
             locale: locale
         )
         alert.addButton(withTitle: String(localized: "Delete", locale: locale))
         alert.addButton(withTitle: String(localized: "Cancel", locale: locale))
         alert.buttons.first?.hasDestructiveAction = true
         guard core.runModalAlert(alert) == .alertFirstButtonReturn else { return }
+        guard core.clipboardStore.deleteStack(stack.id) else { return }
         overlay = .none
         menuSelection = 0
-        core.clipboardStore.deleteStack(stack.id)
         if stackFilter == stack.id {
             applyStackFilter(nil)
         }
