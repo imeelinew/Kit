@@ -6,6 +6,15 @@
         <description>Sparkle appcast for Kit</description>
         <language>en</language>
         <item>
+            <title>0.2.0</title>
+            <pubDate>Wed, 23 Sep 2026 15:20:59 +0000</pubDate>
+            <link>https://github.com/imeelinew/Kit</link>
+            <sparkle:version>60</sparkle:version>
+            <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/imeelinew/Kit/releases/download/v0.2.0/Kit-0.2.0.zip" length="6151203" type="application/octet-stream" sparkle:edSignature="/lafcvGZYHTzHKm+qmsJrXhUjKW+oV9dTEiiVCmgg4uBpEv+qqrq+W9abQbkc0/qTJfg55emaXPwDwrPUMmBAg=="/>
+        </item>
+        <item>
             <title>0.1.9</title>
             <pubDate>Sun, 30 Aug 2026 13:34:08 +0000</pubDate>
             <link>https://github.com/imeelinew/Kit</link>
