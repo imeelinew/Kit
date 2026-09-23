@@ -9,7 +9,9 @@ import QuartzCore
 final class MenuBarController: NSObject {
     private let settings: AppSettings
     private var statusItem: NSStatusItem?
-    private var iconView: MenuBarIconView?
+    private var spinTimer: Timer?
+    private var spinningImage: NSImage?
+    private var spinStartedAt: CFTimeInterval = 0
     private var cancellables = Set<AnyCancellable>()
 
     init(settings: AppSettings) {
@@ -33,31 +35,34 @@ final class MenuBarController: NSObject {
     }
 
     func spin() {
-        guard iconView == nil, let button = statusItem?.button, let image = button.image else {
+        guard spinTimer == nil, let button = statusItem?.button, let image = button.image else {
             return
         }
-        let cellRect = (button.cell as? NSButtonCell)?.imageRect(forBounds: button.bounds)
-        let rect = cellRect.flatMap { $0.isEmpty ? nil : $0 }
-            ?? NSRect(
-                x: (button.bounds.width - image.size.width) / 2,
-                y: (button.bounds.height - image.size.height) / 2,
-                width: image.size.width,
-                height: image.size.height
-            )
-        let spinner = MenuBarIconView(symbol: image)
-        spinner.frame = rect
-        // Keep the variable-length status item at its original width while its icon spins.
-        button.image = NSImage(size: image.size, flipped: false) { _ in true }
-        button.addSubview(spinner)
-        iconView = spinner
-        spinner.spin { [weak self, weak button, weak spinner] in
-            guard let self, let button, let spinner,
-                self.statusItem?.button === button, self.iconView === spinner
-            else { return }
-            spinner.removeFromSuperview()
-            button.image = image
-            self.iconView = nil
+        spinningImage = image
+        spinStartedAt = CACurrentMediaTime()
+        let timer = Timer(timeInterval: 1.0 / 60.0, target: self,
+                          selector: #selector(advanceSpin(_:)), userInfo: nil, repeats: true)
+        spinTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    @objc private func advanceSpin(_ timer: Timer) {
+        guard let button = statusItem?.button, let image = spinningImage else {
+            timer.invalidate()
+            spinTimer = nil
+            spinningImage = nil
+            return
         }
+        let progress = min((CACurrentMediaTime() - spinStartedAt) / 0.35, 1)
+        if progress >= 1 {
+            button.image = image
+            timer.invalidate()
+            spinTimer = nil
+            spinningImage = nil
+            return
+        }
+        let eased = 1 - pow(1 - progress, 3)
+        button.image = MenuBarIcon.rotatedImage(image, degrees: -360 * eased)
     }
 
     private func setVisible(_ visible: Bool) {
@@ -75,7 +80,7 @@ final class MenuBarController: NSObject {
             NSStatusBar.system.removeStatusItem(item)
             return
         }
-        button.image = MenuBarIconView.symbolImage
+        button.image = MenuBarIcon.symbolImage
         button.imagePosition = .imageOnly
         button.imageScaling = .scaleNone
         button.target = self
@@ -88,8 +93,9 @@ final class MenuBarController: NSObject {
 
     private func remove() {
         guard let statusItem else { return }
-        iconView?.removeFromSuperview()
-        iconView = nil
+        spinTimer?.invalidate()
+        spinTimer = nil
+        spinningImage = nil
         NSStatusBar.system.removeStatusItem(statusItem)
         self.statusItem = nil
     }
@@ -213,62 +219,27 @@ final class MenuBarController: NSObject {
     }
 }
 
-/// Template SF Symbol that rotates independently of the status button highlight.
-private final class MenuBarIconView: NSView {
-    private let imageView = PassthroughImageView()
+/// Keep every animation frame in the status button's image canvas so its placement never changes.
+private enum MenuBarIcon {
+    private static let verticalOffset: CGFloat = 0.5
 
-    init(symbol: NSImage) {
-        super.init(frame: .zero)
-        wantsLayer = true
-        imageView.wantsLayer = true
-        imageView.imageScaling = .scaleNone
-        imageView.image = symbol
-        imageView.contentTintColor = .labelColor
-        imageView.frame = NSRect(origin: .zero, size: symbol.size)
-        addSubview(imageView)
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        imageView.contentTintColor = .labelColor
-    }
-
-    override func layout() {
-        super.layout()
-        let size = imageView.image?.size ?? .zero
-        imageView.frame = NSRect(
-            x: (bounds.width - size.width) / 2,
-            y: (bounds.height - size.height) / 2,
-            width: size.width,
-            height: size.height
-        )
-    }
-
-    func spin(completion: @escaping () -> Void) {
-        layoutSubtreeIfNeeded()
-        guard let layer = imageView.layer else {
-            completion()
-            return
+    static func rotatedImage(_ image: NSImage, degrees: Double) -> NSImage {
+        let rotated = NSImage(size: image.size, flipped: false) { bounds in
+            NSGraphicsContext.saveGraphicsState()
+            let transform = NSAffineTransform()
+            transform.translateX(by: bounds.midX, yBy: bounds.midY + Self.verticalOffset)
+            transform.rotate(byDegrees: degrees)
+            transform.translateX(by: -bounds.midX, yBy: -bounds.midY - Self.verticalOffset)
+            transform.concat()
+            image.draw(in: bounds)
+            NSGraphicsContext.restoreGraphicsState()
+            return true
         }
-        let animation = CABasicAnimation(keyPath: "transform.rotation.z")
-        animation.fromValue = 0
-        animation.toValue = -Double.pi * 2
-        animation.duration = 0.35
-        animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        CATransaction.begin()
-        CATransaction.setCompletionBlock(completion)
-        layer.add(animation, forKey: "spin")
-        CATransaction.commit()
+        rotated.isTemplate = true
+        return rotated
     }
 
-    fileprivate static var symbolImage: NSImage {
+    static var symbolImage: NSImage {
         guard
             let base = NSImage(
                 systemSymbolName: "arrow.trianglehead.clockwise",
@@ -280,17 +251,20 @@ private final class MenuBarIconView: NSView {
             weight: .medium
         )
         let symbol = base.withSymbolConfiguration(configuration) ?? base
-        let image = NSImage(size: symbol.size, flipped: false) { bounds in
-            symbol.draw(in: bounds)
+        let side = max(symbol.size.width, symbol.size.height)
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { bounds in
+            let symbolRect = NSRect(
+                x: (bounds.width - symbol.size.width) / 2,
+                y: (bounds.height - symbol.size.height) / 2 + Self.verticalOffset,
+                width: symbol.size.width,
+                height: symbol.size.height
+            )
+            symbol.draw(in: symbolRect)
             return true
         }
         image.isTemplate = true
         return image
     }
-}
-
-private final class PassthroughImageView: NSImageView {
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// Plays the four bundled copy-feedback MP3s. Keeps the player alive for the clip duration.
