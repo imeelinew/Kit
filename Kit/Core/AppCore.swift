@@ -50,6 +50,7 @@ final class AppCore {
             }
         }
         menuBarController.start()
+        windowController.prewarm()
 
         KeyboardShortcuts.onKeyUp(for: .toggleClipboard) { [weak self] in
             self?.togglePalette()
@@ -64,7 +65,7 @@ final class AppCore {
     }
 
     func togglePalette() {
-        if windowController.isVisible {
+        if windowController.isVisible || windowController.isPresenting {
             hidePalette()
         } else {
             showPalette()
@@ -72,7 +73,6 @@ final class AppCore {
     }
 
     func showPalette() {
-        palette.prepare()
         windowController.show()
     }
 

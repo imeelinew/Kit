@@ -6,8 +6,6 @@ struct RootPaletteView: View {
     let store: ClipboardStore
     @ObservedObject private var settings = AppCore.shared.settings
 
-    @State private var scroll = ScrollIntent(kind: .top)
-
     private var isQueryEmpty: Bool {
         vm.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -74,7 +72,7 @@ struct RootPaletteView: View {
                         hasMoreResults: vm.hasMoreResults,
                         selectedID: vm.selectedID,
                         query: vm.query,
-                        scroll: scroll,
+                        scroll: vm.scrollIntent,
                         hoverEnabled: !vm.menuOpen,
                         store: store,
                         onSelect: { vm.select($0.id) },
@@ -157,12 +155,6 @@ struct RootPaletteView: View {
         }
         .animation(Self.menuAnimation, value: vm.overlay)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onChange(of: vm.resetToken) {
-            scroll = ScrollIntent(kind: .top)
-        }
-        .onChange(of: vm.followToken) {
-            scroll = ScrollIntent(kind: .follow)
-        }
         .environment(\.locale, settings.language.locale)
     }
 

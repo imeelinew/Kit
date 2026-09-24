@@ -149,10 +149,14 @@ final class PaletteViewModel {
     private(set) var results: [ClipboardItem] = []
     private(set) var resultsGeneration: UInt64 = 0
     private(set) var hasMoreResults = false
-    private(set) var selectedID: ClipboardItem.ID?
+    private(set) var selectedID: ClipboardItem.ID? {
+        didSet {
+            if preparedPreview?.itemID != selectedID { preparedPreview = nil }
+        }
+    }
+    private(set) var preparedPreview: ClipboardPreviewPayload?
     private(set) var searchReady = true
-    var resetToken = UUID()
-    var followToken = UUID()
+    private(set) var scrollIntent = ScrollIntent(kind: .top)
     var pasteTarget: PasteTarget?
     var imageQuickLookOpen = false
     private(set) var overlay: PaletteOverlay = .none {
@@ -178,6 +182,7 @@ final class PaletteViewModel {
     @ObservationIgnored private unowned let core: AppCore
     private static let pageSize = 160
     @ObservationIgnored private var searchTask: Task<Void, Never>?
+    @ObservationIgnored private var previewWarmTask: Task<Void, Never>?
     @ObservationIgnored private var loadMoreTask: Task<Void, Never>?
     @ObservationIgnored private var nextCursor: ClipboardSearchCursor?
     @ObservationIgnored private var loadedPageCount = 1
@@ -191,6 +196,7 @@ final class PaletteViewModel {
                 guard let self else { return }
                 refreshResults(resetSelection: !searchReady, blockCommands: false)
             }
+        refreshResults(resetSelection: true, blockCommands: true)
     }
 
     var menuOpen: Bool { overlay.isMenu }
@@ -273,20 +279,38 @@ final class PaletteViewModel {
         menuSelection = 0
     }
 
-    func prepare() {
-        searchTask?.cancel()
+    func prepare() async {
         overlay = .none
         menuSelection = 0
         imageQuickLookOpen = false
-        query = ""
-        // Opening the palette leaves selection entirely to pointer or keyboard intent.
-        selectedID = nil
+        if !query.isEmpty { query = "" }
+        scrollIntent = ScrollIntent(kind: .top)
+
+        // A revision can replace either the search or the first item while its image loads.
+        // Hold the prepared payload strongly until SwiftUI has consumed the first frame.
+        while !Task.isCancelled {
+            while let task = searchTask {
+                await task.value
+                guard !Task.isCancelled else { return }
+            }
+            selectedID = results.first?.id
+            guard let item = selectedItem else {
+                preparedPreview = nil
+                return
+            }
+            let payload = await ClipboardPreviewPayload.load(
+                for: item, imageURL: core.clipboardStore.imageURL(for: item))
+            guard !Task.isCancelled else { return }
+            guard searchTask == nil, results.first?.id == item.id else { continue }
+            preparedPreview = payload
+            return
+        }
     }
 
     func select(_ id: ClipboardItem.ID, follow: Bool = false) {
         selectedID = id
         imageQuickLookOpen = false
-        if follow { followToken = UUID() }
+        if follow { scrollIntent = ScrollIntent(kind: .follow) }
     }
 
     func openActions(for id: ClipboardItem.ID) {
@@ -472,7 +496,7 @@ final class PaletteViewModel {
         selectedID = results[next].id
         imageQuickLookOpen = false
         ImageQuickLook.close()
-        followToken = UUID()
+        scrollIntent = ScrollIntent(kind: .follow)
     }
 
     private func moveMenu(_ delta: Int) {
@@ -602,7 +626,7 @@ final class PaletteViewModel {
         stackFilter = stackID
         imageQuickLookOpen = false
         ImageQuickLook.close()
-        resetToken = UUID()
+        scrollIntent = ScrollIntent(kind: .top)
         refreshResults(resetSelection: true, blockCommands: true)
     }
 
@@ -611,7 +635,7 @@ final class PaletteViewModel {
         kindFilter = filter
         imageQuickLookOpen = false
         ImageQuickLook.close()
-        resetToken = UUID()
+        scrollIntent = ScrollIntent(kind: .top)
         refreshResults(resetSelection: true, blockCommands: true)
     }
 
@@ -620,7 +644,7 @@ final class PaletteViewModel {
         menuSelection = 0
         imageQuickLookOpen = false
         ImageQuickLook.close()
-        resetToken = UUID()
+        scrollIntent = ScrollIntent(kind: .top)
         refreshResults(resetSelection: true, blockCommands: true)
     }
 
@@ -656,6 +680,7 @@ final class PaletteViewModel {
                 resetSelection: resetSelection,
                 priorID: priorID,
                 priorIndex: priorIndex)
+            searchTask = nil
         }
     }
 
@@ -697,6 +722,13 @@ final class PaletteViewModel {
         results = newResults
         resultsGeneration &+= 1
         searchReady = true
+        previewWarmTask?.cancel()
+        if let first = newResults.first {
+            let url = core.clipboardStore.imageURL(for: first)
+            previewWarmTask = Task {
+                _ = await ClipboardPreviewPayload.load(for: first, imageURL: url)
+            }
+        }
 
         guard !newResults.isEmpty else {
             selectedID = nil

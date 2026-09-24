@@ -8,6 +8,9 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     private var panel: PalettePanel?
     private var panelStyle: PaletteVisualStyle?
     private var styleObserver: AnyCancellable?
+    private var presentationTask: Task<Void, Never>?
+    private var presentationID = UUID()
+    private(set) var isPresenting = false
     private var hiding = false
     private var modalAlertDepth = 0
     private(set) var previousApp: NSRunningApplication?
@@ -30,7 +33,15 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         return previousApp
     }
 
+    /// Build the hosting tree while the app is idle, before the first shortcut.
+    func prewarm() {
+        let panel = ensurePanel()
+        panel.contentView?.layoutSubtreeIfNeeded()
+    }
+
     func show() {
+        guard !isPresenting else { return }
+
         let frontmost = NSWorkspace.shared.frontmostApplication
         previousApp = frontmost.flatMap { app in
             app.processIdentifier != NSRunningApplication.current.processIdentifier
@@ -43,27 +54,47 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         }
 
         let panel = ensurePanel()
-        guard let finalFrame = positionedFrame() else { return }
-        panel.alphaValue = 1
-        panel.setFrame(finalFrame, display: false)
-        panel.contentView?.layoutSubtreeIfNeeded()
-        if core.settings.switchToEnglishInputOnOpen {
-            InputSourceSwitcher.selectEnglish()
-        }
-        panel.makeKeyAndOrderFront(nil)
-        panel.makeFirstResponder(nil)
-        panel.orderFrontRegardless()
-        panel.requestSearchFocus()
-        DispatchQueue.main.async { [weak panel] in
-            guard let panel, panel.isVisible, !panel.isKeyWindow else {
+        let request = UUID()
+        presentationID = request
+        isPresenting = true
+        presentationTask = Task { [weak self, weak panel] in
+            guard let self, let panel else { return }
+            await core.palette.prepare()
+            guard !Task.isCancelled, presentationID == request else { return }
+            guard let finalFrame = positionedFrame() else {
+                isPresenting = false
+                presentationTask = nil
                 return
             }
+            panel.beginPresentation()
+            panel.alphaValue = 1
+            panel.setFrame(finalFrame, display: false)
+            // Commit the complete selection, preview and footer while still offscreen.
+            panel.contentView?.layoutSubtreeIfNeeded()
+            panel.displayIfNeeded()
+            if core.settings.switchToEnglishInputOnOpen {
+                InputSourceSwitcher.selectEnglish()
+            }
             panel.makeKeyAndOrderFront(nil)
+            panel.orderFrontRegardless()
             panel.requestSearchFocus()
+            isPresenting = false
+            presentationTask = nil
+            DispatchQueue.main.async { [weak self, weak panel] in
+                guard let self, presentationID == request,
+                    let panel, panel.isVisible, !panel.isKeyWindow
+                else { return }
+                panel.makeKeyAndOrderFront(nil)
+                panel.requestSearchFocus()
+            }
         }
     }
 
     func hide(restoreFocus: Bool) {
+        presentationID = UUID()
+        presentationTask?.cancel()
+        presentationTask = nil
+        isPresenting = false
         guard let panel else { return }
         if !panel.isVisible {
             ImageThumbnail.purgePreviews()
@@ -112,7 +143,11 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
 
     private func rebuildPanelForStyleChange() {
         guard panel != nil else { return }
-        let visible = isVisible
+        let visible = isVisible || isPresenting
+        presentationID = UUID()
+        presentationTask?.cancel()
+        presentationTask = nil
+        isPresenting = false
         panel?.orderOut(nil)
         panel = nil
         panelStyle = nil

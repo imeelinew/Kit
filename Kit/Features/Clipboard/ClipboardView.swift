@@ -397,8 +397,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             if let row {
                 tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
             } else {
-                // Keep click behavior single-selected while still permitting the intentional
-                // no-selection state used when the palette first opens.
+                // Empty results can have no selection; clicks remain single-selected.
                 tableView.allowsEmptySelection = true
                 tableView.deselectAll(nil)
                 tableView.allowsEmptySelection = false
@@ -635,7 +634,10 @@ private final class ClipboardTableView: NSTableView {
     }
 
     private func updateHover(at point: NSPoint, pointerMoved: Bool) {
-        guard hoverEnabled, pointerHitsTable(at: point) else {
+        guard hoverEnabled, window?.isVisible == true,
+            (window as? PalettePanel)?.allowsHoverSelection != false,
+            pointerHitsTable(at: point)
+        else {
             clearHover()
             return
         }

@@ -1,66 +1,116 @@
 import AppKit
 import SwiftUI
 
-/// Renders a downsampled clipboard thumbnail, decoding misses off the main thread (cache hits resolve on the first tick, misses show `placeholder`); `content` styles the loaded image per site.
-private struct AsyncThumbnail<Content: View, Placeholder: View>: View {
-    let url: URL?
-    let maxPixel: CGFloat
-    @ViewBuilder let content: (Image) -> Content
-    @ViewBuilder let placeholder: () -> Placeholder
+/// A complete preview is published together, so image decoding and metadata cannot resize
+/// the pane in separate frames. Keep a small, evictable working set across palette dismissals.
+@MainActor
+final class ClipboardPreviewPayload {
+    let itemID: ClipboardItem.ID
+    let image: NSImage?
+    let details: Details
 
-    @State private var image: NSImage?
+    struct Details: Sendable {
+        var characters: Int?
+        var words: Int?
+        var pixelSize: CGSize?
+        var fileBytes: Int?
+    }
 
-    var body: some View {
-        Group {
-            if let image {
-                content(Image(nsImage: image))
-            } else {
-                placeholder()
+    private static let cache: NSCache<NSUUID, ClipboardPreviewPayload> = {
+        let cache = NSCache<NSUUID, ClipboardPreviewPayload>()
+        cache.countLimit = 32
+        cache.totalCostLimit = 16 * 1024 * 1024
+        return cache
+    }()
+
+    private init(itemID: ClipboardItem.ID, image: NSImage?, details: Details) {
+        self.itemID = itemID
+        self.image = image
+        self.details = details
+    }
+
+    static func cached(for item: ClipboardItem) -> ClipboardPreviewPayload? {
+        cache.object(forKey: item.id as NSUUID)
+    }
+
+    static func load(for item: ClipboardItem, imageURL: URL?) async -> ClipboardPreviewPayload {
+        if let hit = cached(for: item) { return hit }
+        let detailsTask = Task.detached(priority: .userInitiated) {
+            var details = Details()
+            if let text = item.text {
+                details.characters = text.count
+                var count = 0
+                var inWord = false
+                for scalar in text.unicodeScalars {
+                    let separator = CharacterSet.whitespacesAndNewlines.contains(scalar)
+                    if !separator && !inWord { count += 1 }
+                    inWord = !separator
+                }
+                details.words = count
             }
+            if let imageURL {
+                details.pixelSize = ImageThumbnail.pixelSize(of: imageURL)
+                details.fileBytes = try? imageURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+            }
+            return details
         }
-        .task(id: url) {
-            guard let url else {
-                image = nil
-                return
-            }
-            if let hit = ImageThumbnail.cached(url, maxPixel: maxPixel) {
-                image = hit
-                return
-            }
-            image = nil  // show the placeholder while a new image decodes
-            let loaded = await ImageThumbnail.loadAsync(url, maxPixel: maxPixel)
-            guard !Task.isCancelled else { return }
-            image = loaded
+        let image: NSImage?
+        if let imageURL {
+            image = await ImageThumbnail.loadAsync(imageURL, maxPixel: 900)
+        } else {
+            image = nil
         }
+        let payload = ClipboardPreviewPayload(
+            itemID: item.id, image: image, details: await detailsTask.value)
+        if !Task.isCancelled {
+            let cost = image.map { Int($0.size.width * $0.size.height) * 4 } ?? 1
+            cache.setObject(payload, forKey: item.id as NSUUID, cost: cost)
+        }
+        return payload
     }
 }
 
 struct ClipboardPreview: View {
-    /// The preview pane is ~460pt wide (panel 750 − list 290); 900px keeps it crisp at 2× Retina without over-decoding.
-    private static let previewMaxPixel: CGFloat = 900
-
     let item: ClipboardItem?
     var query: String = ""
     @Bindable var vm: PaletteViewModel
     let store: ClipboardStore
     @ObservedObject private var settings = AppCore.shared.settings
 
+    @State private var loadedPayload: ClipboardPreviewPayload?
+
     var body: some View {
-        if let item {
-            VStack(alignment: .leading, spacing: 0) {
-                content(for: item)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                ClipboardInfoSection(
-                    item: item, imageURL: store.imageURL(for: item), store: store)
+        Group {
+            if let item {
+                let payload = (vm.preparedPreview?.itemID == item.id ? vm.preparedPreview : nil)
+                    ?? ClipboardPreviewPayload.cached(for: item)
+                    ?? (loadedPayload?.itemID == item.id ? loadedPayload : nil)
+                VStack(alignment: .leading, spacing: 0) {
+                    content(for: item, payload: payload)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    ClipboardInfoSection(
+                        item: item, details: payload?.details ?? .init(), store: store)
+                }
+                .padding(.horizontal, 12)
+            } else {
+                Color.clear
             }
-            .padding(.horizontal, 12)
-        } else {
-            Color.clear
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task(id: item?.id) {
+            guard let item else {
+                loadedPayload = nil
+                return
+            }
+            let payload = await ClipboardPreviewPayload.load(
+                for: item, imageURL: store.imageURL(for: item))
+            guard !Task.isCancelled else { return }
+            loadedPayload = payload
         }
     }
 
     @ViewBuilder
-    private func content(for item: ClipboardItem) -> some View {
+    private func content(for item: ClipboardItem, payload: ClipboardPreviewPayload?) -> some View {
         switch item.kind {
         case .text, .path:
             AttributedTextPreview(
@@ -82,21 +132,22 @@ struct ClipboardPreview: View {
             CodePreview(code: item.text ?? "", query: query)
         case .image:
             let imageURL = store.imageURL(for: item)
-            AsyncThumbnail(url: imageURL, maxPixel: Self.previewMaxPixel) {
-                image in
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .clipShape(
-                        RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                            .strokeBorder(Theme.Colors.cardStroke, lineWidth: 1)
-                    )
-            } placeholder: {
-                Image(systemName: "photo").font(.system(.largeTitle))
-                    .symbolRenderingMode(.hierarchical).foregroundStyle(.tertiary)
+            Group {
+                if let image = payload?.image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .clipShape(
+                            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                                .strokeBorder(Theme.Colors.cardStroke, lineWidth: 1)
+                        )
+                } else {
+                    Image(systemName: "photo").font(.system(.largeTitle))
+                        .symbolRenderingMode(.hierarchical).foregroundStyle(.tertiary)
+                }
             }
             // Anchor to the thumbnail's fitted bounds, not the full preview pane, so the
             // NSPopover arrow points at the image and placement can avoid covering it.
@@ -114,21 +165,13 @@ struct ClipboardPreview: View {
     }
 }
 
-/// The "Information" block under the preview (label/value rows split by hairlines); disk- or full-text-touching details are gathered off the main actor per selection so clicking huge entries never hitches.
+/// Information rows keep their geometry while the complete preview payload loads off-main.
 private struct ClipboardInfoSection: View {
     let item: ClipboardItem
-    let imageURL: URL?
+    let details: ClipboardPreviewPayload.Details
 
     @ObservedObject var store: ClipboardStore
-    @State private var details = Details()
     @ObservedObject private var settings = AppCore.shared.settings
-
-    private struct Details: Equatable, Sendable {
-        var characters: Int?
-        var words: Int?
-        var pixelSize: CGSize?
-        var fileBytes: Int?
-    }
 
     private struct InfoRow: Identifiable {
         let label: String
@@ -180,7 +223,6 @@ private struct ClipboardInfoSection: View {
             }
         }
         .padding(.top, Theme.Spacing.xl)
-        .task(id: item.id) { await loadDetails() }
     }
 
     private var rows: [InfoRow] {
@@ -198,33 +240,23 @@ private struct ClipboardInfoSection: View {
         {
             rows.append(InfoRow(label: "Stack", value: stack.name))
         }
+        // Reserve both rows from the first frame, including missing/unreadable files.
+        // Finishing a decode changes values, never the available image height.
         switch item.kind {
         case .text, .markdown, .code, .link, .path:
-            if let characters = details.characters {
-                rows.append(
-                    InfoRow(
-                        label: "Characters",
-                        value: characters.formatted(
-                            .number.locale(settings.language.locale))))
-            }
-            if let words = details.words {
-                rows.append(
-                    InfoRow(
-                        label: "Words",
-                        value: words.formatted(.number.locale(settings.language.locale))))
-            }
+            rows.append(InfoRow(label: "Characters", value: details.characters.map {
+                $0.formatted(.number.locale(settings.language.locale))
+            } ?? "—"))
+            rows.append(InfoRow(label: "Words", value: details.words.map {
+                $0.formatted(.number.locale(settings.language.locale))
+            } ?? "—"))
         case .image:
-            if let size = details.pixelSize {
-                rows.append(
-                    InfoRow(label: "Dimensions", value: "\(Int(size.width))×\(Int(size.height))"))
-            }
-            if let bytes = details.fileBytes {
-                rows.append(
-                    InfoRow(
-                        label: "Size",
-                        value: Int64(bytes).formatted(
-                            .byteCount(style: .file).locale(settings.language.locale))))
-            }
+            rows.append(InfoRow(label: "Dimensions", value: details.pixelSize.map {
+                "\(Int($0.width))×\(Int($0.height))"
+            } ?? "—"))
+            rows.append(InfoRow(label: "Size", value: details.fileBytes.map {
+                Int64($0).formatted(.byteCount(style: .file).locale(settings.language.locale))
+            } ?? "—"))
         }
         Self.copiedFormatter.locale = settings.language.locale
         rows.append(
@@ -240,34 +272,4 @@ private struct ClipboardInfoSection: View {
         return (url.deletingPathExtension().lastPathComponent, IconCache.icon(forFile: url.path))
     }
 
-    private func loadDetails() async {
-        let text = item.text
-        let url = imageURL
-        let loaded = await Task.detached(priority: .userInitiated) {
-            var details = Details()
-            if let text {
-                details.characters = text.count
-                details.words = Self.wordCount(text)
-            }
-            if let url {
-                details.pixelSize = ImageThumbnail.pixelSize(of: url)
-                details.fileBytes = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize
-            }
-            return details
-        }.value
-        guard !Task.isCancelled else { return }
-        details = loaded
-    }
-
-    /// Single pass over scalars — `split(whereSeparator:)` would allocate a substring per word, which matters for a multi-MB copy.
-    private nonisolated static func wordCount(_ text: String) -> Int {
-        var count = 0
-        var inWord = false
-        for scalar in text.unicodeScalars {
-            let separator = CharacterSet.whitespacesAndNewlines.contains(scalar)
-            if !separator && !inWord { count += 1 }
-            inWord = !separator
-        }
-        return count
-    }
 }

@@ -17,6 +17,26 @@ final class PalettePanel: NSPanel {
         }
     }
 
+    private var presentationMouseLocation = NSEvent.mouseLocation
+    private var pointerHasMoved = false
+
+    func beginPresentation() {
+        presentationMouseLocation = NSEvent.mouseLocation
+        pointerHasMoved = false
+    }
+
+    /// Ordering a window under a stationary pointer is not a selection gesture.
+    var allowsHoverSelection: Bool {
+        guard isVisible else { return false }
+        if !pointerHasMoved {
+            let location = NSEvent.mouseLocation
+            pointerHasMoved = hypot(
+                location.x - presentationMouseLocation.x,
+                location.y - presentationMouseLocation.y) >= 1
+        }
+        return pointerHasMoved
+    }
+
     private weak var searchField: NSTextField?
     private var pendingSearchFocusRequest: UUID?
 
@@ -149,7 +169,7 @@ final class PalettePanel: NSPanel {
     func requestSearchFocus() {
         let request = UUID()
         pendingSearchFocusRequest = request
-        scheduleSearchFocus(for: request)
+        if !focusSearch(for: request) { scheduleSearchFocus(for: request) }
     }
 
     private func schedulePendingSearchFocus() {

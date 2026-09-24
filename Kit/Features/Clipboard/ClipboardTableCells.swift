@@ -239,6 +239,13 @@ final class ClipboardItemCellView: NSTableCellView {
     }
 
     func setSelected(_ selected: Bool) {
+        // Offscreen preparation must produce a finished first frame, not enqueue a fade
+        // that starts only after the palette has already appeared.
+        guard window?.isVisible == true else {
+            self.selected = selected
+            setHighlightOpacity(selected ? 1 : 0)
+            return
+        }
         guard self.selected != selected else { return }
         let briefVisit = !selected && (
             entranceQueued
