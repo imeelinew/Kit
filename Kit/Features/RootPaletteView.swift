@@ -2,13 +2,8 @@ import AppKit
 import SwiftUI
 
 struct RootPaletteView: View {
-    var body: some View {
-        DaycastPaletteView()
-    }
-}
-
-private struct DaycastPaletteView: View {
-    @EnvironmentObject private var vm: PaletteViewModel
+    @Bindable var vm: PaletteViewModel
+    let store: ClipboardStore
     @ObservedObject private var settings = AppCore.shared.settings
 
     @State private var scroll = ScrollIntent(kind: .top)
@@ -75,18 +70,22 @@ private struct DaycastPaletteView: View {
                 HStack(spacing: 0) {
                     ClipboardList(
                         results: clips,
+                        resultsGeneration: vm.resultsGeneration,
+                        hasMoreResults: vm.hasMoreResults,
                         selectedID: vm.selectedID,
                         query: vm.query,
                         scroll: scroll,
                         hoverEnabled: !vm.menuOpen,
+                        store: store,
                         onSelect: { vm.select($0.id) },
-                        onActions: { item in vm.openActions(for: item.id) }
+                        onActions: { item in vm.openActions(for: item.id) },
+                        onLoadMore: { vm.loadMoreResults() }
                     )
                     .frame(width: Theme.Size.clipboardListWidth)
                     Rectangle()
                         .fill(Theme.Colors.separator)
                         .frame(width: 1)
-                    ClipboardPreview(item: selected, query: vm.query)
+                    ClipboardPreview(item: selected, query: vm.query, vm: vm, store: store)
                 }
             }
         }

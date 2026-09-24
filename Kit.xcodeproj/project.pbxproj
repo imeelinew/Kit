@@ -44,6 +44,15 @@
 		AA1000000000000000000003 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = AA1000000000000000000004 /* Sparkle */; };
 		B1C2D3E4F5061728394A5B6C /* PinnedImageWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* PinnedImageWindow.swift */; };
 		B9424F6046260D72728A48DD /* GeneralSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1779D1C157B1B6F9C37365 /* GeneralSettingsView.swift */; };
+		CA1000000000000000000001 /* ClipboardItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1000000000000000000002 /* ClipboardItem.swift */; };
+		CA2000000000000000000001 /* Pinyin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA2000000000000000000002 /* Pinyin.swift */; };
+		CA3000000000000000000001 /* ClipboardTextClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3000000000000000000002 /* ClipboardTextClassifier.swift */; };
+		CA4000000000000000000001 /* ClipboardTableCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA4000000000000000000002 /* ClipboardTableCells.swift */; };
+		CA5000000000000000000001 /* ClipboardPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5000000000000000000002 /* ClipboardPreview.swift */; };
+		CA6000000000000000000001 /* PinnedCardSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA6000000000000000000002 /* PinnedCardSessionStore.swift */; };
+		CA7000000000000000000001 /* PinnedImageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7000000000000000000002 /* PinnedImageViews.swift */; };
+		CA8000000000000000000001 /* ClipboardSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8000000000000000000002 /* ClipboardSearch.swift */; };
+		CA9000000000000000000001 /* ClipboardSQLite.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA9000000000000000000002 /* ClipboardSQLite.swift */; };
 		BB41A0000000000000000002 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB41A0000000000000000001 /* MenuBarController.swift */; };
 		BB41B0000000000000000002 /* sound-effect-1.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000001 /* sound-effect-1.mp3 */; };
 		BB41B0000000000000000004 /* sound-effect-2.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000003 /* sound-effect-2.mp3 */; };
@@ -109,6 +118,15 @@
 		BB41B0000000000000000005 /* sound-effect-3.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "sound-effect-3.mp3"; sourceTree = "<group>"; };
 		BB41B0000000000000000007 /* sound-effect-4.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "sound-effect-4.mp3"; sourceTree = "<group>"; };
 		C6853210949502E0C47D69B9 /* EdgeDissolve.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeDissolve.swift; sourceTree = "<group>"; };
+		CA1000000000000000000002 /* ClipboardItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardItem.swift; sourceTree = "<group>"; };
+		CA2000000000000000000002 /* Pinyin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pinyin.swift; sourceTree = "<group>"; };
+		CA3000000000000000000002 /* ClipboardTextClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTextClassifier.swift; sourceTree = "<group>"; };
+		CA4000000000000000000002 /* ClipboardTableCells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTableCells.swift; sourceTree = "<group>"; };
+		CA5000000000000000000002 /* ClipboardPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPreview.swift; sourceTree = "<group>"; };
+		CA6000000000000000000002 /* PinnedCardSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedCardSessionStore.swift; sourceTree = "<group>"; };
+		CA7000000000000000000002 /* PinnedImageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImageViews.swift; sourceTree = "<group>"; };
+		CA8000000000000000000002 /* ClipboardSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSearch.swift; sourceTree = "<group>"; };
+		CA9000000000000000000002 /* ClipboardSQLite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSQLite.swift; sourceTree = "<group>"; };
 		CE39A396D47F5CC467AA9FA1 /* PasteSettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteSettingsWindowController.swift; sourceTree = "<group>"; };
 		D22A18A2E99B807E7716432E /* InputSourceSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSourceSwitcher.swift; sourceTree = "<group>"; };
 		D3E59B58F324A9600EE4325C /* Kit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Kit.entitlements; sourceTree = "<group>"; };
@@ -145,8 +163,12 @@
 			isa = PBXGroup;
 			children = (
 				657D8CF150E57314AE8665E3 /* ClipboardView.swift */,
+				CA4000000000000000000002 /* ClipboardTableCells.swift */,
+				CA5000000000000000000002 /* ClipboardPreview.swift */,
 				19FB08D4568B366C9339712C /* ImageQuickLook.swift */,
+				CA6000000000000000000002 /* PinnedCardSessionStore.swift */,
 				A1B2C3D4E5F60718293A4B5C /* PinnedImageWindow.swift */,
+				CA7000000000000000000002 /* PinnedImageViews.swift */,
 			);
 			path = Clipboard;
 			sourceTree = "<group>";
@@ -158,7 +180,11 @@
 				67393F83039423D6A2A4C9B5 /* AppSettings.swift */,
 				A5FB3EB883C67D7DA6D8FEAF /* ClipboardCapturePipeline.swift */,
 				A08EBA3DF42E6A3D8518C909 /* ClipboardManager.swift */,
+				CA1000000000000000000002 /* ClipboardItem.swift */,
+				CA8000000000000000000002 /* ClipboardSearch.swift */,
+				CA9000000000000000000002 /* ClipboardSQLite.swift */,
 				FCFFE5C6B9CC83C972FD0B0D /* ClipboardStore.swift */,
+				CA3000000000000000000002 /* ClipboardTextClassifier.swift */,
 				C6853210949502E0C47D69B9 /* EdgeDissolve.swift */,
 				AF2FD6AB5017BBFF5EE420A4 /* ImageThumbnail.swift */,
 				D22A18A2E99B807E7716432E /* InputSourceSwitcher.swift */,
@@ -167,6 +193,7 @@
 				F56E6A15E84064E62E40BD93 /* NotificationToken.swift */,
 				123A20E6FCB60D259A0CC145 /* PalettePanel.swift */,
 				11927303CFC909AE918568B6 /* PaletteViewModel.swift */,
+				CA2000000000000000000002 /* Pinyin.swift */,
 				8738F70AF4AB873CA45EE200 /* PaletteWindowController.swift */,
 				FC678FC84A80AE731726D744 /* Paster.swift */,
 				B83EBAE1FB329C0318507DFB /* PasteTransaction.swift */,
@@ -396,9 +423,15 @@
 				39845C7BA7BF8871C80EE1BE /* AppSettings.swift in Sources */,
 				DF868B19AE7D7BF3751879EF /* ClipboardCapturePipeline.swift in Sources */,
 				A9BFCCAECCC68D9444932887 /* ClipboardManager.swift in Sources */,
+				CA1000000000000000000001 /* ClipboardItem.swift in Sources */,
+				CA8000000000000000000001 /* ClipboardSearch.swift in Sources */,
+				CA9000000000000000000001 /* ClipboardSQLite.swift in Sources */,
 				739ADE5F09C7B1A660B5BE9F /* ClipboardSettingsView.swift in Sources */,
 				E2C25F35DF0B1F8C9960CD38 /* ClipboardStore.swift in Sources */,
+				CA3000000000000000000001 /* ClipboardTextClassifier.swift in Sources */,
 				1D9AA5ECC0F41C5EE2E43336 /* ClipboardView.swift in Sources */,
+				CA4000000000000000000001 /* ClipboardTableCells.swift in Sources */,
+				CA5000000000000000000001 /* ClipboardPreview.swift in Sources */,
 				32D1DA38415AA18444CAE1CC /* CodeSyntaxHighlighter.swift in Sources */,
 				69136128B6F06843A9962FAF /* CopySelectionOnSelect.swift in Sources */,
 				A63F872BC0264BB99231BC52 /* MarkdownPreview.swift in Sources */,
@@ -407,7 +440,9 @@
 				B9424F6046260D72728A48DD /* GeneralSettingsView.swift in Sources */,
 				683657868E94884E86EAD188 /* IconCache.swift in Sources */,
 				2E9B78A0D95CFE4179A41718 /* ImageQuickLook.swift in Sources */,
+				CA6000000000000000000001 /* PinnedCardSessionStore.swift in Sources */,
 				B1C2D3E4F5061728394A5B6C /* PinnedImageWindow.swift in Sources */,
+				CA7000000000000000000001 /* PinnedImageViews.swift in Sources */,
 				F1E4B87385492A86C5F5CDFE /* ImageThumbnail.swift in Sources */,
 				EE9F57DEDBD7C12EA72E7D9E /* InputSourceSwitcher.swift in Sources */,
 				2637AC2FB6592F5FCA9ADA7C /* LaunchAtLogin.swift in Sources */,
@@ -416,6 +451,7 @@
 				9D0896797DC58B6F1EFD765F /* NotificationToken.swift in Sources */,
 				07650D1993A6D4C0D5B7ACD8 /* PalettePanel.swift in Sources */,
 				F2793D8EFF543BEDD5DF57C1 /* PaletteViewModel.swift in Sources */,
+				CA2000000000000000000001 /* Pinyin.swift in Sources */,
 				765DF848224FB5BC506F2CDC /* PaletteWindowController.swift in Sources */,
 				09B23D64A6A4F5463BC87554 /* PasteApp.swift in Sources */,
 				459F1FFE80691847187D0437 /* PasteSettingsWindowController.swift in Sources */,
