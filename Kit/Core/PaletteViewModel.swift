@@ -88,11 +88,11 @@ enum PaletteMenuAction: Equatable {
 extension ClipboardItem.Kind {
     var symbolName: String {
         switch self {
-        case .text: "doc.text"
+        case .text: "text.menu"
         case .markdown: "number"
         case .code: "chevron.left.forwardslash.chevron.right"
         case .link: "link"
-        case .path: "folder"
+        case .path: "point.topleft.down.to.point.bottomright.curvepath"
         case .image: "photo"
         }
     }

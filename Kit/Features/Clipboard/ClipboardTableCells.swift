@@ -46,6 +46,9 @@ final class ClipboardItemCellView: NSTableCellView {
     private let highlightView = NSView()
     private let thumbnailView = ClipboardThumbnailView()
     private let titleLabel = NSTextField(labelWithString: "")
+    private var fullTitle = NSAttributedString(string: "")
+    private var truncatesFromHead = false
+    private var renderedTitleWidth: CGFloat = -1
     private var representedID: ClipboardItem.ID?
     private var selected = false
     private var fadeToken = 0
@@ -64,12 +67,11 @@ final class ClipboardItemCellView: NSTableCellView {
 
         titleLabel.font = .preferredFont(forTextStyle: .body)
         titleLabel.textColor = .labelColor
-        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.lineBreakMode = .byClipping
         titleLabel.maximumNumberOfLines = 1
         titleLabel.cell?.usesSingleLineMode = true
         titleLabel.cell?.wraps = false
         titleLabel.cell?.isScrollable = false
-        titleLabel.cell?.truncatesLastVisibleLine = true
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         textField = titleLabel
@@ -91,8 +93,7 @@ final class ClipboardItemCellView: NSTableCellView {
 
             titleLabel.leadingAnchor.constraint(
                 equalTo: thumbnailView.trailingAnchor, constant: Theme.Spacing.lg),
-            titleLabel.trailingAnchor.constraint(
-                lessThanOrEqualTo: trailingAnchor, constant: -16),
+            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             titleLabel.heightAnchor.constraint(lessThanOrEqualToConstant: Theme.Size.rowIcon),
         ])
@@ -103,12 +104,19 @@ final class ClipboardItemCellView: NSTableCellView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    override func layout() {
+        super.layout()
+        renderTitle()
+    }
+
     override func prepareForReuse() {
         super.prepareForReuse()
         representedID = nil
         selected = false
         setHighlightOpacity(0)
         titleLabel.isHidden = false
+        fullTitle = NSAttributedString(string: "")
+        renderedTitleWidth = -1
         thumbnailView.prepareForReuse()
     }
 
@@ -133,10 +141,101 @@ final class ClipboardItemCellView: NSTableCellView {
     }
 
     func updateTitle(item: ClipboardItem, query: String, locale: Locale) {
-        titleLabel.attributedStringValue = SearchHighlight.nsAttributed(
-            item.displayTitle(locale: locale),
+        let customTitle = item.customTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasCustomTitle = customTitle?.isEmpty == false
+        truncatesFromHead = item.kind == .path && !hasCustomTitle
+        fullTitle = SearchHighlight.nsAttributed(
+            Self.listTitle(for: item, customTitle: customTitle, locale: locale),
             query: query,
             font: .preferredFont(forTextStyle: .body))
+        renderedTitleWidth = -1
+        renderTitle()
+    }
+
+    private func renderTitle() {
+        var width = titleLabel.bounds.width
+        if let clipView = enclosingScrollView?.contentView {
+            let visibleBounds = convert(clipView.bounds, from: clipView)
+            width = min(width, visibleBounds.maxX - titleLabel.frame.minX - 16)
+        }
+        guard width > 0, abs(width - renderedTitleWidth) > 0.5 else { return }
+        renderedTitleWidth = width
+        // The table can clip a cell before NSTextField gets a chance to draw its own ellipsis.
+        titleLabel.attributedStringValue = Self.truncatedTitle(
+            fullTitle, toFit: width - 3, fromHead: truncatesFromHead,
+            font: titleLabel.font ?? .preferredFont(forTextStyle: .body))
+    }
+
+    private static func truncatedTitle(
+        _ full: NSAttributedString, toFit width: CGFloat, fromHead: Bool, font: NSFont
+    ) -> NSAttributedString {
+        guard full.size().width > width else { return full }
+        let ellipsis = NSAttributedString(
+            string: "…", attributes: [.font: font, .foregroundColor: NSColor.labelColor])
+        let source = full.string
+        let boundaries = Array(source.indices) + [source.endIndex]
+        let count = boundaries.count - 1
+        var best: NSAttributedString = ellipsis
+        var low = 0
+        var high = count
+
+        while low <= high {
+            let kept = (low + high) / 2
+            let range = fromHead
+                ? NSRange(boundaries[count - kept]..<source.endIndex, in: source)
+                : NSRange(source.startIndex..<boundaries[kept], in: source)
+            let candidate = NSMutableAttributedString(attributedString: ellipsis)
+            let visible = full.attributedSubstring(from: range)
+            if fromHead {
+                candidate.append(visible)
+            } else {
+                candidate.setAttributedString(visible)
+                candidate.append(ellipsis)
+            }
+            if candidate.size().width <= width {
+                best = candidate
+                low = kept + 1
+            } else {
+                high = kept - 1
+            }
+        }
+        return best
+    }
+
+    private static func listTitle(
+        for item: ClipboardItem, customTitle: String?, locale: Locale
+    ) -> String {
+        if let customTitle, !customTitle.isEmpty { return boundedTitle(customTitle) }
+
+        switch item.kind {
+        case .image:
+            return item.defaultTitle(locale: locale)
+        case .path:
+            return item.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        case .link:
+            let text = item.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard let url = URL(string: text), let host = url.host else { return text }
+            var title = host.lowercased().hasPrefix("www.") ? String(host.dropFirst(4)) : host
+            if let port = url.port { title += ":\(port)" }
+            if url.path != "/" { title += url.path }
+            if let query = url.query, !query.isEmpty { title += "?\(query)" }
+            if let fragment = url.fragment, !fragment.isEmpty { title += "#\(fragment)" }
+            return boundedTitle(title)
+        case .text, .markdown, .code:
+            let text = item.text ?? ""
+            let sample = text.prefix(201)
+            let lineEnd = sample.firstIndex(where: \.isNewline) ?? sample.endIndex
+            let line = String(sample[..<lineEnd]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let visible = String(line.prefix(200))
+            let hasMore = lineEnd < sample.endIndex
+                ? text.index(after: lineEnd) < text.endIndex : sample.count > 200
+            return hasMore ? visible + "…" : visible
+        }
+    }
+
+    private static func boundedTitle(_ title: String) -> String {
+        let prefix = title.prefix(513)
+        return prefix.count > 512 ? String(prefix.prefix(512)) + "…" : title
     }
 
     func setSelected(_ selected: Bool) {
