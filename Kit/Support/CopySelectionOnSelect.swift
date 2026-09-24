@@ -13,6 +13,7 @@ struct SelectableAttributedText: NSViewRepresentable {
     private let fontSize: CGFloat?
     private let scrollPosition: CGPoint?
     private let selection: NSRange?
+    private let selectionEnabled: Bool
     private let onScroll: ((CGPoint) -> Void)?
     private let onSelectionChange: ((NSRange) -> Void)?
 
@@ -21,6 +22,7 @@ struct SelectableAttributedText: NSViewRepresentable {
         fontSize: CGFloat? = nil,
         scrollPosition: CGPoint? = nil,
         selection: NSRange? = nil,
+        selectionEnabled: Bool = true,
         onScroll: ((CGPoint) -> Void)? = nil,
         onSelectionChange: ((NSRange) -> Void)? = nil
     ) {
@@ -28,6 +30,7 @@ struct SelectableAttributedText: NSViewRepresentable {
         self.fontSize = fontSize
         self.scrollPosition = scrollPosition
         self.selection = selection
+        self.selectionEnabled = selectionEnabled
         self.onScroll = onScroll
         self.onSelectionChange = onSelectionChange
     }
@@ -37,6 +40,7 @@ struct SelectableAttributedText: NSViewRepresentable {
         fontSize: CGFloat? = nil,
         scrollPosition: CGPoint? = nil,
         selection: NSRange? = nil,
+        selectionEnabled: Bool = true,
         onScroll: ((CGPoint) -> Void)? = nil,
         onSelectionChange: ((NSRange) -> Void)? = nil
     ) {
@@ -44,6 +48,7 @@ struct SelectableAttributedText: NSViewRepresentable {
         self.fontSize = fontSize
         self.scrollPosition = scrollPosition
         self.selection = selection
+        self.selectionEnabled = selectionEnabled
         self.onScroll = onScroll
         self.onSelectionChange = onSelectionChange
     }
@@ -63,6 +68,7 @@ struct SelectableAttributedText: NSViewRepresentable {
         context.coordinator.onSelectionChange = onSelectionChange
         scrollView.onScroll = onScroll
         let textView = scrollView.textView
+        textView.isSelectable = selectionEnabled
         let ns: NSAttributedString
         switch storage {
         case .swiftUI(let attributed):

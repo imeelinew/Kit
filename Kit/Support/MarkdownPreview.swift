@@ -48,6 +48,7 @@ struct MarkdownPreview: View {
     var fontSize: CGFloat? = nil
     var scrollPosition: CGPoint? = nil
     var selection: NSRange? = nil
+    var selectionEnabled = true
     var onScroll: ((CGPoint) -> Void)? = nil
     var onSelectionChange: ((NSRange) -> Void)? = nil
 
@@ -117,6 +118,7 @@ struct MarkdownPreview: View {
             fontSize: fontSize,
             scrollPosition: scrollPosition,
             selection: selection,
+            selectionEnabled: selectionEnabled,
             onScroll: onScroll,
             onSelectionChange: onSelectionChange)
     }
@@ -127,6 +129,7 @@ struct MarkdownPreview: View {
             fontSize: fontSize,
             scrollPosition: scrollPosition,
             selection: selection,
+            selectionEnabled: selectionEnabled,
             onScroll: onScroll,
             onSelectionChange: onSelectionChange)
     }
