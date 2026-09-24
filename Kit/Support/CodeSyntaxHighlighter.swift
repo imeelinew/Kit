@@ -137,7 +137,6 @@ struct CodePreview: View {
     var fontSize: CGFloat? = nil
     var scrollPosition: CGPoint? = nil
     var selection: NSRange? = nil
-    var selectionEnabled = true
     var onScroll: ((CGPoint) -> Void)? = nil
     var onSelectionChange: ((NSRange) -> Void)? = nil
     @State private var highlighted: AttributedString?
@@ -157,7 +156,6 @@ struct CodePreview: View {
             fontSize: fontSize,
             scrollPosition: scrollPosition,
             selection: selection,
-            selectionEnabled: selectionEnabled,
             onScroll: onScroll,
             onSelectionChange: onSelectionChange)
         .task(id: RenderID(code: code, query: query)) {

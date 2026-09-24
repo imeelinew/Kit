@@ -64,29 +64,22 @@ struct ClipboardPreview: View {
         switch item.kind {
         case .text, .path:
             SelectableAttributedText(
-                attributed: SearchHighlight.attributed(item.text ?? "", query: query),
-                selectionEnabled: !vm.menuOpen
+                attributed: SearchHighlight.attributed(item.text ?? "", query: query)
             )
         case .markdown:
             if settings.renderMarkdown {
-                MarkdownPreview(
-                    source: item.text ?? "", query: query,
-                    selectionEnabled: !vm.menuOpen)
+                MarkdownPreview(source: item.text ?? "", query: query)
             } else {
                 SelectableAttributedText(
-                    attributed: SearchHighlight.attributed(item.text ?? "", query: query),
-                    selectionEnabled: !vm.menuOpen
+                    attributed: SearchHighlight.attributed(item.text ?? "", query: query)
                 )
             }
         case .link:
             SelectableAttributedText(
-                attributed: SearchHighlight.attributed(item.text ?? "", query: query),
-                selectionEnabled: !vm.menuOpen
+                attributed: SearchHighlight.attributed(item.text ?? "", query: query)
             )
         case .code:
-            CodePreview(
-                code: item.text ?? "", query: query,
-                selectionEnabled: !vm.menuOpen)
+            CodePreview(code: item.text ?? "", query: query)
         case .image:
             let imageURL = store.imageURL(for: item)
             AsyncThumbnail(url: imageURL, maxPixel: Self.previewMaxPixel) {
