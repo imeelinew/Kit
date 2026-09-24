@@ -111,6 +111,7 @@ private struct SettingsWindowRoot: View {
                 }
             }
             .listStyle(.sidebar)
+            .background(SourceListSelection())
             .navigationSplitViewColumnWidth(
                 min: SettingsWindowMetrics.sidebarWidth,
                 ideal: SettingsWindowMetrics.sidebarWidth,
@@ -176,6 +177,52 @@ private struct SettingsWindowRoot: View {
         case .history: HistorySettingsView()
         case .about: AboutSettingsView()
         }
+    }
+}
+
+/// Keeps the sidebar selection on the system accent while this window is key.
+/// A plain list highlight turns gray whenever the detail column is first responder.
+private struct SourceListSelection: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { SourceListSelectionView() }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? SourceListSelectionView)?.apply()
+    }
+}
+
+private final class SourceListSelectionView: NSView {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        apply()
+    }
+
+    func apply() {
+        DispatchQueue.main.async { [weak self] in
+            guard let table = self?.enclosingTable else { return }
+            table.selectionHighlightStyle = .sourceList
+        }
+    }
+
+    private var enclosingTable: NSTableView? {
+        if let table = enclosingScrollView?.documentView as? NSTableView { return table }
+        var ancestor: NSView? = self
+        while let current = ancestor {
+            if let table = current as? NSTableView { return table }
+            if let table = current.enclosingScrollView?.documentView as? NSTableView { return table }
+            ancestor = current.superview
+        }
+        return window?.contentView?.tables.min { lhs, rhs in
+            lhs.convert(lhs.bounds, to: nil).minX < rhs.convert(rhs.bounds, to: nil).minX
+        }
+    }
+}
+
+private extension NSView {
+    var tables: [NSTableView] {
+        var found: [NSTableView] = []
+        if let table = self as? NSTableView { found.append(table) }
+        for subview in subviews { found.append(contentsOf: subview.tables) }
+        return found
     }
 }
 
