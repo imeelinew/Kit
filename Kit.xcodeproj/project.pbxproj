@@ -30,7 +30,7 @@
 		5F74A5E6F4687BA1EDA15D8F /* NerdSymbolsFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = 908045C0E8EF72DB68603149 /* NerdSymbolsFont.swift */; };
 		62F5E9E05B1CB111BC22F982 /* RootPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B0977782F9197A6D1FEF7AF /* RootPaletteView.swift */; };
 		683657868E94884E86EAD188 /* IconCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AAAC613C9193B707F079A76 /* IconCache.swift */; };
-		69136128B6F06843A9962FAF /* CopySelectionOnSelect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66BA1300B2872471FA6010D4 /* CopySelectionOnSelect.swift */; };
+		69136128B6F06843A9962FAF /* AttributedTextPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66BA1300B2872471FA6010D4 /* AttributedTextPreview.swift */; };
 		6B1C7B8816B750407EFCB52C /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E803D4959D800FE82F1EC0EA /* Theme.swift */; };
 		739ADE5F09C7B1A660B5BE9F /* ClipboardSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42062A9B167BB7DCD3E7129 /* ClipboardSettingsView.swift */; };
 		73C5E3F78FDD5E8837E47AC0 /* PasteTransaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = B83EBAE1FB329C0318507DFB /* PasteTransaction.swift */; };
@@ -89,7 +89,7 @@
 		5EC0E3B9B5C98ACD47608094 /* VisualEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualEffectView.swift; sourceTree = "<group>"; };
 		6127F340C801F2F566147DE2 /* SymbolsNerdFontMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SymbolsNerdFontMono-Regular.ttf"; sourceTree = "<group>"; };
 		657D8CF150E57314AE8665E3 /* ClipboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardView.swift; sourceTree = "<group>"; };
-		66BA1300B2872471FA6010D4 /* CopySelectionOnSelect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopySelectionOnSelect.swift; sourceTree = "<group>"; };
+		66BA1300B2872471FA6010D4 /* AttributedTextPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttributedTextPreview.swift; sourceTree = "<group>"; };
 		67393F83039423D6A2A4C9B5 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		6C234D84C11C94266A6B560D /* PopoverMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverMenu.swift; sourceTree = "<group>"; };
 		7B34CA7CF3889D8A18413F77 /* SystemClipboardHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemClipboardHistory.swift; sourceTree = "<group>"; };
@@ -218,7 +218,7 @@
 			isa = PBXGroup;
 			children = (
 				420946D50A22D4D3CDA26B77 /* CodeSyntaxHighlighter.swift */,
-				66BA1300B2872471FA6010D4 /* CopySelectionOnSelect.swift */,
+				66BA1300B2872471FA6010D4 /* AttributedTextPreview.swift */,
 				2AAAC613C9193B707F079A76 /* IconCache.swift */,
 				81D51FA4C7914F68805A9D72 /* MarkdownAttributedRenderer.swift */,
 				F94E5C69B11642BE89C7B40A /* MarkdownPreview.swift */,
@@ -429,7 +429,7 @@
 				CA4000000000000000000001 /* ClipboardTableCells.swift in Sources */,
 				CA5000000000000000000001 /* ClipboardPreview.swift in Sources */,
 				32D1DA38415AA18444CAE1CC /* CodeSyntaxHighlighter.swift in Sources */,
-				69136128B6F06843A9962FAF /* CopySelectionOnSelect.swift in Sources */,
+				69136128B6F06843A9962FAF /* AttributedTextPreview.swift in Sources */,
 				A63F872BC0264BB99231BC52 /* MarkdownPreview.swift in Sources */,
 				F3C7ADFBEBBA4EF387C9A15F /* MarkdownAttributedRenderer.swift in Sources */,
 				02CB1E90666F628DBF9C7C78 /* EdgeDissolve.swift in Sources */,

@@ -47,12 +47,6 @@ enum Paster {
         return true
     }
 
-    /// String counterpart of `copy(_:store:willWrite:)`.
-    @MainActor
-    static func copyString(_ text: String) {
-        _ = write(.text(text))
-    }
-
     /// Copies a pinned image without routing through the palette or synthesizing a paste event.
     @MainActor @discardableResult
     static func copyImage(at url: URL) async -> Bool {

@@ -47,9 +47,7 @@ struct MarkdownPreview: View {
     var query: String = ""
     var fontSize: CGFloat? = nil
     var scrollPosition: CGPoint? = nil
-    var selection: NSRange? = nil
     var onScroll: ((CGPoint) -> Void)? = nil
-    var onSelectionChange: ((NSRange) -> Void)? = nil
 
     @State private var rendered: Rendered?
 
@@ -89,11 +87,11 @@ struct MarkdownPreview: View {
         Group {
             switch rendered {
             case .appKit(let value):
-                selectableText(nsAttributed: value)
+                previewText(nsAttributed: value)
             case .swiftUI(let value):
-                selectableText(attributed: value)
+                previewText(attributed: value)
             case nil:
-                selectableText(attributed: AttributedString(source))
+                previewText(attributed: AttributedString(source))
             }
         }
         .task(id: RenderID(source: source, query: query, fontSize: fontSize)) {
@@ -111,23 +109,19 @@ struct MarkdownPreview: View {
         }
     }
 
-    private func selectableText(attributed: AttributedString) -> SelectableAttributedText {
-        SelectableAttributedText(
+    private func previewText(attributed: AttributedString) -> AttributedTextPreview {
+        AttributedTextPreview(
             attributed: attributed,
             fontSize: fontSize,
             scrollPosition: scrollPosition,
-            selection: selection,
-            onScroll: onScroll,
-            onSelectionChange: onSelectionChange)
+            onScroll: onScroll)
     }
 
-    private func selectableText(nsAttributed: NSAttributedString) -> SelectableAttributedText {
-        SelectableAttributedText(
+    private func previewText(nsAttributed: NSAttributedString) -> AttributedTextPreview {
+        AttributedTextPreview(
             nsAttributed: nsAttributed,
             fontSize: fontSize,
             scrollPosition: scrollPosition,
-            selection: selection,
-            onScroll: onScroll,
-            onSelectionChange: onSelectionChange)
+            onScroll: onScroll)
     }
 }

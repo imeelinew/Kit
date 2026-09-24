@@ -1,9 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// Read-only attributed preview text with select-to-copy. The scroll view and text system are
+/// Read-only attributed preview text. The scroll view and text system are
 /// entirely AppKit so large previews do not need a SwiftUI `ScrollView` around `NSTextView`.
-struct SelectableAttributedText: NSViewRepresentable {
+struct AttributedTextPreview: NSViewRepresentable {
     private enum Storage {
         case swiftUI(AttributedString)
         case appKit(NSAttributedString)
@@ -12,55 +12,37 @@ struct SelectableAttributedText: NSViewRepresentable {
     private let storage: Storage
     private let fontSize: CGFloat?
     private let scrollPosition: CGPoint?
-    private let selection: NSRange?
     private let onScroll: ((CGPoint) -> Void)?
-    private let onSelectionChange: ((NSRange) -> Void)?
 
     init(
         attributed: AttributedString,
         fontSize: CGFloat? = nil,
         scrollPosition: CGPoint? = nil,
-        selection: NSRange? = nil,
-        onScroll: ((CGPoint) -> Void)? = nil,
-        onSelectionChange: ((NSRange) -> Void)? = nil
+        onScroll: ((CGPoint) -> Void)? = nil
     ) {
         storage = .swiftUI(attributed)
         self.fontSize = fontSize
         self.scrollPosition = scrollPosition
-        self.selection = selection
         self.onScroll = onScroll
-        self.onSelectionChange = onSelectionChange
     }
 
     init(
         nsAttributed: NSAttributedString,
         fontSize: CGFloat? = nil,
         scrollPosition: CGPoint? = nil,
-        selection: NSRange? = nil,
-        onScroll: ((CGPoint) -> Void)? = nil,
-        onSelectionChange: ((NSRange) -> Void)? = nil
+        onScroll: ((CGPoint) -> Void)? = nil
     ) {
         storage = .appKit(nsAttributed)
         self.fontSize = fontSize
         self.scrollPosition = scrollPosition
-        self.selection = selection
         self.onScroll = onScroll
-        self.onSelectionChange = onSelectionChange
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
     func makeNSView(context: Context) -> PreviewTextScrollView {
-        let scrollView = PreviewTextScrollView()
-        let textView = scrollView.textView
-        textView.delegate = context.coordinator
-        context.coordinator.onCopy = { Paster.copyString($0) }
-        return scrollView
+        PreviewTextScrollView()
     }
 
     func updateNSView(_ scrollView: PreviewTextScrollView, context: Context) {
-        context.coordinator.onCopy = { Paster.copyString($0) }
-        context.coordinator.onSelectionChange = onSelectionChange
         scrollView.onScroll = onScroll
         let textView = scrollView.textView
         let ns: NSAttributedString
@@ -74,19 +56,9 @@ struct SelectableAttributedText: NSViewRepresentable {
             ns = Self.nsAttributed(from: attributed, fontSize: fontSize)
         }
         let plain = ns.string
-        if textView.string != plain {
+        if textView.string != plain || textView.currentAttributedString() != ns {
             textView.textStorage?.setAttributedString(ns)
             textView.invalidateIntrinsicContentSize()
-        } else if textView.currentAttributedString() != ns {
-            let selection = textView.selectedRange()
-            textView.textStorage?.setAttributedString(ns)
-            if NSMaxRange(selection) <= ns.length {
-                textView.setSelectedRange(selection)
-            }
-            textView.invalidateIntrinsicContentSize()
-        }
-        if let selection, selection != textView.selectedRange(), NSMaxRange(selection) <= ns.length {
-            textView.setSelectedRange(selection)
         }
         scrollView.updateDocumentGeometry()
         scrollView.setScrollPosition(scrollPosition)
@@ -171,37 +143,6 @@ struct SelectableAttributedText: NSViewRepresentable {
         return NSColor(
             srgbRed: CGFloat(resolved.red), green: CGFloat(resolved.green),
             blue: CGFloat(resolved.blue), alpha: CGFloat(resolved.opacity))
-    }
-
-    @MainActor
-    final class Coordinator: NSObject, NSTextViewDelegate {
-        var onCopy: ((String) -> Void)?
-        var onSelectionChange: ((NSRange) -> Void)?
-        private var pending: String?
-
-        func textViewDidChangeSelection(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
-            let range = textView.selectedRange()
-            onSelectionChange?(range)
-            let ns = textView.string as NSString
-            guard range.length > 0, NSMaxRange(range) <= ns.length else {
-                pending = nil
-                return
-            }
-            let text = ns.substring(with: range)
-            if NSEvent.pressedMouseButtons != 0 {
-                pending = text
-            } else {
-                pending = nil
-                onCopy?(text)
-            }
-        }
-
-        func flushPending() {
-            guard let pending else { return }
-            self.pending = nil
-            onCopy?(pending)
-        }
     }
 }
 
@@ -377,37 +318,6 @@ final class PreviewTextView: NSTextView {
             textContainer.size = NSSize(width: bounds.width, height: CGFloat.greatestFiniteMagnitude)
             invalidateIntrinsicContentSize()
         }
-    }
-
-    /// Drop the default text-view junk (Look Up, Translate, Services, …); keep Copy + Select All.
-    override func menu(for event: NSEvent) -> NSMenu? {
-        let locale = AppCore.shared.settings.language.locale
-        let menu = NSMenu()
-        menu.addItem(
-            withTitle: AppLocalization.string("Copy", locale: locale), action: #selector(copy(_:)),
-            keyEquivalent: "")
-        menu.addItem(
-            withTitle: AppLocalization.string("Select All", locale: locale),
-            action: #selector(selectAll(_:)), keyEquivalent: "")
-        return menu
-    }
-
-    /// Same path as select-to-copy: stamp the internal pasteboard marker so monitoring skips history.
-    override func copy(_ sender: Any?) {
-        let range = selectedRange()
-        guard range.length > 0 else { return }
-        let text = (string as NSString).substring(with: range)
-        Paster.copyString(text)
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        super.mouseUp(with: event)
-        (delegate as? SelectableAttributedText.Coordinator)?.flushPending()
-    }
-
-    override func didChangeText() {
-        super.didChangeText()
-        invalidateIntrinsicContentSize()
     }
 
     func currentAttributedString() -> NSAttributedString {

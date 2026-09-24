@@ -24,7 +24,6 @@
 "Content Preview" = "内容预览";
 "Clipboard history is empty" = "剪贴板历史为空";
 "Copied" = "复制时间";
-"Copy" = "拷贝";
 "Copy to Clipboard" = "复制到剪贴板";
 "Danger Zone" = "危险操作";
 "Dark" = "深色";
@@ -99,7 +98,6 @@
 "Rename…" = "重命名…";
 "Repository" = "代码仓库";
 "Render Markdown" = "渲染 Markdown";
-"Select All" = "全选";
 "Settings…" = "设置…";
 "Shortcut" = "快捷键";
 "Shortcuts" = "快捷键";

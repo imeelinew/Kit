@@ -63,19 +63,19 @@ struct ClipboardPreview: View {
     private func content(for item: ClipboardItem) -> some View {
         switch item.kind {
         case .text, .path:
-            SelectableAttributedText(
+            AttributedTextPreview(
                 attributed: SearchHighlight.attributed(item.text ?? "", query: query)
             )
         case .markdown:
             if settings.renderMarkdown {
                 MarkdownPreview(source: item.text ?? "", query: query)
             } else {
-                SelectableAttributedText(
+                AttributedTextPreview(
                     attributed: SearchHighlight.attributed(item.text ?? "", query: query)
                 )
             }
         case .link:
-            SelectableAttributedText(
+            AttributedTextPreview(
                 attributed: SearchHighlight.attributed(item.text ?? "", query: query)
             )
         case .code:

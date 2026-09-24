@@ -196,9 +196,7 @@ final class PalettePanel: NSPanel {
         case kVK_ANSI_C:
             guard editor.selectedRange().length > 0 else { return true }
             editor.copy(nil)
-            if !(editor is PreviewTextView) {
-                Paster.markCurrentPasteboardInternal()
-            }
+            Paster.markCurrentPasteboardInternal()
             return true
         case kVK_ANSI_X:
             guard editor.isEditable, editor.selectedRange().length > 0 else { return true }
