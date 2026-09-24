@@ -1,8 +1,9 @@
-"About Paste" = "About Kit";
+"About Kit" = "About Kit";
 "About" = "About";
 "Acknowledgments" = "Acknowledgments";
 "Actions" = "Actions";
 "Add" = "Add";
+"Add Application…" = "Add Application…";
 "Add to Stack" = "Add to Stack";
 "All Types" = "All Types";
 "App Language" = "App Language";
@@ -11,7 +12,7 @@
 "Cancel" = "Cancel";
 "Characters" = "Characters";
 "%lld Characters" = "%lld characters";
-"Clear" = "Clear";
+"Clear…" = "Clear…";
 "Clear clipboard history?" = "Clear clipboard history?";
 "Clear history" = "Clear history";
 "Clear History" = "Clear History";
@@ -44,7 +45,7 @@
 "Icon Animation" = "Icon Animation";
 "Information" = "Information";
 "Items in this stack will also be deleted. This can't be undone." = "Items in this stack will also be deleted. This can't be undone.";
-"Rename" = "Rename";
+"Rename…" = "Rename…";
 "Input Method" = "Input Method";
 "Keep history for" = "Keep history for";
 "Language" = "Language";
@@ -91,12 +92,11 @@
 "Copy Pinned Image" = "Copy Pinned Image";
 "Hide Pinned Cards" = "Hide Pinned Cards";
 "Quit" = "Quit";
-"Quit Paste" = "Quit Kit";
+"Quit Kit…" = "Quit Kit…";
 "Quit Paste?" = "Quit Kit?";
 "Repository" = "Repository";
 "Render Markdown" = "Render Markdown";
 "Select All" = "Select All";
-"Settings" = "Settings";
 "Settings…" = "Settings…";
 "Shortcut" = "Shortcut";
 "Shortcuts" = "Shortcuts";

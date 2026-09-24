@@ -34,18 +34,18 @@ struct PopoverMenuItem {
     ) {
         switch action {
         case .about:
-            title = "About Paste"
+            title = "About Kit"
             icon = nil
         case .checkForUpdates:
             title = "Check for Updates"
             icon = nil
             isEnabled = AppCore.shared.updateService.canCheckForUpdates
         case .settings:
-            title = "Settings"
+            title = "Settings…"
             icon = nil
             shortcut = "⌘,"
         case .quit:
-            title = "Quit Paste"
+            title = "Quit Kit…"
             icon = nil
             shortcut = "⌘Q"
             isDestructive = true
@@ -101,7 +101,7 @@ struct PopoverMenuItem {
             title = "New Stack"
             icon = .symbol("plus")
         case .renameStack:
-            title = "Rename"
+            title = "Rename…"
             icon = nil
         case .deleteStack:
             title = "Delete Stack…"

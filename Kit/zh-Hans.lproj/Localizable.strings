@@ -1,8 +1,9 @@
-"About Paste" = "关于 Kit";
+"About Kit" = "关于 Kit";
 "About" = "关于";
 "Acknowledgments" = "致谢";
 "Actions" = "操作";
 "Add" = "添加";
+"Add Application…" = "添加应用…";
 "Add to Stack" = "添加到 Stack";
 "All Types" = "全部类型";
 "App Language" = "应用语言";
@@ -11,7 +12,7 @@
 "Cancel" = "取消";
 "Characters" = "字符数";
 "%lld Characters" = "%lld 个字符";
-"Clear" = "清空";
+"Clear…" = "清空…";
 "Clear clipboard history?" = "要清空剪贴板历史吗？";
 "Clear history" = "清空历史";
 "Clear History" = "清空历史";
@@ -90,13 +91,12 @@
 "Copy Pinned Image" = "复制钉选图片";
 "Hide Pinned Cards" = "隐藏钉选卡片";
 "Quit" = "退出";
-"Quit Paste" = "退出 Kit";
+"Quit Kit…" = "退出 Kit…";
 "Quit Paste?" = "要退出 Kit 吗？";
-"Rename" = "重命名";
+"Rename…" = "重命名…";
 "Repository" = "代码仓库";
 "Render Markdown" = "渲染 Markdown";
 "Select All" = "全选";
-"Settings" = "设置";
 "Settings…" = "设置…";
 "Shortcut" = "快捷键";
 "Shortcuts" = "快捷键";

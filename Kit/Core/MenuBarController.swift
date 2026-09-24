@@ -125,7 +125,7 @@ final class MenuBarController: NSObject {
         let menu = NSMenu()
 
         let aboutItem = NSMenuItem(
-            title: String(localized: "About Paste", locale: locale),
+            title: String(localized: "About Kit", locale: locale),
             action: #selector(showAbout),
             keyEquivalent: ""
         )
@@ -174,7 +174,7 @@ final class MenuBarController: NSObject {
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(
-            title: String(localized: "Quit Paste", locale: locale),
+            title: String(localized: "Quit Kit…", locale: locale),
             action: #selector(quit),
             keyEquivalent: "q"
         )

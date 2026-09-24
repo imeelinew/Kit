@@ -49,7 +49,7 @@ struct ClipboardSettingsView: View {
                                 .font(.system(size: 12, weight: .medium))
                         }
                         .buttonStyle(.borderless)
-                        .accessibilityLabel("Add")
+                        .accessibilityLabel("Add Application…")
                     }
                     .padding(.horizontal, Theme.Spacing.xl)
                     .padding(.vertical, Theme.Spacing.md)
@@ -128,7 +128,7 @@ struct HistorySettingsView: View {
             PreferencesSectionHeader(title: "Danger Zone")
 
             PreferencesRow(label: "Clear history") {
-                Button("Clear") { confirmingClear = true }
+                Button("Clear…") { confirmingClear = true }
                     .foregroundStyle(.red)
                     .controlSize(.regular)
             }
