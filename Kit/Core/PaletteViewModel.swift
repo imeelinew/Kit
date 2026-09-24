@@ -92,13 +92,14 @@ extension ClipboardItem.Kind {
         case .markdown: "number"
         case .code: "chevron.left.forwardslash.chevron.right"
         case .link: "link"
+        case .path: "folder"
         case .image: "photo"
         }
     }
 }
 
 enum ClipboardKindFilter: Equatable, CaseIterable {
-    case all, text, markdown, code, link, image
+    case all, text, markdown, code, link, path, image
 
     var title: LocalizedStringKey {
         LocalizedStringKey(kind?.typeLabel ?? "All Types")
@@ -115,6 +116,7 @@ enum ClipboardKindFilter: Equatable, CaseIterable {
         case .markdown: .markdown
         case .code: .code
         case .link: .link
+        case .path: .path
         case .image: .image
         }
     }
@@ -229,6 +231,8 @@ final class PaletteViewModel {
             ]
             if item.kind == .image {
                 actions.append(.pinToScreen(item))
+            }
+            if item.kind == .image || item.kind == .path {
                 actions.append(.revealInFinder(item))
             }
             if !core.clipboardStore.stacks.isEmpty {
@@ -417,9 +421,10 @@ final class PaletteViewModel {
             overlay = .none
             core.pinToScreen(item)
         case .revealInFinder:
-            guard searchReady, let item = actionTarget, item.kind == .image else { return true }
+            guard searchReady, let item = actionTarget,
+                item.kind == .image || item.kind == .path else { return true }
             overlay = .none
-            core.revealClipboardImage(item)
+            core.revealClipboardItem(item)
         case .toggleQuickLook:
             guard canToggleQuickLook else { return menuOpen }
             imageQuickLookOpen.toggle()
@@ -496,7 +501,7 @@ final class PaletteViewModel {
             guard item.kind == .image else { return }
             core.pinToScreen(item)
         case .revealInFinder(let item):
-            core.revealClipboardImage(item)
+            core.revealClipboardItem(item)
         case .addToStack(let item):
             overlay = .addToStack(item.id)
             menuSelection = 0

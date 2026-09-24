@@ -91,7 +91,7 @@ enum Paster {
         _ item: ClipboardItem, store: ClipboardStore, targetBundleID: String?
     ) async -> Payload? {
         switch item.kind {
-        case .text, .markdown, .code, .link:
+        case .text, .markdown, .code, .link, .path:
             return item.text.map(Payload.text)
         case .image:
             guard let url = store.imageURL(for: item) else { return nil }

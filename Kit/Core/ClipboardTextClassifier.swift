@@ -1,6 +1,6 @@
 import Foundation
 
-/// Assign one persistent kind when text is captured: links, code, Markdown, then plain text.
+/// Assign one persistent kind when text is captured: links, paths, code, Markdown, then plain text.
 /// Code checks inspect a bounded prefix and ignore snippets embedded in Markdown prose.
 enum ClipboardTextClassifier {
     private static let sampleLimit = 12_000
@@ -17,9 +17,30 @@ enum ClipboardTextClassifier {
 
     static func kind(for text: String) -> ClipboardItem.Kind {
         if isLink(text) { return .link }
+        if fileURL(for: text) != nil { return .path }
         if isCode(text) { return .code }
         if MarkdownAttributedRenderer.isMarkdown(text) { return .markdown }
         return .text
+    }
+
+    /// Resolve a single existing local path, including file URLs and home-relative paths.
+    /// Checking the filesystem keeps prose and code that merely look path-like as text.
+    static func fileURL(for text: String) -> URL? {
+        let path = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !path.isEmpty, !path.contains(where: \.isNewline) else { return nil }
+
+        let url: URL
+        if path.hasPrefix("file://") {
+            guard let parsed = URL(string: path), parsed.isFileURL,
+                parsed.host == nil || parsed.host == "localhost"
+            else { return nil }
+            url = parsed.standardizedFileURL
+        } else {
+            guard path.hasPrefix("/") || path.hasPrefix("~/") else { return nil }
+            url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath).standardizedFileURL
+        }
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        return url
     }
 
     /// Whole clipboard string is a single http(s) URL (no surrounding prose).

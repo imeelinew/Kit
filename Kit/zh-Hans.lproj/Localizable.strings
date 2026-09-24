@@ -74,6 +74,7 @@
 "Paste Settings" = "Kit 设置";
 "Paste to %@" = "粘贴到 %@";
 "Plain Text" = "纯文本";
+"Path" = "路径";
 "Paste will stop monitoring the clipboard until you open it again." = "退出后，Kit 将停止监控剪贴板";
 "Past 30 Days" = "过去 30 天";
 "Past 7 Days" = "过去 7 天";

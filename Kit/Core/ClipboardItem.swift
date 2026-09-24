@@ -2,7 +2,7 @@ import Foundation
 
 struct ClipboardItem: Identifiable, Hashable, Sendable {
     enum Kind: String, Sendable {
-        case text, markdown, code, link, image
+        case text, markdown, code, link, path, image
 
         var typeLabel: String {
             switch self {
@@ -10,6 +10,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
             case .markdown: "Markdown"
             case .code: "Code"
             case .link: "Link"
+            case .path: "Path"
             case .image: "Image"
             }
         }
@@ -84,7 +85,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
         switch kind {
         case .image:
             return String(localized: "Image", locale: locale)
-        case .text, .markdown, .code, .link:
+        case .text, .markdown, .code, .link, .path:
             let text = String((text ?? "").prefix(200)).trimmingCharacters(
                 in: .whitespacesAndNewlines)
             let lineEnd = text.firstIndex(where: { $0.isNewline }) ?? text.endIndex
@@ -142,4 +143,3 @@ struct ClipboardStack: Identifiable, Equatable, Hashable, Sendable {
     let id: UUID
     var name: String
 }
-

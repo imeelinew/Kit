@@ -62,7 +62,7 @@ struct ClipboardPreview: View {
     @ViewBuilder
     private func content(for item: ClipboardItem) -> some View {
         switch item.kind {
-        case .text:
+        case .text, .path:
             SelectableAttributedText(
                 attributed: SearchHighlight.attributed(item.text ?? "", query: query)
             )
@@ -199,7 +199,7 @@ private struct ClipboardInfoSection: View {
             rows.append(InfoRow(label: "Stack", value: stack.name))
         }
         switch item.kind {
-        case .text, .markdown, .code, .link:
+        case .text, .markdown, .code, .link, .path:
             if let characters = details.characters {
                 rows.append(
                     InfoRow(

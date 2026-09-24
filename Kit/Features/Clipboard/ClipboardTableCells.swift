@@ -300,7 +300,7 @@ private final class ClipboardThumbnailView: NSView {
         displayedImage = nil
 
         switch item.kind {
-        case .text, .markdown, .code, .link:
+        case .text, .markdown, .code, .link, .path:
             showKind(item.kind)
         case .image:
             showKind(.image)
@@ -361,4 +361,3 @@ private final class ClipboardThumbnailView: NSView {
         needsDisplay = true
     }
 }
-

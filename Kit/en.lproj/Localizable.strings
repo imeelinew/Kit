@@ -75,6 +75,7 @@
 "Paste Settings" = "Kit Settings";
 "Paste to %@" = "Paste to %@";
 "Plain Text" = "Plain Text";
+"Path" = "Path";
 "Paste will stop monitoring the clipboard until you open it again." = "Kit will stop monitoring the clipboard";
 "Past 30 Days" = "Past 30 Days";
 "Past 7 Days" = "Past 7 Days";

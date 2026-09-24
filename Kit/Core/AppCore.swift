@@ -208,10 +208,28 @@ final class AppCore {
         }
     }
 
-    func revealClipboardImage(_ item: ClipboardItem, dismissPalette: Bool = true) {
-        guard let url = clipboardStore.imageURL(for: item) else { return }
+    func revealClipboardItem(_ item: ClipboardItem, dismissPalette: Bool = true) {
+        let url: URL
+        switch item.kind {
+        case .image:
+            guard let imageURL = clipboardStore.imageURL(for: item) else { return }
+            url = imageURL
+        case .path:
+            guard let text = item.text, let pathURL = ClipboardTextClassifier.fileURL(for: text)
+            else { return }
+            url = pathURL
+        default:
+            return
+        }
         if dismissPalette { hidePalette(restoreFocus: false) }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+            isDirectory.boolValue
+        {
+            _ = NSWorkspace.shared.open(url)
+        } else {
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
     }
 
     func pinToScreen(_ item: ClipboardItem, dismissPalette: Bool = true) {
