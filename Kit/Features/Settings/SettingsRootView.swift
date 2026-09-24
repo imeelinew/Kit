@@ -17,19 +17,6 @@ enum SettingsTab: Int, CaseIterable, Hashable, Identifiable {
         }
     }
 
-    /// Stable identifier for `MacAppSettingsUI` tab items.
-    var tabIdentifier: String {
-        switch self {
-        case .general: return "general"
-        case .shortcuts: return "shortcuts"
-        case .appearance: return "appearance"
-        case .sound: return "sound"
-        case .clipboard: return "clipboard"
-        case .history: return "history"
-        case .about: return "about"
-        }
-    }
-
     var symbolName: String {
         switch self {
         case .general: return "gearshape"
@@ -39,18 +26,6 @@ enum SettingsTab: Int, CaseIterable, Hashable, Identifiable {
         case .clipboard: return "clipboard"
         case .history: return "clock"
         case .about: return "info.circle"
-        }
-    }
-
-    var preferredPaneHeight: CGFloat {
-        switch self {
-        case .general: return 300
-        case .shortcuts: return 580
-        case .appearance: return 500
-        case .sound: return 200
-        case .clipboard: return 360
-        case .history: return 220
-        case .about: return 320
         }
     }
 }

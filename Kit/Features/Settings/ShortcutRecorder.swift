@@ -124,29 +124,27 @@ private struct LocalShortcutRecorder: View {
 struct ShortcutsSettingsView: View {
     var body: some View {
         PreferencesForm {
-            PreferencesRow(label: "Show Kit") {
-                KeyboardShortcuts.Recorder(for: .toggleClipboard)
+            Section {
+                PreferencesRow(label: "Show Kit") {
+                    KeyboardShortcuts.Recorder(for: .toggleClipboard)
+                }
             }
 
-            PreferencesDivider()
+            Section("Palette") {
+                shortcutRow("Actions", shortcut: .actions)
+                shortcutRow("Copy to Clipboard", shortcut: .copyToClipboard)
+                shortcutRow("Pin to Screen", shortcut: .pinToScreen)
+                shortcutRow("Show in Finder", shortcut: .showInFinder)
+            }
 
-            PreferencesSectionHeader(title: "Palette")
+            Section("Pinned Images") {
+                pinnedImageShortcutRow("Close Pinned Image", shortcut: .close)
+                pinnedImageShortcutRow("Close All Pinned Images", shortcut: .closeAll)
+                pinnedImageShortcutRow("Copy Pinned Image", shortcut: .copy)
 
-            shortcutRow("Actions", shortcut: .actions)
-            shortcutRow("Copy to Clipboard", shortcut: .copyToClipboard)
-            shortcutRow("Pin to Screen", shortcut: .pinToScreen)
-            shortcutRow("Show in Finder", shortcut: .showInFinder)
-
-            PreferencesDivider()
-
-            PreferencesSectionHeader(title: "Pinned Images")
-
-            pinnedImageShortcutRow("Close Pinned Image", shortcut: .close)
-            pinnedImageShortcutRow("Close All Pinned Images", shortcut: .closeAll)
-            pinnedImageShortcutRow("Copy Pinned Image", shortcut: .copy)
-
-            PreferencesRow(label: "Hide Pinned Cards") {
-                KeyboardShortcuts.Recorder(for: .hidePinnedCards)
+                PreferencesRow(label: "Hide Pinned Cards") {
+                    KeyboardShortcuts.Recorder(for: .hidePinnedCards)
+                }
             }
         }
     }

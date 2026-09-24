@@ -8,14 +8,11 @@ struct ClipboardSettingsView: View {
 
     var body: some View {
         PreferencesForm {
-            PreferencesRow(label: "Content Preview", alignment: .firstTextBaseline) {
+            Section("Content Preview") {
                 Toggle("Render Markdown", isOn: $settings.renderMarkdown)
-                    .toggleStyle(.checkbox)
             }
 
-            PreferencesDivider()
-
-            PreferencesRow(label: "System Clipboard", alignment: .firstTextBaseline) {
+            Section("System Clipboard") {
                 Toggle(
                     "Disable System Clipboard",
                     isOn: Binding(
@@ -23,51 +20,19 @@ struct ClipboardSettingsView: View {
                         set: { systemClipboardHistory.setDisabled($0) }
                     )
                 )
-                .toggleStyle(.checkbox)
             }
 
-            PreferencesDivider()
-
-            PreferencesRow(label: "Disabled Applications", alignment: .top) {
-                VStack(spacing: 0) {
-                    ForEach(settings.clipboardDisabledApps, id: \.self) { bundleID in
-                        DisabledAppRow(bundleID: bundleID) {
-                            settings.clipboardDisabledApps.removeAll { $0 == bundleID }
-                        }
-                        .padding(.horizontal, Theme.Spacing.lg)
-                        .padding(.vertical, Theme.Spacing.md)
-
-                        if bundleID != settings.clipboardDisabledApps.last {
-                            Divider()
-                        }
-                    }
-
-                    HStack(spacing: Theme.Spacing.lg) {
-                        Spacer(minLength: Theme.Spacing.xl)
-                        Button(action: addExcludedApp) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 12, weight: .medium))
-                        }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel("Add Application…")
-                    }
-                    .padding(.horizontal, Theme.Spacing.xl)
-                    .padding(.vertical, Theme.Spacing.md)
-                    .overlay(alignment: .top) {
-                        if !settings.clipboardDisabledApps.isEmpty {
-                            Divider()
-                        }
+            Section("Disabled Applications") {
+                ForEach(settings.clipboardDisabledApps, id: \.self) { bundleID in
+                    DisabledAppRow(bundleID: bundleID) {
+                        settings.clipboardDisabledApps.removeAll { $0 == bundleID }
                     }
                 }
-                .background {
-                    RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                        .fill(Color(nsColor: .controlBackgroundColor))
+
+                Button(action: addExcludedApp) {
+                    Image(systemName: "plus")
                 }
-                .overlay {
-                    RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
-                }
-                .frame(maxWidth: PreferencesMetrics.appListMaxWidth, alignment: .leading)
+                .accessibilityLabel("Add Application…")
             }
         }
         .onAppear {
@@ -108,29 +73,29 @@ struct HistorySettingsView: View {
 
     var body: some View {
         PreferencesForm {
-            PreferencesRow(label: "Keep history for") {
-                Picker("Keep history for", selection: $settings.clipboardRetention) {
-                    ForEach(ClipboardRetention.allCases) { retention in
-                        Text(LocalizedStringKey(retention.title)).tag(retention)
+            Section {
+                PreferencesRow(label: "Keep history for") {
+                    Picker("Keep history for", selection: $settings.clipboardRetention) {
+                        ForEach(ClipboardRetention.allCases) { retention in
+                            Text(LocalizedStringKey(retention.title)).tag(retention)
+                        }
                     }
-                }
-                .labelsHidden()
-                .fixedSize()
-                .onChange(of: settings.clipboardRetention) {
-                    let store = AppCore.shared.clipboardStore
-                    store.maxAge = settings.clipboardRetention.maxAge
-                    store.enforceLimits()
+                    .labelsHidden()
+                    .fixedSize()
+                    .onChange(of: settings.clipboardRetention) {
+                        let store = AppCore.shared.clipboardStore
+                        store.maxAge = settings.clipboardRetention.maxAge
+                        store.enforceLimits()
+                    }
                 }
             }
 
-            PreferencesDivider()
-
-            PreferencesSectionHeader(title: "Danger Zone")
-
-            PreferencesRow(label: "Clear history") {
-                Button("Clear…") { confirmingClear = true }
-                    .foregroundStyle(.red)
-                    .controlSize(.regular)
+            Section("Danger Zone") {
+                PreferencesRow(label: "Clear history") {
+                    Button("Clear…") { confirmingClear = true }
+                        .foregroundStyle(.red)
+                        .controlSize(.regular)
+                }
             }
         }
         .confirmationDialog(
@@ -161,12 +126,14 @@ private struct DisabledAppRow: View {
         if let bundle = Bundle(url: url) {
             let localized = bundle.localizedInfoDictionary
             let info = bundle.infoDictionary
-            if let name = localized?["CFBundleDisplayName"] as? String ?? info?["CFBundleDisplayName"]
+            if let name = localized?["CFBundleDisplayName"] as? String ?? info?[
+                "CFBundleDisplayName"]
                 as? String
             {
                 return name
             }
-            if let name = localized?["CFBundleName"] as? String ?? info?["CFBundleName"] as? String {
+            if let name = localized?["CFBundleName"] as? String ?? info?["CFBundleName"] as? String
+            {
                 return name
             }
         }

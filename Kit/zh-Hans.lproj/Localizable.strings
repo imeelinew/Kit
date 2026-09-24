@@ -8,6 +8,7 @@
 "All Types" = "全部类型";
 "App Language" = "应用语言";
 "Appearance" = "外观";
+"Back" = "返回";
 "Automatically Check for Updates" = "自动检查更新";
 "Cancel" = "取消";
 "Characters" = "字符数";
@@ -121,6 +122,7 @@
 "Updates" = "更新";
 "Version" = "版本";
 "Visual Style" = "视觉风格";
+"Forward" = "前进";
 "Frosted Glass" = "毛玻璃";
 "Liquid Glass" = "Liquid Glass";
 "GitHub Repository" = "GitHub 仓库";

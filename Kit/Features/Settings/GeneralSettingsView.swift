@@ -7,32 +7,27 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         PreferencesForm {
-            PreferencesRow(label: "Language") {
+            Section("Language") {
                 Picker("App Language", selection: $settings.language) {
                     ForEach(AppLanguage.allCases) { language in
                         Text(LocalizedStringKey(language.title)).tag(language)
                     }
                 }
-                .labelsHidden()
-                .fixedSize()
+                .pickerStyle(.menu)
             }
 
-            PreferencesRow(label: "Startup", alignment: .firstTextBaseline) {
+            Section("Startup") {
                 Toggle("Launch at Login", isOn: $settings.launchAtLogin)
-                    .toggleStyle(.checkbox)
             }
 
-            PreferencesRow(label: "Input Method", alignment: .firstTextBaseline) {
+            Section("Input Method") {
                 Toggle(
                     "Switch to English When Opening",
                     isOn: $settings.switchToEnglishInputOnOpen
                 )
-                .toggleStyle(.checkbox)
             }
 
-            PreferencesDivider()
-
-            PreferencesRow(label: "Updates", alignment: .firstTextBaseline) {
+            Section("Updates") {
                 Toggle(
                     "Automatically Check for Updates",
                     isOn: Binding(
@@ -40,7 +35,6 @@ struct GeneralSettingsView: View {
                         set: { updateService.setAutomaticallyChecksForUpdates($0) }
                     )
                 )
-                .toggleStyle(.checkbox)
             }
         }
         .onAppear {
@@ -54,64 +48,58 @@ struct AppearanceSettingsView: View {
 
     var body: some View {
         PreferencesForm {
-            PreferencesSectionHeader(title: "Theme")
-
-            PreferencesRow(label: "Appearance") {
-                Picker("Appearance", selection: $settings.appearance) {
-                    ForEach(AppAppearance.allCases) { option in
-                        Text(LocalizedStringKey(option.title)).tag(option)
+            Section("Theme") {
+                PreferencesRow(label: "Appearance") {
+                    Picker("Appearance", selection: $settings.appearance) {
+                        ForEach(AppAppearance.allCases) { option in
+                            Text(LocalizedStringKey(option.title)).tag(option)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                    .accessibilityLabel("Theme")
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                .accessibilityLabel("Theme")
             }
 
-            PreferencesDivider()
-
-            PreferencesSectionHeader(title: "Visual Style")
-
-            PreferencesRow(label: "Visual Style") {
-                Picker("Visual Style", selection: $settings.paletteVisualStyle) {
-                    ForEach(PaletteVisualStyle.allCases) { style in
-                        Text(LocalizedStringKey(style.title)).tag(style)
+            Section("Visual Style") {
+                PreferencesRow(label: "Visual Style") {
+                    Picker("Visual Style", selection: $settings.paletteVisualStyle) {
+                        ForEach(PaletteVisualStyle.allCases) { style in
+                            Text(LocalizedStringKey(style.title)).tag(style)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                    .accessibilityLabel("Visual Style")
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
-                .accessibilityLabel("Visual Style")
             }
 
-            PreferencesDivider()
+            Section("Menu Bar") {
+                PreferencesCheckboxRow(
+                    title: "Show Menu Bar Icon",
+                    isOn: $settings.showMenuBarIcon
+                )
 
-            PreferencesSectionHeader(title: "Menu Bar")
+                PreferencesCheckboxRow(
+                    title: "Icon Animation",
+                    isOn: $settings.animateMenuBarIconOnCopy,
+                    disabled: !settings.showMenuBarIcon
+                )
+            }
 
-            PreferencesCheckboxRow(
-                title: "Show Menu Bar Icon",
-                isOn: $settings.showMenuBarIcon
-            )
-
-            PreferencesCheckboxRow(
-                title: "Icon Animation",
-                isOn: $settings.animateMenuBarIconOnCopy,
-                disabled: !settings.showMenuBarIcon
-            )
-
-            PreferencesDivider()
-
-            PreferencesSectionHeader(title: "Pinned Cards")
-
-            PreferencesRow(label: "Pinned Image Size") {
-                Picker("Pinned Image Size", selection: $settings.pinnedImageSize) {
-                    ForEach(PinnedImageSize.allCases) { option in
-                        Text(LocalizedStringKey(option.title)).tag(option)
+            Section("Pinned Cards") {
+                PreferencesRow(label: "Pinned Image Size") {
+                    Picker("Pinned Image Size", selection: $settings.pinnedImageSize) {
+                        ForEach(PinnedImageSize.allCases) { option in
+                            Text(LocalizedStringKey(option.title)).tag(option)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .fixedSize()
             }
         }
     }
@@ -123,24 +111,21 @@ struct SoundSettingsView: View {
 
     var body: some View {
         PreferencesForm {
-            PreferencesRow(label: "Enable Sound Effects", alignment: .firstTextBaseline) {
+            Section {
                 Toggle("Enable Sound Effects", isOn: $settings.soundEffectsEnabled)
-                    .toggleStyle(.checkbox)
-                    .labelsHidden()
-                    .accessibilityLabel("Enable Sound Effects")
-            }
 
-            PreferencesRow(label: "Sound Effect") {
-                Picker("Sound Effect", selection: $settings.copySoundEffect) {
-                    ForEach(CopySoundEffect.allCases) { option in
-                        Text(option.title(locale: locale)).tag(option)
+                PreferencesRow(label: "Sound Effect") {
+                    Picker("Sound Effect", selection: $settings.copySoundEffect) {
+                        ForEach(CopySoundEffect.allCases) { option in
+                            Text(option.title(locale: locale)).tag(option)
+                        }
                     }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .fixedSize()
+                    .disabled(!settings.soundEffectsEnabled)
+                    .accessibilityLabel("Sound Effect")
                 }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .fixedSize()
-                .disabled(!settings.soundEffectsEnabled)
-                .accessibilityLabel("Sound Effect")
             }
         }
         .onChange(of: settings.copySoundEffect) {
@@ -162,10 +147,6 @@ struct AboutSettingsView: View {
             URL(string: "https://github.com/sindresorhus/KeyboardShortcuts")!
         ),
         (
-            "MacAppSettingsUI",
-            URL(string: "https://github.com/usagimaru/MacAppSettingsUI")!
-        ),
-        (
             "Sparkle",
             URL(string: "https://github.com/sparkle-project/Sparkle")!
         ),
@@ -185,40 +166,40 @@ struct AboutSettingsView: View {
 
     var body: some View {
         PreferencesForm {
-            HStack(alignment: .center, spacing: Theme.Spacing.xl) {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 64, height: 64)
+            Section {
+                HStack(alignment: .center, spacing: Theme.Spacing.xl) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 64, height: 64)
 
-                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                    Text(appName)
-                        .font(.title2.weight(.semibold))
-                    Text("\(AppLocalization.string("Version", locale: locale)) \(versionString)")
+                    VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                        Text(appName)
+                            .font(.title2.weight(.semibold))
+                        Text(
+                            "\(AppLocalization.string("Version", locale: locale)) \(versionString)"
+                        )
                         .foregroundStyle(.secondary)
-                }
+                    }
 
-                Spacer(minLength: 0)
-            }
-            .padding(.bottom, Theme.Spacing.sm)
-
-            PreferencesDivider()
-
-            PreferencesRow(label: "Repository") {
-                Button("GitHub Repository") {
-                    NSWorkspace.shared.open(Self.repositoryURL)
+                    Spacer(minLength: 0)
                 }
             }
 
-            PreferencesDivider()
+            Section {
+                PreferencesRow(label: "Repository") {
+                    Button("GitHub Repository") {
+                        NSWorkspace.shared.open(Self.repositoryURL)
+                    }
+                }
+            }
 
-            PreferencesRow(label: "Acknowledgments", alignment: .top) {
-                VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-                    ForEach(Self.acknowledgments, id: \.name) { item in
-                        Button(item.name) {
-                            NSWorkspace.shared.open(item.url)
+            Section {
+                PreferencesRow(label: "Acknowledgments", alignment: .top) {
+                    VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
+                        ForEach(Self.acknowledgments, id: \.name) { item in
+                            Link(item.name, destination: item.url)
                         }
-                        .buttonStyle(.link)
                     }
                 }
             }

@@ -2,23 +2,17 @@ import AppKit
 import Carbon.HIToolbox
 import Combine
 import KeyboardShortcuts
-import MacAppSettingsUI
 import SwiftUI
 
-private enum SettingsPaneLayout {
-    static func width(for language: AppLanguage) -> CGFloat {
-        language.locale.identifier.hasPrefix("en") ? 600 : 480
-    }
-}
-
-/// Owns the MacAppSettingsUI preferences window and bridges Kit's SwiftUI panes into it.
+/// Owns the native window and the selection shared with the SwiftUI sidebar.
 @MainActor
 final class KitSettingsWindowController {
     private let activationPolicy: ActivationPolicyCoordinator
-    private var controller: SettingsWindowController?
+    private let selection = SettingsSelection()
+    private let windowDelegate = SettingsWindowDelegate()
+    private var window: NSWindow?
     private var closeObserver: NSObjectProtocol?
     private var commandWCloseView: CommandWCloseView?
-    private var builtLanguage: AppLanguage?
     private var languageObserver: AnyCancellable?
 
     init(activationPolicy: ActivationPolicyCoordinator) {
@@ -26,155 +20,48 @@ final class KitSettingsWindowController {
         languageObserver = AppCore.shared.settings.$language
             .dropFirst()
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.handleLanguageChange()
+            .sink { [weak self] language in
+                self?.window?.title = AppLocalization.string(
+                    "Kit Settings", locale: language.locale)
             }
     }
 
-    var isVisible: Bool {
-        controller?.window?.isVisible == true
-    }
+    var isVisible: Bool { window?.isVisible == true }
 
     func show(tab: SettingsTab = .general) {
-        let language = AppCore.shared.settings.language
-        let needsRebuild =
-            controller == nil
-            || controller?.tabViewController.panes.count != SettingsTab.allCases.count
-            || builtLanguage != language
-        if needsRebuild {
-            rebuildController(preservingTab: tab, makeVisible: false)
-        }
-        guard let controller else { return }
-
-        select(tab, in: controller)
-        attachCloseObserverIfNeeded(to: controller.window)
-        installCommandWCloseViewIfNeeded(on: controller.window)
-
-        activationPolicy.acquire("settings")
-        NSApp.activate(ignoringOtherApps: true)
-        controller.showWindow(nil)
-        fitWindowWidth(controller.window)
-        DispatchQueue.main.async {
-            controller.window?.makeKeyAndOrderFront(nil)
-        }
-    }
-
-    func focus() {
-        guard let window = controller?.window else { return }
+        if window == nil { makeWindow() }
+        selection.tab = tab
+        guard let window else { return }
         activationPolicy.acquire("settings")
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }
 
-    // MARK: - Private
-
-    private func handleLanguageChange() {
-        guard controller != nil else {
-            builtLanguage = nil
-            return
-        }
-        rebuildController(
-            preservingTab: selectedTab() ?? .general,
-            makeVisible: isVisible
-        )
-    }
-
-    private func rebuildController(preservingTab tab: SettingsTab, makeVisible: Bool) {
-        let frame = controller?.window?.frame
-        tearDownController()
-        builtLanguage = AppCore.shared.settings.language
-        controller = makeController()
-        guard let controller else { return }
-
-        select(tab, in: controller)
-        if let frame {
-            controller.window?.setFrame(frame, display: false)
-        }
-
-        guard makeVisible else { return }
-        // Keep the existing settings activation; tear-down closed the window
-        // without releasing so we don't acquire a second time here.
-        attachCloseObserverIfNeeded(to: controller.window)
-        installCommandWCloseViewIfNeeded(on: controller.window)
-        controller.showWindow(nil)
-        fitWindowWidth(controller.window)
-        controller.window?.makeKeyAndOrderFront(nil)
-    }
-
-    private func fitWindowWidth(_ window: NSWindow?) {
+    func focus() {
         guard let window else { return }
-        let width = SettingsPaneLayout.width(for: AppCore.shared.settings.language)
-        let frame = window.frame
-        guard abs(frame.width - width) > 0.5 else { return }
-        window.setFrame(
-            NSRect(
-                x: frame.midX - width / 2, y: frame.minY,
-                width: width, height: frame.height),
-            display: false)
+        activationPolicy.acquire("settings")
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
     }
 
-    private func tearDownController() {
-        if let closeObserver {
-            NotificationCenter.default.removeObserver(closeObserver)
-            self.closeObserver = nil
-        }
-        commandWCloseView?.removeFromSuperview()
-        commandWCloseView = nil
-        controller?.close()
-        controller = nil
-    }
-
-    private func makeController() -> SettingsWindowController {
-        let locale = AppCore.shared.settings.language.locale
-        let panes: [SettingsPaneViewController] = SettingsTab.allCases.map { tab in
-            SwiftUISettingsPaneController(tab: tab) {
-                switch tab {
-                case .general:
-                    GeneralSettingsView()
-                case .shortcuts:
-                    ShortcutsSettingsView()
-                case .appearance:
-                    AppearanceSettingsView()
-                case .sound:
-                    SoundSettingsView()
-                case .clipboard:
-                    ClipboardSettingsView()
-                case .history:
-                    HistorySettingsView()
-                case .about:
-                    AboutSettingsView()
-                }
-            }
-        }
-
-        let controller = SettingsWindowController(
-            with: panes,
-            centersWindowPositionAlways: false,
-            closesWindowWithEscapeKey: true
-        )
-        controller.settingsWindow.defaultWindowTitle = AppLocalization.string(
-            "Kit Settings", locale: locale)
-        return controller
-    }
-
-    private func selectedTab() -> SettingsTab? {
-        guard let controller,
-            let index = controller.tabViewController.selectedTabIndex,
-            controller.tabViewController.panes.indices.contains(index)
-        else { return nil }
-        let identifier = controller.tabViewController.panes[index].tabIdentifier
-        return SettingsTab.allCases.first { $0.tabIdentifier == identifier }
-    }
-
-    private func select(_ tab: SettingsTab, in controller: SettingsWindowController) {
-        let panes = controller.tabViewController.panes
-        guard let index = panes.firstIndex(where: { $0.tabIdentifier == tab.tabIdentifier })
-        else { return }
-        controller.tabViewController.selectedTabIndex = index
-    }
-
-    private func attachCloseObserverIfNeeded(to window: NSWindow?) {
-        guard let window, closeObserver == nil else { return }
+    private func makeWindow() {
+        let hosting = NSHostingController(rootView: SettingsWindowRoot(selection: selection))
+        let window = SettingsWindow(contentViewController: hosting)
+        window.title = AppLocalization.string(
+            "Kit Settings", locale: AppCore.shared.settings.language.locale)
+        window.styleMask = [.titled, .closable, .fullSizeContentView]
+        window.collectionBehavior = [.fullScreenNone, .fullScreenDisallowsTiling]
+        window.delegate = windowDelegate
+        window.isReleasedWhenClosed = false
+        let contentSize = SettingsWindowMetrics.contentSize
+        window.setContentSize(contentSize)
+        let frameSize = window.frame.size
+        window.minSize = frameSize
+        window.maxSize = frameSize
+        window.center()
+        window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
+        window.standardWindowButton(.zoomButton)?.isEnabled = false
+        self.window = window
         closeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,
             object: window,
@@ -184,12 +71,12 @@ final class KitSettingsWindowController {
                 self?.activationPolicy.release("settings")
             }
         }
+        installCommandWCloseView(on: window)
     }
 
-    /// Agent apps lack File → Close. Handle ⌘W in the view hierarchy so it only runs after local
-    /// monitors; a shortcut recorder can then consume the event instead of closing the window.
-    private func installCommandWCloseViewIfNeeded(on window: NSWindow?) {
-        guard commandWCloseView == nil, let content = window?.contentView else { return }
+    /// Agent apps have no File → Close command; keep ⌘W below shortcut recorders.
+    private func installCommandWCloseView(on window: NSWindow) {
+        guard let content = window.contentView else { return }
         let view = CommandWCloseView(frame: content.bounds)
         view.autoresizingMask = [.width, .height]
         content.addSubview(view)
@@ -197,8 +84,120 @@ final class KitSettingsWindowController {
     }
 }
 
-/// Closes the settings window on ⌘W without a local event monitor, so KeyboardShortcuts.Recorder
-/// can observe the same keystroke while it is recording.
+@MainActor
+private final class SettingsSelection: ObservableObject {
+    @Published var tab: SettingsTab = .general
+}
+
+private struct SettingsWindowRoot: View {
+    @ObservedObject var selection: SettingsSelection
+    @ObservedObject private var settings = AppCore.shared.settings
+    @State private var backStack: [SettingsTab] = []
+    @State private var forwardStack: [SettingsTab] = []
+    @State private var applyingHistory = false
+
+    var body: some View {
+        NavigationSplitView {
+            List(selection: $selection.tab) {
+                ForEach(SettingsTab.allCases) { tab in
+                    Label {
+                        Text(LocalizedStringKey(tab.localizationKey))
+                    } icon: {
+                        Image(systemName: tab.symbolName)
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .listItemTint(.preferred(Color.secondary))
+                    .tag(tab)
+                }
+            }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(
+                min: SettingsWindowMetrics.sidebarWidth,
+                ideal: SettingsWindowMetrics.sidebarWidth,
+                max: SettingsWindowMetrics.sidebarWidth
+            )
+        } detail: {
+            NavigationStack {
+                settingsPage
+                    .navigationTitle(LocalizedStringKey(selection.tab.localizationKey))
+            }
+        }
+        .toolbar(removing: .sidebarToggle)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                ControlGroup {
+                    Button(action: goBack) {
+                        Image(systemName: "chevron.backward")
+                    }
+                    .disabled(backStack.isEmpty)
+                    .accessibilityLabel("Back")
+                    Button(action: goForward) {
+                        Image(systemName: "chevron.forward")
+                    }
+                    .disabled(forwardStack.isEmpty)
+                    .accessibilityLabel("Forward")
+                }
+                .controlGroupStyle(.navigation)
+            }
+        }
+        .onChange(of: selection.tab) { previous, _ in
+            guard !applyingHistory else {
+                applyingHistory = false
+                return
+            }
+            backStack.append(previous)
+            forwardStack.removeAll()
+        }
+        .environment(\.locale, settings.language.locale)
+    }
+
+    private func goBack() {
+        guard let tab = backStack.popLast() else { return }
+        forwardStack.append(selection.tab)
+        applyingHistory = true
+        selection.tab = tab
+    }
+
+    private func goForward() {
+        guard let tab = forwardStack.popLast() else { return }
+        backStack.append(selection.tab)
+        applyingHistory = true
+        selection.tab = tab
+    }
+
+    @ViewBuilder
+    private var settingsPage: some View {
+        switch selection.tab {
+        case .general: GeneralSettingsView()
+        case .shortcuts: ShortcutsSettingsView()
+        case .appearance: AppearanceSettingsView()
+        case .sound: SoundSettingsView()
+        case .clipboard: ClipboardSettingsView()
+        case .history: HistorySettingsView()
+        case .about: AboutSettingsView()
+        }
+    }
+}
+
+/// Dia's settings window, measured while it was open: 778×509, sidebar 196.
+private enum SettingsWindowMetrics {
+    static let contentSize = NSSize(width: 778, height: 509)
+    static let sidebarWidth: CGFloat = 196
+}
+
+/// Close stays available. Minimize and zoom stay visible but do nothing.
+private final class SettingsWindow: NSWindow {
+    override func miniaturize(_ sender: Any?) {}
+
+    override func zoom(_ sender: Any?) {}
+
+    override func toggleFullScreen(_ sender: Any?) {}
+}
+
+private final class SettingsWindowDelegate: NSObject, NSWindowDelegate {
+    func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool { false }
+}
+
 private final class CommandWCloseView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
@@ -207,93 +206,12 @@ private final class CommandWCloseView: NSView {
         guard modifiers == .command, event.keyCode == UInt16(kVK_ANSI_W) else {
             return super.performKeyEquivalent(with: event)
         }
-        if isShortcutRecorderFirstResponder {
-            return false
+        var responder: NSResponder? = window?.firstResponder
+        while let current = responder {
+            if current is KeyboardShortcuts.RecorderCocoa { return false }
+            responder = current.nextResponder
         }
         window?.performClose(nil)
         return true
-    }
-
-    private var isShortcutRecorderFirstResponder: Bool {
-        var responder: NSResponder? = window?.firstResponder
-        while let current = responder {
-            if current is KeyboardShortcuts.RecorderCocoa { return true }
-            responder = current.nextResponder
-        }
-        return false
-    }
-}
-
-extension SettingsTab {
-    /// Template image for the settings toolbar. The toolbar scales a 32pt slot, so the symbol stays centered inside that canvas.
-    func settingsTabImage() -> NSImage {
-        let canvas: CGFloat = 32
-        let configuration = NSImage.SymbolConfiguration(pointSize: 17, weight: .regular)
-        guard
-            let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
-                .withSymbolConfiguration(configuration)
-        else { return NSImage() }
-        let image = NSImage(size: NSSize(width: canvas, height: canvas), flipped: false) { _ in
-            let rect = NSRect(
-                x: (canvas - symbol.size.width) / 2,
-                y: (canvas - symbol.size.height) / 2,
-                width: symbol.size.width,
-                height: symbol.size.height
-            )
-            symbol.draw(
-                in: rect, from: .zero, operation: .sourceOver, fraction: 1,
-                respectFlipped: true, hints: nil)
-            return true
-        }
-        image.isTemplate = true
-        return image
-    }
-}
-
-/// Hosts a SwiftUI settings pane inside `MacAppSettingsUI`'s `SettingsPaneViewController`.
-private final class SwiftUISettingsPaneController: SettingsPaneViewController {
-    private let rootView: AnyView
-    private let paneHeight: CGFloat
-
-    init(
-        tab: SettingsTab,
-        @ViewBuilder content: () -> some View
-    ) {
-        let locale = AppCore.shared.settings.language.locale
-        self.rootView = AnyView(
-            SettingsPaneLocalizedRoot(content: content())
-        )
-        self.paneHeight = tab.preferredPaneHeight
-        super.init(nibName: nil, bundle: nil)
-        tabName = AppLocalization.string(tab.localizationKey, locale: locale)
-        tabImage = tab.settingsTabImage()
-        tabIdentifier = tab.tabIdentifier
-        isResizableView = false
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override func loadView() {
-        let hosting = NSHostingView(rootView: rootView)
-        hosting.sizingOptions = []
-        view = hosting
-        let width = SettingsPaneLayout.width(for: AppCore.shared.settings.language)
-        preferredPaneSize = NSSize(width: width, height: paneHeight)
-        view.setFrameSize(preferredPaneSize ?? .zero)
-    }
-}
-
-/// Keeps SwiftUI settings content on the live app-language locale.
-private struct SettingsPaneLocalizedRoot<Content: View>: View {
-    @ObservedObject private var settings = AppCore.shared.settings
-    let content: Content
-
-    var body: some View {
-        content
-            .environment(\.locale, settings.language.locale)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }

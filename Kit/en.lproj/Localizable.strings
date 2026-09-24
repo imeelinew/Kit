@@ -8,6 +8,7 @@
 "All Types" = "All Types";
 "App Language" = "App Language";
 "Appearance" = "Appearance";
+"Back" = "Back";
 "Automatically Check for Updates" = "Automatically Check for Updates";
 "Cancel" = "Cancel";
 "Characters" = "Characters";
@@ -121,6 +122,7 @@
 "Updates" = "Updates";
 "Version" = "Version";
 "Visual Style" = "Visual Style";
+"Forward" = "Forward";
 "Frosted Glass" = "Frosted Glass";
 "Liquid Glass" = "Liquid Glass";
 "GitHub Repository" = "GitHub Repository";
