@@ -18,7 +18,7 @@
 "Clear History" = "Clear History";
 "Check for Updates" = "Check for Updates…";
 "Clipboard" = "Clipboard";
-"Show Paste" = "Show Kit";
+"Show Kit" = "Show Kit";
 "Code" = "Code";
 "Content Preview" = "Content Preview";
 "Clipboard history is empty" = "Clipboard history is empty";
@@ -58,9 +58,9 @@
 "Scroll for more" = "Scroll for more";
 "Name" = "Name";
 "New Stack" = "New Stack";
-"Paste Menu" = "Kit Menu";
-"Pause Paste" = "Pause Kit";
-"Resume Paste" = "Resume Kit";
+"Kit Menu" = "Kit Menu";
+"Pause Kit" = "Pause Kit";
+"Resume Kit" = "Resume Kit";
 "Pause" = "Pause";
 "For 15 Minutes" = "For 15 Minutes";
 "For 30 Minutes" = "For 30 Minutes";
@@ -69,14 +69,15 @@
 "For 8 Hours" = "For 8 Hours";
 "Until Tomorrow" = "Until Tomorrow";
 "Indefinitely" = "Indefinitely";
+"Kit" = "Kit";
 "Palette" = "Palette";
 "Paste" = "Paste";
 "Paste & Keep Window Open" = "Paste & Keep Window Open";
-"Paste Settings" = "Kit Settings";
+"Kit Settings" = "Kit Settings";
 "Paste to %@" = "Paste to %@";
 "Plain Text" = "Plain Text";
 "Path" = "Path";
-"Paste will stop monitoring the clipboard until you open it again." = "Kit will stop monitoring the clipboard";
+"Kit will stop monitoring the clipboard until you open it again." = "Kit will stop monitoring the clipboard until you open it again.";
 "Past 30 Days" = "Past 30 Days";
 "Past 7 Days" = "Past 7 Days";
 "Pin to Screen" = "Pin to Screen";
@@ -94,7 +95,7 @@
 "Hide Pinned Cards" = "Hide Pinned Cards";
 "Quit" = "Quit";
 "Quit Kit…" = "Quit Kit…";
-"Quit Paste?" = "Quit Kit?";
+"Quit Kit?" = "Quit Kit?";
 "Repository" = "Repository";
 "Render Markdown" = "Render Markdown";
 "Select All" = "Select All";
@@ -131,7 +132,4 @@
 "1 Year" = "1 Year";
 "3 Months" = "3 Months";
 "6 Months" = "6 Months";
-"音效1" = "音效1";
-"音效2" = "音效2";
-"音效3" = "音效3";
-"音效4" = "音效4";
+"Sound Effect %d" = "Sound Effect %d";

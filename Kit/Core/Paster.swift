@@ -2,7 +2,7 @@ import AppKit
 import Carbon.HIToolbox
 
 enum Paster {
-    /// Stamped on Paste's own synthetic keystrokes so listeners can ignore them.
+    /// Stamped on Kit's own synthetic keystrokes so listeners can ignore them.
     static let pasteEventTag: Int64 = 0x50415354  // "PAST"
     private static let finderBundleID = "com.apple.finder"
 
@@ -60,7 +60,7 @@ enum Paster {
         return write(payload)
     }
 
-    /// Keep text copied or cut from Paste's own search field out of clipboard history while
+    /// Keep text copied or cut from Kit's own search field out of clipboard history while
     /// preserving the field editor's native editing behavior and pasteboard contents.
     @MainActor
     static func markCurrentPasteboardInternal() {

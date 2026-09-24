@@ -1,8 +1,8 @@
 import Combine
 import Sparkle
 
-/// Owns Sparkle for the lifetime of the app and exposes only the controls used by Paste's UI.
-/// Sparkle persists its own preferences; Paste deliberately does not duplicate them in AppSettings.
+/// Owns Sparkle for the lifetime of the app and exposes only the controls used by Kit's UI.
+/// Sparkle persists its own preferences; Kit deliberately does not duplicate them in AppSettings.
 @MainActor
 final class UpdateService: ObservableObject {
     @Published private(set) var canCheckForUpdates = false

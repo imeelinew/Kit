@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Central design tokens for Paste's adaptive palette UI.
+/// Central design tokens for Kit's adaptive palette UI.
 enum Theme {
     enum Spacing {
         static let xxs: CGFloat = 2

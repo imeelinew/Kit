@@ -14,7 +14,7 @@ enum LaunchAtLogin {
                 if SMAppService.mainApp.status == .enabled { try SMAppService.mainApp.unregister() }
             }
         } catch {
-            NSLog("Paste: launch-at-login change failed: \(error.localizedDescription)")
+            NSLog("Kit: launch-at-login change failed: \(error.localizedDescription)")
         }
         return isEnabled
     }

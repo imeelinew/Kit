@@ -5,7 +5,7 @@ enum SettingsTab: Int, CaseIterable, Hashable, Identifiable {
 
     var id: Int { rawValue }
 
-    var localizationKey: String.LocalizationValue {
+    var localizationKey: String {
         switch self {
         case .general: return "General"
         case .shortcuts: return "Shortcuts"

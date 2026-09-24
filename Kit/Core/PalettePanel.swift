@@ -277,7 +277,17 @@ final class PalettePanel: NSPanel {
             material.layer?.cornerRadius = Theme.Radius.panel
             material.layer?.masksToBounds = true
             material.addSubview(hosting)
-            contentView = material
+
+            // The material's rounded layer does not clip the window's rectangular shadow.
+            // Match the shell that keeps Liquid Glass's corners transparent.
+            let shell = NSView(frame: frame)
+            shell.autoresizingMask = [.width, .height]
+            shell.wantsLayer = true
+            shell.layer?.backgroundColor = NSColor.clear.cgColor
+            shell.layer?.cornerRadius = Theme.Radius.panel
+            shell.layer?.masksToBounds = true
+            shell.addSubview(material)
+            contentView = shell
         }
     }
 

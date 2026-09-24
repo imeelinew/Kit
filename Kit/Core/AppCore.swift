@@ -16,7 +16,7 @@ final class AppCore {
     private lazy var windowController = PaletteWindowController(core: self)
     private let activationPolicy = ActivationPolicyCoordinator()
     private lazy var pinnedImageWindows = PinnedImageWindowController()
-    private lazy var settingsWindowController = PasteSettingsWindowController(
+    private lazy var settingsWindowController = KitSettingsWindowController(
         activationPolicy: activationPolicy
     )
     private lazy var menuBarController = MenuBarController(settings: settings)
@@ -143,13 +143,11 @@ final class AppCore {
         let locale = settings.language.locale
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = String(localized: "Quit Paste?", locale: locale)
-        alert.informativeText = String(
-            localized: "Paste will stop monitoring the clipboard until you open it again.",
-            locale: locale
-        )
-        alert.addButton(withTitle: String(localized: "Quit", locale: locale))
-        alert.addButton(withTitle: String(localized: "Cancel", locale: locale))
+        alert.messageText = AppLocalization.string("Quit Kit?", locale: locale)
+        alert.informativeText = AppLocalization.string(
+            "Kit will stop monitoring the clipboard until you open it again.", locale: locale)
+        alert.addButton(withTitle: AppLocalization.string("Quit", locale: locale))
+        alert.addButton(withTitle: AppLocalization.string("Cancel", locale: locale))
         alert.buttons.first?.hasDestructiveAction = true
 
         if alert.runModal() == .alertFirstButtonReturn {

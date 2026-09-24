@@ -10,7 +10,7 @@
 		02CB1E90666F628DBF9C7C78 /* EdgeDissolve.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6853210949502E0C47D69B9 /* EdgeDissolve.swift */; };
 		068B6C43C18DB6110AED985B /* PopoverMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C234D84C11C94266A6B560D /* PopoverMenu.swift */; };
 		07650D1993A6D4C0D5B7ACD8 /* PalettePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123A20E6FCB60D259A0CC145 /* PalettePanel.swift */; };
-		09B23D64A6A4F5463BC87554 /* PasteApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECEFF1A363FE4929A8295A86 /* PasteApp.swift */; };
+		09B23D64A6A4F5463BC87554 /* KitApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECEFF1A363FE4929A8295A86 /* KitApp.swift */; };
 		0FD9FE1B849F35DA7CE4C9FD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BA150DA7FBE4819BF19B7F31 /* Assets.xcassets */; };
 		1C45571908BB38D3FAD1095B /* Paster.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC678FC84A80AE731726D744 /* Paster.swift */; };
 		1D9AA5ECC0F41C5EE2E43336 /* ClipboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 657D8CF150E57314AE8665E3 /* ClipboardView.swift */; };
@@ -23,7 +23,7 @@
 		39845C7BA7BF8871C80EE1BE /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67393F83039423D6A2A4C9B5 /* AppSettings.swift */; };
 		4176341D42A93B3915ADC2AC /* ThinScrollbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27D1C525A6F1C83A87346D62 /* ThinScrollbar.swift */; };
 		423227345830781DFEB25653 /* ScrollIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F3166EA8852EDBCC9A0D3DF /* ScrollIntent.swift */; };
-		459F1FFE80691847187D0437 /* PasteSettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE39A396D47F5CC467AA9FA1 /* PasteSettingsWindowController.swift */; };
+		459F1FFE80691847187D0437 /* KitSettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE39A396D47F5CC467AA9FA1 /* KitSettingsWindowController.swift */; };
 		4727BAB0DFB738C67703BC3B /* Permissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA577CC2AE8EBDA99C731955 /* Permissions.swift */; };
 		4D294A32FFE66B9E795811C7 /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3187686D939660FFB703D911 /* SettingsRootView.swift */; };
 		548476F13FAEFBC9FE5F0632 /* SymbolsNerdFontMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 6127F340C801F2F566147DE2 /* SymbolsNerdFontMono-Regular.ttf */; };
@@ -127,7 +127,7 @@
 		CA7000000000000000000002 /* PinnedImageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImageViews.swift; sourceTree = "<group>"; };
 		CA8000000000000000000002 /* ClipboardSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSearch.swift; sourceTree = "<group>"; };
 		CA9000000000000000000002 /* ClipboardSQLite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSQLite.swift; sourceTree = "<group>"; };
-		CE39A396D47F5CC467AA9FA1 /* PasteSettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteSettingsWindowController.swift; sourceTree = "<group>"; };
+		CE39A396D47F5CC467AA9FA1 /* KitSettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KitSettingsWindowController.swift; sourceTree = "<group>"; };
 		D22A18A2E99B807E7716432E /* InputSourceSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSourceSwitcher.swift; sourceTree = "<group>"; };
 		D3E59B58F324A9600EE4325C /* Kit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Kit.entitlements; sourceTree = "<group>"; };
 		DB2357C425F1390F61CEB545 /* NerdFontsSymbolsOnly-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "NerdFontsSymbolsOnly-LICENSE.txt"; sourceTree = "<group>"; };
@@ -135,7 +135,7 @@
 		E4A9AB5D6002E8775B7A1B4A /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		E803D4959D800FE82F1EC0EA /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		EA577CC2AE8EBDA99C731955 /* Permissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Permissions.swift; sourceTree = "<group>"; };
-		ECEFF1A363FE4929A8295A86 /* PasteApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteApp.swift; sourceTree = "<group>"; };
+		ECEFF1A363FE4929A8295A86 /* KitApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KitApp.swift; sourceTree = "<group>"; };
 		F56E6A15E84064E62E40BD93 /* NotificationToken.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationToken.swift; sourceTree = "<group>"; };
 		F94E5C69B11642BE89C7B40A /* MarkdownPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPreview.swift; sourceTree = "<group>"; };
 		FC1779D1C157B1B6F9C37365 /* GeneralSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsView.swift; sourceTree = "<group>"; };
@@ -211,7 +211,7 @@
 		4C5F3C861CCDA820438BE9DA /* App */ = {
 			isa = PBXGroup;
 			children = (
-				ECEFF1A363FE4929A8295A86 /* PasteApp.swift */,
+				ECEFF1A363FE4929A8295A86 /* KitApp.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -253,7 +253,7 @@
 			children = (
 				B42062A9B167BB7DCD3E7129 /* ClipboardSettingsView.swift */,
 				FC1779D1C157B1B6F9C37365 /* GeneralSettingsView.swift */,
-				CE39A396D47F5CC467AA9FA1 /* PasteSettingsWindowController.swift */,
+				CE39A396D47F5CC467AA9FA1 /* KitSettingsWindowController.swift */,
 				9DD90436D7A4A7E354F421DD /* SettingsComponents.swift */,
 				3187686D939660FFB703D911 /* SettingsRootView.swift */,
 				538279907CABE616D759F4E1 /* ShortcutRecorder.swift */,
@@ -453,8 +453,8 @@
 				F2793D8EFF543BEDD5DF57C1 /* PaletteViewModel.swift in Sources */,
 				CA2000000000000000000001 /* Pinyin.swift in Sources */,
 				765DF848224FB5BC506F2CDC /* PaletteWindowController.swift in Sources */,
-				09B23D64A6A4F5463BC87554 /* PasteApp.swift in Sources */,
-				459F1FFE80691847187D0437 /* PasteSettingsWindowController.swift in Sources */,
+				09B23D64A6A4F5463BC87554 /* KitApp.swift in Sources */,
+				459F1FFE80691847187D0437 /* KitSettingsWindowController.swift in Sources */,
 				73C5E3F78FDD5E8837E47AC0 /* PasteTransaction.swift in Sources */,
 				1C45571908BB38D3FAD1095B /* Paster.swift in Sources */,
 				4727BAB0DFB738C67703BC3B /* Permissions.swift in Sources */,

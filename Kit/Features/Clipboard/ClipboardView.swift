@@ -282,7 +282,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                         item: item, query: query, locale: locale)
                 case .more:
                     (view as? ClipboardSectionCellView)?.configure(
-                        title: String(localized: "Scroll for more", locale: locale),
+                        title: AppLocalization.string("Scroll for more", locale: locale),
                         isFirst: false)
                 }
             }
@@ -369,7 +369,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                         as? ClipboardSectionCellView ?? ClipboardSectionCellView()
                 view.identifier = headerIdentifier
                 view.configure(
-                    title: String(localized: "Scroll for more", locale: locale),
+                    title: AppLocalization.string("Scroll for more", locale: locale),
                     isFirst: false)
                 return view
             }
@@ -495,11 +495,11 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
 
         private static func localized(_ title: String, locale: Locale) -> String {
             switch title {
-            case "Today": return String(localized: "Today", locale: locale)
-            case "Yesterday": return String(localized: "Yesterday", locale: locale)
-            case "Past 7 Days": return String(localized: "Past 7 Days", locale: locale)
-            case "Past 30 Days": return String(localized: "Past 30 Days", locale: locale)
-            default: return String(localized: "Earlier", locale: locale)
+            case "Today": return AppLocalization.string("Today", locale: locale)
+            case "Yesterday": return AppLocalization.string("Yesterday", locale: locale)
+            case "Past 7 Days": return AppLocalization.string("Past 7 Days", locale: locale)
+            case "Past 30 Days": return AppLocalization.string("Past 30 Days", locale: locale)
+            default: return AppLocalization.string("Earlier", locale: locale)
             }
         }
     }

@@ -144,7 +144,7 @@ final class PaletteViewModel {
         {
             return stack.name
         }
-        return String(localized: "Clipboard")
+        return AppLocalization.string("Clipboard", locale: core.settings.language.locale)
     }
     private(set) var results: [ClipboardItem] = []
     private(set) var resultsGeneration: UInt64 = 0
@@ -579,16 +579,14 @@ final class PaletteViewModel {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = String(
-            format: String(localized: "Delete Stack %@?", locale: locale),
+            format: AppLocalization.string("Delete Stack %@?", locale: locale),
             locale: locale,
             stack.name
         )
-        alert.informativeText = String(
-            localized: "Items in this stack will also be deleted. This can't be undone.",
-            locale: locale
-        )
-        alert.addButton(withTitle: String(localized: "Delete", locale: locale))
-        alert.addButton(withTitle: String(localized: "Cancel", locale: locale))
+        alert.informativeText = AppLocalization.string(
+            "Items in this stack will also be deleted. This can't be undone.", locale: locale)
+        alert.addButton(withTitle: AppLocalization.string("Delete", locale: locale))
+        alert.addButton(withTitle: AppLocalization.string("Cancel", locale: locale))
         alert.buttons.first?.hasDestructiveAction = true
         guard core.runModalAlert(alert) == .alertFirstButtonReturn else { return }
         guard core.clipboardStore.deleteStack(stack.id) else { return }

@@ -13,7 +13,7 @@ tag="v${version}"
 script_dir="${0:A:h}"
 repo_root="${script_dir:h}"
 github_repo="${KIT_GITHUB_REPOSITORY:-imeelinew/Kit}"
-team_id="${PASTE_TEAM_ID:-5Q5QT76MJU}"
+team_id="${KIT_TEAM_ID:-5Q5QT76MJU}"
 work_dir=$(mktemp -d /tmp/kit-release.XXXXXX)
 trap 'rm -rf "$work_dir"' EXIT
 

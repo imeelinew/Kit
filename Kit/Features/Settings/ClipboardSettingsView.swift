@@ -88,7 +88,7 @@ struct ClipboardSettingsView: View {
         panel.allowedContentTypes = [.application]
         panel.treatsFilePackagesAsDirectories = false
         panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
-        panel.prompt = String(localized: "Add")
+        panel.prompt = AppLocalization.string("Add", locale: settings.language.locale)
         guard panel.runModal() == .OK else { return }
 
         var apps = settings.clipboardDisabledApps

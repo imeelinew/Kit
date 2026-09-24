@@ -173,7 +173,6 @@ private struct StackNameField: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSTextField {
         let field = NSTextField(string: text)
-        field.placeholderString = String(localized: "Name")
         field.isBordered = false
         field.isBezeled = false
         field.drawsBackground = false
@@ -187,6 +186,7 @@ private struct StackNameField: NSViewRepresentable {
 
     func updateNSView(_ field: NSTextField, context: Context) {
         context.coordinator.text = $text
+        field.placeholderString = AppLocalization.string("Name", locale: context.environment.locale)
         if field.stringValue != text {
             field.stringValue = text
         }

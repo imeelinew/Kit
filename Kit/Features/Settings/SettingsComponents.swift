@@ -3,7 +3,10 @@ import SwiftUI
 
 /// Layout metrics for the Preferences-style settings form (visual only).
 enum PreferencesMetrics {
-    static let labelWidth: CGFloat = 132
+    static func labelWidth(for locale: Locale) -> CGFloat {
+        locale.identifier.hasPrefix("en") ? 156 : 132
+    }
+
     static let gutter: CGFloat = 12
     static let contentPaddingH: CGFloat = 28
     static let contentPaddingV: CGFloat = 22
@@ -30,13 +33,14 @@ struct PreferencesRow<Content: View>: View {
     let label: LocalizedStringKey
     var alignment: VerticalAlignment = .center
     @ViewBuilder var content: Content
+    @Environment(\.locale) private var locale
 
     var body: some View {
         HStack(alignment: alignment, spacing: PreferencesMetrics.gutter) {
             Text(label)
                 .font(.body)
                 .multilineTextAlignment(.trailing)
-                .frame(width: PreferencesMetrics.labelWidth, alignment: .trailing)
+                .frame(width: PreferencesMetrics.labelWidth(for: locale), alignment: .trailing)
 
             content
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -49,13 +53,14 @@ struct PreferencesCheckboxRow: View {
     let title: LocalizedStringKey
     @Binding var isOn: Bool
     var disabled: Bool = false
+    @Environment(\.locale) private var locale
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: PreferencesMetrics.gutter) {
             Toggle(title, isOn: $isOn)
                 .toggleStyle(.checkbox)
                 .labelsHidden()
-                .frame(width: PreferencesMetrics.labelWidth, alignment: .trailing)
+                .frame(width: PreferencesMetrics.labelWidth(for: locale), alignment: .trailing)
                 .disabled(disabled)
 
             Text(title)

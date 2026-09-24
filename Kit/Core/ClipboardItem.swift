@@ -84,7 +84,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     func defaultTitle(locale: Locale) -> String {
         switch kind {
         case .image:
-            return String(localized: "Image", locale: locale)
+            return AppLocalization.string("Image", locale: locale)
         case .text, .markdown, .code, .link, .path:
             let text = String((text ?? "").prefix(200)).trimmingCharacters(
                 in: .whitespacesAndNewlines)

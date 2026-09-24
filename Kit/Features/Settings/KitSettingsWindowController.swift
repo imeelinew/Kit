@@ -5,9 +5,15 @@ import KeyboardShortcuts
 import MacAppSettingsUI
 import SwiftUI
 
-/// Owns the MacAppSettingsUI preferences window and bridges Paste's SwiftUI panes into it.
+private enum SettingsPaneLayout {
+    static func width(for language: AppLanguage) -> CGFloat {
+        language.locale.identifier.hasPrefix("en") ? 600 : 480
+    }
+}
+
+/// Owns the MacAppSettingsUI preferences window and bridges Kit's SwiftUI panes into it.
 @MainActor
-final class PasteSettingsWindowController {
+final class KitSettingsWindowController {
     private let activationPolicy: ActivationPolicyCoordinator
     private var controller: SettingsWindowController?
     private var closeObserver: NSObjectProtocol?
@@ -47,6 +53,7 @@ final class PasteSettingsWindowController {
         activationPolicy.acquire("settings")
         NSApp.activate(ignoringOtherApps: true)
         controller.showWindow(nil)
+        fitWindowWidth(controller.window)
         DispatchQueue.main.async {
             controller.window?.makeKeyAndOrderFront(nil)
         }
@@ -90,7 +97,20 @@ final class PasteSettingsWindowController {
         attachCloseObserverIfNeeded(to: controller.window)
         installCommandWCloseViewIfNeeded(on: controller.window)
         controller.showWindow(nil)
+        fitWindowWidth(controller.window)
         controller.window?.makeKeyAndOrderFront(nil)
+    }
+
+    private func fitWindowWidth(_ window: NSWindow?) {
+        guard let window else { return }
+        let width = SettingsPaneLayout.width(for: AppCore.shared.settings.language)
+        let frame = window.frame
+        guard abs(frame.width - width) > 0.5 else { return }
+        window.setFrame(
+            NSRect(
+                x: frame.midX - width / 2, y: frame.minY,
+                width: width, height: frame.height),
+            display: false)
     }
 
     private func tearDownController() {
@@ -132,10 +152,8 @@ final class PasteSettingsWindowController {
             centersWindowPositionAlways: false,
             closesWindowWithEscapeKey: true
         )
-        controller.settingsWindow.defaultWindowTitle = String(
-            localized: "Paste Settings",
-            locale: locale
-        )
+        controller.settingsWindow.defaultWindowTitle = AppLocalization.string(
+            "Kit Settings", locale: locale)
         return controller
     }
 
@@ -236,7 +254,6 @@ extension SettingsTab {
 private final class SwiftUISettingsPaneController: SettingsPaneViewController {
     private let rootView: AnyView
     private let paneHeight: CGFloat
-    private static let paneWidth: CGFloat = 480
 
     init(
         tab: SettingsTab,
@@ -248,7 +265,7 @@ private final class SwiftUISettingsPaneController: SettingsPaneViewController {
         )
         self.paneHeight = tab.preferredPaneHeight
         super.init(nibName: nil, bundle: nil)
-        tabName = String(localized: tab.localizationKey, locale: locale)
+        tabName = AppLocalization.string(tab.localizationKey, locale: locale)
         tabImage = tab.settingsTabImage()
         tabIdentifier = tab.tabIdentifier
         isResizableView = false
@@ -263,7 +280,8 @@ private final class SwiftUISettingsPaneController: SettingsPaneViewController {
         let hosting = NSHostingView(rootView: rootView)
         hosting.sizingOptions = []
         view = hosting
-        preferredPaneSize = NSSize(width: Self.paneWidth, height: paneHeight)
+        let width = SettingsPaneLayout.width(for: AppCore.shared.settings.language)
+        preferredPaneSize = NSSize(width: width, height: paneHeight)
         view.setFrameSize(preferredPaneSize ?? .zero)
     }
 }

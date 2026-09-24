@@ -25,6 +25,23 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     }
 }
 
+/// AppKit strings must use the selected language's .lproj bundle explicitly.
+/// `String(localized:locale:)` only uses its locale for formatting interpolated values.
+enum AppLocalization {
+    static func string(_ key: String, locale: Locale) -> String {
+        let language: String?
+        switch locale.identifier {
+        case "en": language = "en"
+        case "zh-Hans": language = "zh-Hans"
+        default: language = nil
+        }
+        let bundle = language.flatMap { code in
+            Bundle.main.path(forResource: code, ofType: "lproj").flatMap(Bundle.init(path:))
+        } ?? .main
+        return bundle.localizedString(forKey: key, value: key, table: nil)
+    }
+}
+
 enum AppAppearance: String, CaseIterable, Identifiable {
     case system
     case light
@@ -96,7 +113,11 @@ enum CopySoundEffect: Int, CaseIterable, Identifiable {
 
     var id: Int { rawValue }
 
-    var title: String { "音效\(rawValue)" }
+    func title(locale: Locale) -> String {
+        String(
+            format: AppLocalization.string("Sound Effect %d", locale: locale),
+            locale: locale, rawValue)
+    }
 
     var resourceName: String { "sound-effect-\(rawValue)" }
 }

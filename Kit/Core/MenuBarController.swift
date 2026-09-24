@@ -101,7 +101,7 @@ final class MenuBarController: NSObject {
     }
 
     private func applyLocalizedChrome() {
-        let title = String(localized: "Paste", locale: settings.language.locale)
+        let title = AppLocalization.string("Kit", locale: settings.language.locale)
         statusItem?.button?.setAccessibilityLabel(title)
         statusItem?.button?.toolTip = title
     }
@@ -125,7 +125,7 @@ final class MenuBarController: NSObject {
         let menu = NSMenu()
 
         let aboutItem = NSMenuItem(
-            title: String(localized: "About Kit", locale: locale),
+            title: AppLocalization.string("About Kit", locale: locale),
             action: #selector(showAbout),
             keyEquivalent: ""
         )
@@ -133,7 +133,7 @@ final class MenuBarController: NSObject {
         menu.addItem(aboutItem)
 
         let settingsItem = NSMenuItem(
-            title: String(localized: "Settings…", locale: locale),
+            title: AppLocalization.string("Settings…", locale: locale),
             action: #selector(openSettings),
             keyEquivalent: ","
         )
@@ -147,7 +147,7 @@ final class MenuBarController: NSObject {
 
         if AppCore.shared.isClipboardPaused {
             let resumeItem = NSMenuItem(
-                title: String(localized: "Resume Paste", locale: locale),
+                title: AppLocalization.string("Resume Kit", locale: locale),
                 action: #selector(resumeClipboard),
                 keyEquivalent: ""
             )
@@ -155,7 +155,7 @@ final class MenuBarController: NSObject {
             menu.addItem(resumeItem)
         } else {
             let pauseItem = NSMenuItem(
-                title: String(localized: "Pause Paste", locale: locale),
+                title: AppLocalization.string("Pause Kit", locale: locale),
                 action: nil,
                 keyEquivalent: ""
             )
@@ -174,7 +174,7 @@ final class MenuBarController: NSObject {
         menu.addItem(.separator())
 
         let quitItem = NSMenuItem(
-            title: String(localized: "Quit Kit…", locale: locale),
+            title: AppLocalization.string("Quit Kit…", locale: locale),
             action: #selector(quit),
             keyEquivalent: "q"
         )
@@ -185,10 +185,10 @@ final class MenuBarController: NSObject {
     }
 
     private func pauseOption(
-        _ title: String.LocalizationValue, duration: TimeInterval?, locale: Locale
+        _ title: String, duration: TimeInterval?, locale: Locale
     ) -> NSMenuItem {
         let item = NSMenuItem(
-            title: String(localized: title, locale: locale),
+            title: AppLocalization.string(title, locale: locale),
             action: #selector(pauseClipboard(_:)),
             keyEquivalent: ""
         )

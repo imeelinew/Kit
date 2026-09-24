@@ -384,10 +384,10 @@ final class PreviewTextView: NSTextView {
         let locale = AppCore.shared.settings.language.locale
         let menu = NSMenu()
         menu.addItem(
-            withTitle: String(localized: "Copy", locale: locale), action: #selector(copy(_:)),
+            withTitle: AppLocalization.string("Copy", locale: locale), action: #selector(copy(_:)),
             keyEquivalent: "")
         menu.addItem(
-            withTitle: String(localized: "Select All", locale: locale),
+            withTitle: AppLocalization.string("Select All", locale: locale),
             action: #selector(selectAll(_:)), keyEquivalent: "")
         return menu
     }

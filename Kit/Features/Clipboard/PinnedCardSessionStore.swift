@@ -45,7 +45,7 @@ final class PinnedCardSessionStore {
 
     init() {
         guard let bundleID = Bundle.main.bundleIdentifier else {
-            preconditionFailure("Paste requires a bundle identifier")
+            preconditionFailure("Kit requires a bundle identifier")
         }
         let root = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -156,4 +156,3 @@ final class PinnedCardSessionStore {
         }
     }
 }
-

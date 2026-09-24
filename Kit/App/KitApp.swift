@@ -1,7 +1,7 @@
 import AppKit
 
 @main
-enum PasteApp {
+enum KitApp {
     @MainActor private static let delegate = AppDelegate()
 
     @MainActor

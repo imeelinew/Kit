@@ -306,7 +306,6 @@ private struct PaletteSearchField: NSViewRepresentable {
         field.cell?.usesSingleLineMode = true
         field.cell?.wraps = false
         field.cell?.isScrollable = true
-        field.setAccessibilityLabel(String(localized: "Search"))
         return field
     }
 
@@ -315,8 +314,10 @@ private struct PaletteSearchField: NSViewRepresentable {
         if field.stringValue != text { field.stringValue = text }
         field.isEnabled = enabled
         field.font = .systemFont(ofSize: fontSize, weight: .regular)
+        let searchTitle = AppLocalization.string("Search", locale: context.environment.locale)
+        field.setAccessibilityLabel(searchTitle)
         field.placeholderAttributedString = NSAttributedString(
-            string: String(localized: "Search", locale: context.environment.locale),
+            string: searchTitle,
             attributes: [
                 .font: NSFont.systemFont(ofSize: fontSize, weight: .regular),
                 .foregroundColor: NSColor.tertiaryLabelColor,

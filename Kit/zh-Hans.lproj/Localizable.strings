@@ -18,7 +18,7 @@
 "Clear History" = "清空历史";
 "Check for Updates" = "检查更新…";
 "Clipboard" = "剪贴板";
-"Show Paste" = "打开 Kit";
+"Show Kit" = "打开 Kit";
 "Code" = "代码";
 "Content Preview" = "内容预览";
 "Clipboard history is empty" = "剪贴板历史为空";
@@ -57,9 +57,9 @@
 "Scroll for more" = "继续滚动以加载更多";
 "Name" = "名称";
 "New Stack" = "新建 Stack";
-"Paste Menu" = "Kit 菜单";
-"Pause Paste" = "暂停 Kit";
-"Resume Paste" = "继续 Kit";
+"Kit Menu" = "Kit 菜单";
+"Pause Kit" = "暂停 Kit";
+"Resume Kit" = "继续 Kit";
 "Pause" = "暂停";
 "For 15 Minutes" = "暂停 15 分钟";
 "For 30 Minutes" = "暂停 30 分钟";
@@ -68,14 +68,15 @@
 "For 8 Hours" = "暂停 8 小时";
 "Until Tomorrow" = "暂停到明天";
 "Indefinitely" = "无限期暂停";
+"Kit" = "Kit";
 "Palette" = "面板";
 "Paste" = "粘贴";
 "Paste & Keep Window Open" = "粘贴并保持窗口打开";
-"Paste Settings" = "Kit 设置";
+"Kit Settings" = "Kit 设置";
 "Paste to %@" = "粘贴到 %@";
 "Plain Text" = "纯文本";
 "Path" = "路径";
-"Paste will stop monitoring the clipboard until you open it again." = "退出后，Kit 将停止监控剪贴板";
+"Kit will stop monitoring the clipboard until you open it again." = "退出后，Kit 将停止监控剪贴板";
 "Past 30 Days" = "过去 30 天";
 "Past 7 Days" = "过去 7 天";
 "Pin to Screen" = "钉到屏幕上";
@@ -93,7 +94,7 @@
 "Hide Pinned Cards" = "隐藏钉选卡片";
 "Quit" = "退出";
 "Quit Kit…" = "退出 Kit…";
-"Quit Paste?" = "要退出 Kit 吗？";
+"Quit Kit?" = "要退出 Kit 吗？";
 "Rename…" = "重命名…";
 "Repository" = "代码仓库";
 "Render Markdown" = "渲染 Markdown";
@@ -121,7 +122,7 @@
 "Version" = "版本";
 "Visual Style" = "视觉风格";
 "Frosted Glass" = "毛玻璃";
-"Liquid Glass" = "液态玻璃";
+"Liquid Glass" = "Liquid Glass";
 "GitHub Repository" = "GitHub 仓库";
 "Words" = "词数";
 "Yesterday" = "昨天";
@@ -131,7 +132,4 @@
 "1 Year" = "1 年";
 "3 Months" = "3 个月";
 "6 Months" = "6 个月";
-"音效1" = "音效1";
-"音效2" = "音效2";
-"音效3" = "音效3";
-"音效4" = "音效4";
+"Sound Effect %d" = "音效%d";

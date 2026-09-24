@@ -119,6 +119,7 @@ struct AppearanceSettingsView: View {
 
 struct SoundSettingsView: View {
     @ObservedObject private var settings = AppCore.shared.settings
+    @Environment(\.locale) private var locale
 
     var body: some View {
         PreferencesForm {
@@ -132,7 +133,7 @@ struct SoundSettingsView: View {
             PreferencesRow(label: "Sound Effect") {
                 Picker("Sound Effect", selection: $settings.copySoundEffect) {
                     ForEach(CopySoundEffect.allCases) { option in
-                        Text(LocalizedStringKey(option.title)).tag(option)
+                        Text(option.title(locale: locale)).tag(option)
                     }
                 }
                 .pickerStyle(.menu)
@@ -149,6 +150,7 @@ struct SoundSettingsView: View {
 }
 
 struct AboutSettingsView: View {
+    @Environment(\.locale) private var locale
     private static let repositoryURL = URL(string: "https://github.com/imeelinew/Kit")!
     private static let acknowledgments: [(name: String, url: URL)] = [
         (
@@ -170,7 +172,7 @@ struct AboutSettingsView: View {
     ]
 
     private var appName: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Paste"
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String ?? "Kit"
     }
 
     private var versionString: String {
@@ -192,7 +194,7 @@ struct AboutSettingsView: View {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                     Text(appName)
                         .font(.title2.weight(.semibold))
-                    Text("\(String(localized: "Version")) \(versionString)")
+                    Text("\(AppLocalization.string("Version", locale: locale)) \(versionString)")
                         .foregroundStyle(.secondary)
                 }
 
