@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Observation
 import SwiftUI
 
 struct PasteTarget: Equatable {
@@ -122,15 +123,16 @@ enum ClipboardKindFilter: Equatable, CaseIterable {
 /// The palette's single interaction state machine. AppKit keyboard events and SwiftUI mouse
 /// actions both enter here, so commands do not depend on whichever embedded view is first responder.
 @MainActor
-final class PaletteViewModel: ObservableObject {
-    @Published var query = "" {
+@Observable
+final class PaletteViewModel {
+    var query = "" {
         didSet { queryChanged() }
     }
-    @Published private(set) var kindFilter: ClipboardKindFilter = .all
+    private(set) var kindFilter: ClipboardKindFilter = .all
     /// `nil` shows the whole clipboard. A stack id shows only items in that stack.
-    @Published private(set) var stackFilter: ClipboardStack.ID?
-    @Published var stackNameEdit: StackNameEdit?
-    @Published var stackNameDraft = ""
+    private(set) var stackFilter: ClipboardStack.ID?
+    var stackNameEdit: StackNameEdit?
+    var stackNameDraft = ""
 
     var isNamingStack: Bool { stackNameEdit != nil }
 
@@ -142,14 +144,16 @@ final class PaletteViewModel: ObservableObject {
         }
         return String(localized: "Clipboard")
     }
-    @Published private(set) var results: [ClipboardItem] = []
-    @Published private(set) var selectedID: ClipboardItem.ID?
-    @Published private(set) var searchReady = true
-    @Published var resetToken = UUID()
-    @Published var followToken = UUID()
-    @Published var pasteTarget: PasteTarget?
-    @Published var imageQuickLookOpen = false
-    @Published private(set) var overlay: PaletteOverlay = .none {
+    private(set) var results: [ClipboardItem] = []
+    private(set) var resultsGeneration: UInt64 = 0
+    private(set) var hasMoreResults = false
+    private(set) var selectedID: ClipboardItem.ID?
+    private(set) var searchReady = true
+    var resetToken = UUID()
+    var followToken = UUID()
+    var pasteTarget: PasteTarget?
+    var imageQuickLookOpen = false
+    private(set) var overlay: PaletteOverlay = .none {
         didSet {
             if overlay.isOpen {
                 imageQuickLookOpen = false
@@ -164,14 +168,18 @@ final class PaletteViewModel: ObservableObject {
             }
         }
     }
-    @Published var menuSelection = 0
+    var menuSelection = 0
 
-    var onMenuOpenChanged: ((Bool) -> Void)?
-    var onSearchFocusRequested: (() -> Void)?
+    @ObservationIgnored var onMenuOpenChanged: ((Bool) -> Void)?
+    @ObservationIgnored var onSearchFocusRequested: (() -> Void)?
 
-    private unowned let core: AppCore
-    private var searchTask: Task<Void, Never>?
-    private var revisionObserver: AnyCancellable?
+    @ObservationIgnored private unowned let core: AppCore
+    private static let pageSize = 160
+    @ObservationIgnored private var searchTask: Task<Void, Never>?
+    @ObservationIgnored private var loadMoreTask: Task<Void, Never>?
+    @ObservationIgnored private var nextCursor: ClipboardSearchCursor?
+    @ObservationIgnored private var loadedPageCount = 1
+    @ObservationIgnored private var revisionObserver: AnyCancellable?
 
     init(core: AppCore) {
         self.core = core
@@ -615,42 +623,68 @@ final class PaletteViewModel: ObservableObject {
 
     private func refreshResults(resetSelection: Bool, blockCommands: Bool) {
         searchTask?.cancel()
+        loadMoreTask?.cancel()
+        loadMoreTask = nil
+        nextCursor = nil
+        hasMoreResults = false
+        if resetSelection { loadedPageCount = 1 }
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let priorID = selectedID
         let priorIndex = selectionIndex
         if blockCommands { searchReady = false }
 
         let stackID = stackFilter
-        if query.isEmpty && kindFilter == .all {
-            applyResults(
-                scoped(core.clipboardStore.displayItems, to: stackID),
-                resetSelection: resetSelection,
-                priorID: priorID,
-                priorIndex: priorIndex)
-            return
-        }
-
         let filter = kindFilter
+        let pageLimit = Self.pageSize * loadedPageCount
         searchTask = Task { [weak self] in
             guard let self else { return }
-            let matches = await core.clipboardStore.searchAsync(
-                query, kind: filter.kind)
+            let page = await core.clipboardStore.searchAsync(
+                query, kind: filter.kind, stackID: stackID,
+                after: nil, limit: pageLimit)
             guard !Task.isCancelled,
                 self.query.trimmingCharacters(in: .whitespacesAndNewlines) == query,
                 self.kindFilter == filter,
                 self.stackFilter == stackID
             else { return }
+            nextCursor = page.nextCursor
+            hasMoreResults = page.nextCursor != nil
             applyResults(
-                self.scoped(matches, to: stackID),
+                page.items,
                 resetSelection: resetSelection,
                 priorID: priorID,
                 priorIndex: priorIndex)
         }
     }
 
-    private func scoped(_ items: [ClipboardItem], to stackID: ClipboardStack.ID?) -> [ClipboardItem] {
-        guard let stackID else { return items }
-        return items.filter { core.clipboardStore.stackID(for: $0.id) == stackID }
+    func loadMoreResults() {
+        guard searchReady, hasMoreResults, loadMoreTask == nil else { return }
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filter = kindFilter
+        let stackID = stackFilter
+        guard let cursor = nextCursor else { return }
+        loadMoreTask = Task { [weak self] in
+            guard let self else { return }
+            let page = await core.clipboardStore.searchAsync(
+                query, kind: filter.kind, stackID: stackID,
+                after: cursor, limit: Self.pageSize)
+            guard !Task.isCancelled,
+                self.query.trimmingCharacters(in: .whitespacesAndNewlines) == query,
+                self.kindFilter == filter,
+                self.stackFilter == stackID,
+                self.nextCursor == cursor
+            else { return }
+            nextCursor = page.nextCursor
+            hasMoreResults = page.nextCursor != nil
+            loadedPageCount += 1
+            let seen = Set(results.map(\.id))
+            let additions = page.items.filter { !seen.contains($0.id) }
+            if !additions.isEmpty {
+                results.append(contentsOf: additions)
+                resultsGeneration &+= 1
+            }
+            loadMoreTask = nil
+            if additions.isEmpty && hasMoreResults { loadMoreResults() }
+        }
     }
 
     private func applyResults(
@@ -658,6 +692,7 @@ final class PaletteViewModel: ObservableObject {
         priorID: ClipboardItem.ID?, priorIndex: Int
     ) {
         results = newResults
+        resultsGeneration &+= 1
         searchReady = true
 
         guard !newResults.isEmpty else {
