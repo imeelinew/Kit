@@ -1,9 +1,8 @@
 import AppKit
 import KeyboardShortcuts
-import SwiftUI
 
 @MainActor
-final class AppCore: ObservableObject {
+final class AppCore {
     static let shared = AppCore()
 
     let settings = AppSettings()
@@ -12,8 +11,7 @@ final class AppCore: ObservableObject {
     let clipboardManager: ClipboardManager
     lazy var palette = PaletteViewModel(core: self)
     let systemClipboardHistory = SystemClipboardHistory()
-    @Published private(set) var isClipboardPaused = false
-    @Published private(set) var clipboardPauseUntil: Date?
+    private(set) var isClipboardPaused = false
 
     private lazy var windowController = PaletteWindowController(core: self)
     private let activationPolicy = ActivationPolicyCoordinator()
@@ -107,7 +105,6 @@ final class AppCore: ObservableObject {
 
     func pauseClipboard(until date: Date?) {
         clipboardResumeTask?.cancel()
-        clipboardPauseUntil = date
         isClipboardPaused = true
         settings.saveClipboardPause(until: date)
         clipboardManager.setPaused(true)
@@ -124,7 +121,6 @@ final class AppCore: ObservableObject {
     func resumeClipboard() {
         clipboardResumeTask?.cancel()
         clipboardResumeTask = nil
-        clipboardPauseUntil = nil
         isClipboardPaused = false
         settings.clearClipboardPause()
         clipboardManager.setPaused(false)
