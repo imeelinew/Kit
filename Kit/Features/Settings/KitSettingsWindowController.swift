@@ -123,7 +123,14 @@ private struct SettingsWindowRoot: View {
         } detail: {
             NavigationStack {
                 settingsPage
-                    .navigationTitle(LocalizedStringKey(selection.tab.localizationKey))
+                    .navigationTitle(
+                        Text(
+                            verbatim: AppLocalization.string(
+                                selection.tab.localizationKey,
+                                locale: settings.language.locale
+                            )
+                        )
+                    )
             }
         }
         .toolbar(removing: .sidebarToggle)
