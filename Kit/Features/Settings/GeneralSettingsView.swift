@@ -3,7 +3,6 @@ import SwiftUI
 
 struct GeneralSettingsView: View {
     @ObservedObject private var settings = AppCore.shared.settings
-    @ObservedObject private var updateService = AppCore.shared.updateService
 
     var body: some View {
         PreferencesForm {
@@ -24,16 +23,6 @@ struct GeneralSettingsView: View {
                 Toggle(
                     "Switch to English When Opening",
                     isOn: $settings.switchToEnglishInputOnOpen
-                )
-            }
-
-            Section("Updates") {
-                Toggle(
-                    "Automatically Check for Updates",
-                    isOn: Binding(
-                        get: { updateService.automaticallyChecksForUpdates },
-                        set: { updateService.setAutomaticallyChecksForUpdates($0) }
-                    )
                 )
             }
         }
@@ -136,6 +125,7 @@ struct SoundSettingsView: View {
 
 struct AboutSettingsView: View {
     @Environment(\.locale) private var locale
+    @ObservedObject private var updateService = AppCore.shared.updateService
     private static let repositoryURL = URL(string: "https://github.com/imeelinew/Kit")!
     private static let acknowledgments: [(name: String, url: URL)] = [
         (
@@ -184,6 +174,16 @@ struct AboutSettingsView: View {
 
                     Spacer(minLength: 0)
                 }
+            }
+
+            Section("Updates") {
+                Toggle(
+                    "Automatically Check for Updates",
+                    isOn: Binding(
+                        get: { updateService.automaticallyChecksForUpdates },
+                        set: { updateService.setAutomaticallyChecksForUpdates($0) }
+                    )
+                )
             }
 
             Section {
