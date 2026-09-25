@@ -47,13 +47,6 @@ enum Paster {
         return true
     }
 
-    /// Copies a pinned image without routing through the palette or synthesizing a paste event.
-    @MainActor @discardableResult
-    static func copyImage(at url: URL) async -> Bool {
-        guard let payload = await imagePayload(at: url), !Task.isCancelled else { return false }
-        return write(payload)
-    }
-
     /// Keep text copied or cut from Kit's own search field out of clipboard history while
     /// preserving the field editor's native editing behavior and pasteboard contents.
     @MainActor

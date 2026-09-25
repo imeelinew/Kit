@@ -40,7 +40,6 @@ final class AppCore {
         clipboardStore.onItemInserted = { [weak self] in
             self?.handleClipboardItemInserted()
         }
-        pinnedImageWindows.restore()
         clipboardManager.start()
         let savedPause = settings.savedClipboardPause
         if savedPause.isPaused {
@@ -61,13 +60,6 @@ final class AppCore {
         KeyboardShortcuts.onKeyUp(for: .toggleClipboard) { [weak self] in
             self?.clipboardShortcutIsDown = false
         }
-        KeyboardShortcuts.onKeyUp(for: .hidePinnedCards) { [weak self] in
-            self?.pinnedImageWindows.toggleParked()
-        }
-    }
-
-    func prepareForTermination() {
-        pinnedImageWindows.flushPersistence()
     }
 
     func togglePalette() {

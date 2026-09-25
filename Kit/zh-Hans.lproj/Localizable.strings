@@ -83,15 +83,11 @@
 "Pinned Cards" = "钉选卡片";
 "Pinned Image" = "钉选图片";
 "Pinned Image Size" = "图片尺寸";
-"Pinned Images" = "钉选图片";
 "Small" = "小";
 "Medium" = "中";
 "Menu Bar" = "菜单栏";
 "Large" = "大";
 "Close Pinned Image" = "关闭钉选图片";
-"Close All Pinned Images" = "关闭所有钉选图片";
-"Copy Pinned Image" = "复制钉选图片";
-"Hide Pinned Cards" = "隐藏钉选卡片";
 "Quit" = "退出";
 "Quit Kit…" = "退出 Kit…";
 "Quit Kit?" = "要退出 Kit 吗？";

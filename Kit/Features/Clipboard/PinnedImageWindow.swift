@@ -1,17 +1,10 @@
 import AppKit
 import Combine
-import QuartzCore
 import SwiftUI
 
-enum PinnedImageCommand {
-    case close
-    case closeAll
-    case copy
-}
-
-/// Owns durable pinned-content panels independently from the clipboard palette. Each clipboard
-/// item gets at most one panel; pinning it again brings the existing panel forward. Open panels
-/// restore after relaunch, follow regular Spaces, and hide on exclusive fullscreen Spaces.
+/// Owns pinned-content panels independently from the clipboard palette. Each clipboard item gets
+/// at most one panel; pinning it again brings the existing panel forward. Panels follow regular
+/// Spaces and hide on exclusive fullscreen Spaces.
 @MainActor
 final class PinnedImageWindowController: NSObject, NSWindowDelegate {
     private var panels: [ClipboardItem.ID: PinnedImagePanel] = [:]
@@ -19,43 +12,8 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
     private var hiddenForFullscreen: Set<ClipboardItem.ID> = []
     private var spaceObservers: [NotificationToken] = []
     private var fullscreenSyncTask: Task<Void, Never>?
-    private var persistenceTask: Task<Void, Never>?
-    private var lastPersistenceSave = Date.distantPast
     private var observesExclusiveFullScreen = false
-    private var restoredSession = false
-    private let sessionStore = PinnedCardSessionStore()
     private var titleObserver: AnyCancellable?
-    private var parkedHomeFrames: [ClipboardItem.ID: NSRect] = [:]
-    private var isUnparking = false
-
-    func restore() {
-        guard !restoredSession else { return }
-        restoredSession = true
-        observeExclusiveFullScreenIfNeeded()
-        observeTitlesIfNeeded()
-
-        for record in sessionStore.records {
-            if !restoreImage(record) {
-                sessionStore.remove(itemID: record.id)
-            }
-        }
-    }
-
-    func flushPersistence() {
-        persistParkedHomeFrames()
-        persistenceTask?.cancel()
-        persistenceTask = nil
-        sessionStore.saveNow()
-        lastPersistenceSave = Date()
-    }
-
-    func toggleParked() {
-        if isParked {
-            unpark()
-        } else {
-            park()
-        }
-    }
 
     func show(
         itemID: ClipboardItem.ID,
@@ -70,11 +28,9 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
             return
         }
 
-        let storedURL = sessionStore.writeImagePayload(from: url, itemID: itemID)
-        let contentURL = storedURL ?? url
         let visibleFrame = targetVisibleFrame()
-        let pixelSize = ImageThumbnail.pixelSize(of: contentURL) ?? CGSize(width: 1_200, height: 900)
-        let imageSize = NSImage(contentsOf: contentURL)?.size ?? pixelSize
+        let pixelSize = ImageThumbnail.pixelSize(of: url) ?? CGSize(width: 1_200, height: 900)
+        let imageSize = NSImage(contentsOf: url)?.size ?? pixelSize
         let initialSize = PinnedImageLayout.initialSize(
             imageSize: imageSize,
             visibleFrame: visibleFrame,
@@ -89,79 +45,20 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
                 visibleFrame: visibleFrame
             )
         )
-        panel.onCommand = { [weak self] command in
-            self?.handle(command, itemID: itemID, url: contentURL)
+        panel.onClose = { [weak self] in
+            self?.close(itemID)
         }
 
         install(
             PinnedImageContent(
                 itemID: itemID,
-                url: contentURL,
+                url: url,
                 decodeMaxPixel: imageDecodeMaxPixel,
                 onClose: { [weak self] in self?.close(itemID) }
             ),
             in: panel
         )
-        let frame = present(panel, size: initialSize, in: visibleFrame, itemID: itemID)
-        if storedURL != nil {
-            sessionStore.add(itemID: itemID, frame: frame)
-            lastPersistenceSave = Date()
-        }
-    }
-
-    private func restoreImage(_ record: PinnedCardRecord) -> Bool {
-        guard let url = sessionStore.imageURL(for: record) else { return false }
-        let visibleFrame = visibleFrame(for: record.frame.rect)
-        let pixelSize = ImageThumbnail.pixelSize(of: url) ?? CGSize(width: 1_200, height: 900)
-        let imageSize = NSImage(contentsOf: url)?.size ?? pixelSize
-        let settings = AppCore.shared.settings
-        let preferredLongEdge: () -> CGFloat = { [weak settings] in
-            settings?.pinnedImageSize.longestEdge ?? PinnedImageSize.medium.longestEdge
-        }
-        let initialSize = PinnedImageLayout.initialSize(
-            imageSize: imageSize,
-            visibleFrame: visibleFrame,
-            preferredLongEdge: preferredLongEdge()
-        )
-        let panel = makePanel(
-            title: cardTitle(for: record.id, fallback: String(
-                localized: "Pinned Image", locale: settings.language.locale)),
-            initialSize: initialSize,
-            aspectRatio: imageSize,
-            minSize: PinnedImageLayout.minimumSize(
-                imageSize: imageSize,
-                visibleFrame: visibleFrame
-            )
-        )
-        panel.onCommand = { [weak self] command in
-            self?.handle(command, itemID: record.id, url: url)
-        }
-        install(
-            PinnedImageContent(
-                itemID: record.id,
-                url: url,
-                decodeMaxPixel: imageDecodeMaxPixel,
-                onClose: { [weak self] in self?.close(record.id) }
-            ),
-            in: panel
-        )
-        restore(panel, record: record)
-        return true
-    }
-
-    private func restore(_ panel: PinnedImagePanel, record: PinnedCardRecord) {
-        let frame = restoredFrame(record.frame.rect, minimumSize: panel.contentMinSize)
-        applyVisibleAlpha(to: panel)
-        panel.setFrame(frame, display: false)
-        panels[record.id] = panel
-        if hidesForExclusiveFullScreen(panel) {
-            hideForFullscreen(record.id, panel)
-        } else {
-            panel.orderFrontRegardless()
-        }
-        if sessionStore.updateFrame(itemID: record.id, frame: frame) {
-            schedulePersistence()
-        }
+        present(panel, size: initialSize, in: visibleFrame, itemID: itemID)
     }
 
     private var imageDecodeMaxPixel: CGFloat {
@@ -172,42 +69,6 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
                     * candidate.backingScaleFactor
             )
         }
-    }
-
-    private func visibleFrame(for frame: NSRect) -> NSRect {
-        bestScreen(for: frame)?.visibleFrame ?? targetVisibleFrame()
-    }
-
-    private func restoredFrame(_ frame: NSRect, minimumSize: CGSize) -> NSRect {
-        let remainsReachable = NSScreen.screens.contains { screen in
-            let intersection = screen.frame.intersection(frame)
-            return !intersection.isNull && intersection.width >= 44 && intersection.height >= 44
-        }
-        if remainsReachable, frame.width >= minimumSize.width, frame.height >= minimumSize.height {
-            return frame
-        }
-
-        let visible = visibleFrame(for: frame)
-        let width = min(max(frame.width, minimumSize.width), visible.width)
-        let height = min(max(frame.height, minimumSize.height), visible.height)
-        return NSRect(
-            x: min(max(frame.minX, visible.minX), visible.maxX - width),
-            y: min(max(frame.minY, visible.minY), visible.maxY - height),
-            width: width,
-            height: height
-        )
-    }
-
-    private func bestScreen(for frame: NSRect) -> NSScreen? {
-        let candidates = NSScreen.screens.map { screen in
-            let intersection = screen.frame.intersection(frame)
-            let area = intersection.isNull ? CGFloat.zero : intersection.width * intersection.height
-            return (screen, area)
-        }
-        guard let best = candidates.max(by: { $0.1 < $1.1 }), best.1 > 0 else {
-            return NSScreen.main
-        }
-        return best.0
     }
 
     private func activate(_ panel: PinnedImagePanel) {
@@ -226,7 +87,6 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
 
     /// Bring an existing panel forward unless its display is in exclusive fullscreen.
     private func reveal(_ panel: PinnedImagePanel, itemID: ClipboardItem.ID) {
-        if isParked { unpark() }
         if hidesForExclusiveFullScreen(panel) {
             hideForFullscreen(itemID, panel)
             return
@@ -243,30 +103,11 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         panels.removeValue(forKey: itemID)
         closingPanels.remove(itemID)
         hiddenForFullscreen.remove(itemID)
-        parkedHomeFrames.removeValue(forKey: itemID)
-        if parkedHomeFrames.isEmpty { isUnparking = false }
-    }
-
-    func windowDidMove(_ notification: Notification) {
-        persistFrame(from: notification)
-    }
-
-    func windowDidResize(_ notification: Notification) {
-        persistFrame(from: notification)
-    }
-
-    func windowDidBecomeKey(_ notification: Notification) {
-        guard let panel = notification.object as? PinnedImagePanel,
-            let itemID = itemID(for: panel), sessionStore.bringToFront(itemID: itemID)
-        else { return }
-        schedulePersistence()
     }
 
     private func close(_ itemID: ClipboardItem.ID) {
         hiddenForFullscreen.remove(itemID)
         guard let panel = panels[itemID], closingPanels.insert(itemID).inserted else { return }
-        sessionStore.remove(itemID: itemID)
-        lastPersistenceSave = Date()
 
         panel.ignoresMouseEvents = true
         let targetFrame = Self.scaledFrame(panel.frame, scale: 0.96)
@@ -287,151 +128,6 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
 
     private func itemID(for panel: PinnedImagePanel) -> ClipboardItem.ID? {
         panels.first(where: { $0.value === panel })?.key
-    }
-
-    private func persistFrame(from notification: Notification) {
-        guard !isParked, let panel = notification.object as? PinnedImagePanel,
-            let itemID = itemID(for: panel),
-            sessionStore.updateFrame(itemID: itemID, frame: panel.frame)
-        else { return }
-        schedulePersistence()
-    }
-
-    private var isParked: Bool { !parkedHomeFrames.isEmpty }
-
-    private func park() {
-        if isUnparking {
-            isUnparking = false
-            slideParkedCardsOffscreen()
-            return
-        }
-
-        let candidates = panels.filter { itemID, _ in
-            !closingPanels.contains(itemID) && !hiddenForFullscreen.contains(itemID)
-        }
-        guard !candidates.isEmpty else { return }
-
-        var homes: [ClipboardItem.ID: NSRect] = [:]
-        for (itemID, panel) in candidates {
-            homes[itemID] = panel.frame
-        }
-        parkedHomeFrames = homes
-        slideParkedCardsOffscreen()
-    }
-
-    private func unpark() {
-        guard isParked, !isUnparking else { return }
-        isUnparking = true
-        let homes = parkedHomeFrames.mapValues { frame in
-            restoredFrame(frame, minimumSize: CGSize(width: 44, height: 44))
-        }
-        for (itemID, home) in homes {
-            guard let panel = panels[itemID], !closingPanels.contains(itemID) else { continue }
-            if !panel.isVisible {
-                let screen = bestScreen(for: home)?.frame ?? home
-                panel.setFrame(PinnedCardPark.offscreenFrame(home, screen: screen), display: false)
-            }
-            applyVisibleAlpha(to: panel)
-            if hidesForExclusiveFullScreen(panel) {
-                hideForFullscreen(itemID, panel)
-            } else {
-                hiddenForFullscreen.remove(itemID)
-                panel.orderFrontRegardless()
-            }
-        }
-        animateParkedFrames(homes) { [weak self] in
-            guard let self else { return }
-            for (itemID, home) in self.parkedHomeFrames {
-                _ = self.sessionStore.updateFrame(itemID: itemID, frame: home)
-            }
-            self.parkedHomeFrames.removeAll()
-            self.isUnparking = false
-            self.schedulePersistence()
-        }
-    }
-
-    private func slideParkedCardsOffscreen() {
-        var targets: [ClipboardItem.ID: NSRect] = [:]
-        for (itemID, home) in parkedHomeFrames {
-            guard panels[itemID] != nil, !closingPanels.contains(itemID) else { continue }
-            let screen = bestScreen(for: home)?.frame ?? home
-            targets[itemID] = PinnedCardPark.offscreenFrame(home, screen: screen)
-        }
-        guard !targets.isEmpty else { return }
-        animateParkedFrames(targets) { [weak self] in
-            guard let self else { return }
-            for itemID in self.parkedHomeFrames.keys {
-                self.panels[itemID]?.orderOut(nil)
-            }
-        }
-    }
-
-    private func persistParkedHomeFrames() {
-        for (itemID, frame) in parkedHomeFrames {
-            _ = sessionStore.updateFrame(itemID: itemID, frame: frame)
-        }
-    }
-
-    private func animateParkedFrames(
-        _ frames: [ClipboardItem.ID: NSRect],
-        completion: (@MainActor @Sendable () -> Void)? = nil
-    ) {
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = PinnedCardPark.duration
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.4, 0.0, 0.2, 1.0)
-            for (itemID, frame) in frames {
-                guard let panel = panels[itemID], !closingPanels.contains(itemID) else { continue }
-                panel.animator().setFrame(frame, display: true)
-            }
-        } completionHandler: {
-            Task { @MainActor in
-                completion?()
-            }
-        }
-    }
-
-    private func schedulePersistence() {
-        let interval: TimeInterval = 0.12
-        let elapsed = Date().timeIntervalSince(lastPersistenceSave)
-        if elapsed >= interval {
-            persistenceTask?.cancel()
-            persistenceTask = nil
-            sessionStore.saveNow()
-            lastPersistenceSave = Date()
-            return
-        }
-
-        persistenceTask?.cancel()
-        let delay = max(Int((interval - elapsed) * 1_000), 1)
-        persistenceTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(delay))
-            guard !Task.isCancelled, let self else { return }
-            sessionStore.saveNow()
-            lastPersistenceSave = Date()
-            persistenceTask = nil
-        }
-    }
-
-    private func handle(_ command: PinnedImageCommand, itemID: ClipboardItem.ID, url: URL) {
-        guard panels[itemID] != nil else { return }
-
-        switch command {
-        case .close:
-            close(itemID)
-        case .closeAll:
-            for id in Array(panels.keys) {
-                close(id)
-            }
-        case .copy:
-            Task { _ = await Paster.copyImage(at: url) }
-        }
-    }
-
-    private func cardTitle(for itemID: ClipboardItem.ID, fallback: String) -> String {
-        let locale = AppCore.shared.settings.language.locale
-        let title = AppCore.shared.clipboardStore.item(id: itemID)?.displayTitle(locale: locale)
-            ?? ""
-        return title.isEmpty ? fallback : title
     }
 
     private func observeTitlesIfNeeded() {
@@ -508,7 +204,7 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         size: CGSize,
         in visibleFrame: CGRect,
         itemID: ClipboardItem.ID
-    ) -> NSRect {
+    ) {
         let finalFrame = NSRect(
             x: visibleFrame.midX - size.width / 2,
             y: visibleFrame.midY - size.height / 2,
@@ -522,7 +218,7 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
             panel.setFrame(finalFrame, display: false)
             applyVisibleAlpha(to: panel)
             hideForFullscreen(itemID, panel)
-            return finalFrame
+            return
         }
         activate(panel)
         panel.ignoresMouseEvents = visibleAlpha <= 0
@@ -531,7 +227,6 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
             panel.animator().alphaValue = visibleAlpha
             panel.animator().setFrame(finalFrame, display: true)
         }
-        return finalFrame
     }
 
     private func observeExclusiveFullScreenIfNeeded() {
@@ -604,7 +299,6 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
             if hidesForExclusiveFullScreen(panel) {
                 hideForFullscreen(itemID, panel)
             } else if hiddenForFullscreen.remove(itemID) != nil {
-                guard parkedHomeFrames[itemID] == nil else { continue }
                 applyVisibleAlpha(to: panel)
                 panel.orderFrontRegardless()
             }
@@ -758,18 +452,5 @@ enum PinnedImageLayout {
 
     private static func rounded(_ size: CGSize) -> CGSize {
         CGSize(width: max(size.width.rounded(), 1), height: max(size.height.rounded(), 1))
-    }
-}
-
-private enum PinnedCardPark {
-    static let duration: TimeInterval = 0.34
-    static let margin: CGFloat = 12
-
-    static func offscreenFrame(_ frame: NSRect, screen: NSRect) -> NSRect {
-        let x =
-            frame.midX < screen.midX
-            ? screen.minX - frame.width - margin
-            : screen.maxX + margin
-        return NSRect(x: x, y: frame.minY, width: frame.width, height: frame.height)
     }
 }

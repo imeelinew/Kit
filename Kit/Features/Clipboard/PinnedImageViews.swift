@@ -1,9 +1,9 @@
 import AppKit
-import KeyboardShortcuts
+import Carbon.HIToolbox
 import SwiftUI
 
 final class PinnedImagePanel: NSPanel {
-    var onCommand: ((PinnedImageCommand) -> Void)?
+    var onClose: (() -> Void)?
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
@@ -14,9 +14,9 @@ final class PinnedImagePanel: NSPanel {
                 super.sendEvent(event)
                 return
             }
-            if let command = command(for: event) {
+            if isCloseShortcut(event) {
                 if !event.isARepeat {
-                    onCommand?(command)
+                    onClose?()
                 }
                 return
             }
@@ -86,12 +86,9 @@ final class PinnedImagePanel: NSPanel {
         return visible.insetBy(dx: inset, dy: inset)
     }
 
-    private func command(for event: NSEvent) -> PinnedImageCommand? {
-        let shortcut = KeyboardShortcuts.Shortcut(event: event)
-        if PinnedImageShortcut.close.matches(shortcut) { return .close }
-        if PinnedImageShortcut.closeAll.matches(shortcut) { return .closeAll }
-        if PinnedImageShortcut.copy.matches(shortcut) { return .copy }
-        return nil
+    private func isCloseShortcut(_ event: NSEvent) -> Bool {
+        event.keyCode == UInt16(kVK_ANSI_W)
+            && event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command
     }
 }
 

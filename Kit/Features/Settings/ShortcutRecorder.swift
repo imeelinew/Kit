@@ -24,22 +24,6 @@ extension KeyboardShortcuts.Name {
         "paletteShowPreviousStack",
         default: .init(.upArrow, modifiers: [.option])
     )
-    static let pinnedImageClose = Self(
-        "pinnedImageClose",
-        default: .init(.w, modifiers: [.command])
-    )
-    static let pinnedImageCloseAll = Self(
-        "pinnedImageCloseAll",
-        default: .init(.w, modifiers: [.command, .option])
-    )
-    static let pinnedImageCopy = Self(
-        "pinnedImageCopy",
-        default: .init(.c, modifiers: [.command])
-    )
-    static let hidePinnedCards = Self(
-        "hidePinnedCards",
-        default: .init(.h, modifiers: [.command, .shift])
-    )
 }
 
 enum PaletteShortcut {
@@ -90,38 +74,6 @@ enum PaletteShortcut {
     }
 }
 
-enum PinnedImageShortcut {
-    case close
-    case closeAll
-    case copy
-
-    private static let closeName = local(.pinnedImageClose)
-    private static let closeAllName = local(.pinnedImageCloseAll)
-    private static let copyName = local(.pinnedImageCopy)
-
-    var name: KeyboardShortcuts.Name {
-        switch self {
-        case .close: Self.closeName
-        case .closeAll: Self.closeAllName
-        case .copy: Self.copyName
-        }
-    }
-
-    func matches(_ eventShortcut: KeyboardShortcuts.Shortcut?) -> Bool {
-        guard let eventShortcut, let shortcut = KeyboardShortcuts.getShortcut(for: name) else {
-            return false
-        }
-        return eventShortcut == shortcut
-    }
-
-    private static func local(
-        _ name: KeyboardShortcuts.Name
-    ) -> KeyboardShortcuts.Name {
-        KeyboardShortcuts.disable(name)
-        return name
-    }
-}
-
 private struct LocalShortcutRecorder: View {
     let name: KeyboardShortcuts.Name
 
@@ -152,31 +104,12 @@ struct ShortcutsSettingsView: View {
                 shortcutRow("Show Next Stack", shortcut: .showNextStack)
                 shortcutRow("Show Previous Stack", shortcut: .showPreviousStack)
             }
-
-            Section("Pinned Images") {
-                pinnedImageShortcutRow("Close Pinned Image", shortcut: .close)
-                pinnedImageShortcutRow("Close All Pinned Images", shortcut: .closeAll)
-                pinnedImageShortcutRow("Copy Pinned Image", shortcut: .copy)
-
-                PreferencesRow(label: "Hide Pinned Cards") {
-                    KeyboardShortcuts.Recorder(for: .hidePinnedCards)
-                }
-            }
         }
     }
 
     private func shortcutRow(
         _ label: LocalizedStringKey,
         shortcut: PaletteShortcut
-    ) -> some View {
-        PreferencesRow(label: label) {
-            LocalShortcutRecorder(name: shortcut.name)
-        }
-    }
-
-    private func pinnedImageShortcutRow(
-        _ label: LocalizedStringKey,
-        shortcut: PinnedImageShortcut
     ) -> some View {
         PreferencesRow(label: label) {
             LocalShortcutRecorder(name: shortcut.name)
