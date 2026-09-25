@@ -202,7 +202,7 @@ private final class SourceListSelectionView: NSView {
     func apply() {
         DispatchQueue.main.async { [weak self] in
             guard let table = self?.enclosingTable else { return }
-            table.selectionHighlightStyle = .sourceList
+            table.style = .sourceList
         }
     }
 
