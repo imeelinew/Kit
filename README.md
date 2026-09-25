@@ -17,7 +17,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/macOS-26%2B-black.svg" alt="macOS 26+">
-  <img src="https://img.shields.io/badge/Swift-6-orange.svg" alt="Swift 6">
+  <img src="https://img.shields.io/badge/Swift-6.4-orange.svg" alt="Swift 6.4">
 </p>
 
 <p align="center">
@@ -56,7 +56,7 @@ Kit 需要辅助功能权限，才能将选中的内容发送回呼出面板前�
 
 ## 从源码构建
 
-需要 macOS 26、Xcode 26 和 Swift 6。
+需要 macOS 26、Xcode 27 和 Swift 6.4。
 
 ```bash
 git clone https://github.com/imeelinew/Kit.git
