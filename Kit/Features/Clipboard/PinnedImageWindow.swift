@@ -8,7 +8,6 @@ import SwiftUI
 @MainActor
 final class PinnedImageWindowController: NSObject, NSWindowDelegate {
     private var panels: [ClipboardItem.ID: PinnedImagePanel] = [:]
-    private var closingPanels: Set<ClipboardItem.ID> = []
     private var hiddenForFullscreen: Set<ClipboardItem.ID> = []
     private var spaceObservers: [NotificationToken] = []
     private var fullscreenSyncTask: Task<Void, Never>?
@@ -19,7 +18,7 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         itemID: ClipboardItem.ID,
         url: URL,
         title: String,
-        preferredLongEdge: @escaping () -> CGFloat
+        preferredLongEdge: CGFloat
     ) {
         observeExclusiveFullScreenIfNeeded()
         observeTitlesIfNeeded()
@@ -29,22 +28,12 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         }
 
         let visibleFrame = targetVisibleFrame()
-        let pixelSize = ImageThumbnail.pixelSize(of: url) ?? CGSize(width: 1_200, height: 900)
-        let imageSize = NSImage(contentsOf: url)?.size ?? pixelSize
-        let initialSize = PinnedImageLayout.initialSize(
-            imageSize: imageSize,
+        let geometry = PinnedImageGeometry(
+            imageSize: ImageThumbnail.pixelSize(of: url) ?? CGSize(width: 1_200, height: 900),
             visibleFrame: visibleFrame,
-            preferredLongEdge: preferredLongEdge()
+            preferredLongEdge: preferredLongEdge
         )
-        let panel = makePanel(
-            title: title,
-            initialSize: initialSize,
-            aspectRatio: imageSize,
-            minSize: PinnedImageLayout.minimumSize(
-                imageSize: imageSize,
-                visibleFrame: visibleFrame
-            )
-        )
+        let panel = makePanel(title: title, geometry: geometry)
         panel.onClose = { [weak self] in
             self?.close(itemID)
         }
@@ -54,11 +43,14 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
                 itemID: itemID,
                 url: url,
                 decodeMaxPixel: imageDecodeMaxPixel,
-                onClose: { [weak self] in self?.close(itemID) }
+                onClose: { [weak self] in self?.close(itemID) },
+                onZoomOut: { [weak panel] in panel?.zoom(by: -0.2) },
+                onResetSize: { [weak panel] in panel?.resetSize() },
+                onZoomIn: { [weak panel] in panel?.zoom(by: 0.2) }
             ),
             in: panel
         )
-        present(panel, size: initialSize, in: visibleFrame, itemID: itemID)
+        present(panel, itemID: itemID)
     }
 
     private var imageDecodeMaxPixel: CGFloat {
@@ -87,12 +79,12 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
 
     /// Bring an existing panel forward unless its display is in exclusive fullscreen.
     private func reveal(_ panel: PinnedImagePanel, itemID: ClipboardItem.ID) {
+        panel.fitToScreen()
         if hidesForExclusiveFullScreen(panel) {
             hideForFullscreen(itemID, panel)
             return
         }
         hiddenForFullscreen.remove(itemID)
-        applyVisibleAlpha(to: panel)
         activate(panel)
     }
 
@@ -101,29 +93,12 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
             let itemID = itemID(for: panel)
         else { return }
         panels.removeValue(forKey: itemID)
-        closingPanels.remove(itemID)
         hiddenForFullscreen.remove(itemID)
     }
 
     private func close(_ itemID: ClipboardItem.ID) {
         hiddenForFullscreen.remove(itemID)
-        guard let panel = panels[itemID], closingPanels.insert(itemID).inserted else { return }
-
-        panel.ignoresMouseEvents = true
-        let targetFrame = Self.scaledFrame(panel.frame, scale: 0.96)
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.14
-            panel.animator().alphaValue = 0
-            panel.animator().setFrame(targetFrame, display: true)
-        }
-
-        Task { @MainActor [weak self, weak panel] in
-            try? await Task.sleep(for: .milliseconds(150))
-            guard let self, let panel,
-                closingPanels.contains(itemID), panels[itemID] === panel
-            else { return }
-            panel.close()
-        }
+        panels[itemID]?.close()
     }
 
     private func itemID(for panel: PinnedImagePanel) -> ClipboardItem.ID? {
@@ -139,13 +114,6 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
             }
     }
 
-    private let visibleAlpha: CGFloat = 1
-
-    private func applyVisibleAlpha(to panel: PinnedImagePanel) {
-        panel.alphaValue = visibleAlpha
-        panel.ignoresMouseEvents = false
-    }
-
     private func syncPanelTitles() {
         let locale = AppCore.shared.settings.language.locale
         let store = AppCore.shared.clipboardStore
@@ -157,18 +125,14 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func makePanel(
-        title: String,
-        initialSize: CGSize,
-        aspectRatio: CGSize?,
-        minSize: CGSize
-    ) -> PinnedImagePanel {
+    private func makePanel(title: String, geometry: PinnedImageGeometry) -> PinnedImagePanel {
         let panel = PinnedImagePanel(
-            contentRect: NSRect(origin: .zero, size: initialSize),
-            styleMask: [.borderless, .resizable],
+            contentRect: geometry.frame,
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
+        panel.geometry = geometry
         panel.title = title
         panel.isFloatingPanel = true
         panel.level = .floating
@@ -181,10 +145,6 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         panel.hasShadow = true
         panel.animationBehavior = .none
         panel.isReleasedWhenClosed = false
-        if let aspectRatio {
-            panel.contentAspectRatio = aspectRatio
-        }
-        panel.contentMinSize = minSize
         panel.delegate = self
         return panel
     }
@@ -199,34 +159,9 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         panel.contentView = hosting
     }
 
-    private func present(
-        _ panel: PinnedImagePanel,
-        size: CGSize,
-        in visibleFrame: CGRect,
-        itemID: ClipboardItem.ID
-    ) {
-        let finalFrame = NSRect(
-            x: visibleFrame.midX - size.width / 2,
-            y: visibleFrame.midY - size.height / 2,
-            width: size.width,
-            height: size.height
-        )
-        panel.alphaValue = 0
-        panel.setFrame(Self.scaledFrame(finalFrame, scale: 0.96), display: false)
+    private func present(_ panel: PinnedImagePanel, itemID: ClipboardItem.ID) {
         panels[itemID] = panel
-        if hidesForExclusiveFullScreen(panel) {
-            panel.setFrame(finalFrame, display: false)
-            applyVisibleAlpha(to: panel)
-            hideForFullscreen(itemID, panel)
-            return
-        }
-        activate(panel)
-        panel.ignoresMouseEvents = visibleAlpha <= 0
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.18
-            panel.animator().alphaValue = visibleAlpha
-            panel.animator().setFrame(finalFrame, display: true)
-        }
+        reveal(panel, itemID: itemID)
     }
 
     private func observeExclusiveFullScreenIfNeeded() {
@@ -269,6 +204,7 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
                     queue: .main,
                     using: { [weak self] (_: Notification) -> Void in
                         MainActor.assumeIsolated {
+                            self?.panels.values.forEach { $0.fitToScreen() }
                             self?.handleSpaceChange()
                             return
                         }
@@ -295,11 +231,9 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
 
     private func syncFullscreenVisibility() {
         for (itemID, panel) in panels {
-            guard !closingPanels.contains(itemID) else { continue }
             if hidesForExclusiveFullScreen(panel) {
                 hideForFullscreen(itemID, panel)
             } else if hiddenForFullscreen.remove(itemID) != nil {
-                applyVisibleAlpha(to: panel)
                 panel.orderFrontRegardless()
             }
         }
@@ -333,16 +267,6 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
     private func targetScreen() -> NSScreen? {
         let mouse = NSEvent.mouseLocation
         return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
-    }
-
-    private static func scaledFrame(_ frame: NSRect, scale: CGFloat) -> NSRect {
-        let size = CGSize(width: frame.width * scale, height: frame.height * scale)
-        return NSRect(
-            x: frame.midX - size.width / 2,
-            y: frame.midY - size.height / 2,
-            width: size.width,
-            height: size.height
-        )
     }
 }
 
@@ -406,51 +330,5 @@ private enum ExclusiveFullScreen {
             width: bounds.width,
             height: bounds.height
         )
-    }
-}
-
-/// Pure sizing policy kept separate from AppKit window ownership so unusual image ratios and
-/// multi-display bounds remain deterministic.
-enum PinnedImageLayout {
-    static func initialSize(
-        imageSize: CGSize,
-        visibleFrame: CGRect,
-        preferredLongEdge: CGFloat
-    ) -> CGSize {
-        let natural = normalized(imageSize)
-        let maxSize = CGSize(
-            width: max(visibleFrame.width - 24, 1),
-            height: max(visibleFrame.height - 24, 1)
-        )
-        let preferredScale = max(preferredLongEdge, 1) / max(natural.width, natural.height)
-        let screenScale = min(maxSize.width / natural.width, maxSize.height / natural.height)
-        let scale = max(min(preferredScale, screenScale, 1), 0.001)
-        return rounded(CGSize(width: natural.width * scale, height: natural.height * scale))
-    }
-
-    static func minimumSize(imageSize: CGSize, visibleFrame: CGRect) -> CGSize {
-        let natural = normalized(imageSize)
-        let longSideScale = 160 / max(natural.width, natural.height)
-        // The 28-point close control has 10-point card insets on both sides. Never let either
-        // image dimension fall below 48 points, even for extreme panoramas or long screenshots.
-        let shortSideScale = 48 / min(natural.width, natural.height)
-        let desiredScale = max(longSideScale, shortSideScale)
-        let displayScale = min(
-            visibleFrame.width * 0.9 / natural.width,
-            visibleFrame.height * 0.9 / natural.height
-        )
-        let scale = max(min(desiredScale, displayScale), 0.001)
-        return rounded(CGSize(width: natural.width * scale, height: natural.height * scale))
-    }
-
-    private static func normalized(_ size: CGSize) -> CGSize {
-        CGSize(
-            width: max(size.width, 1),
-            height: max(size.height, 1)
-        )
-    }
-
-    private static func rounded(_ size: CGSize) -> CGSize {
-        CGSize(width: max(size.width.rounded(), 1), height: max(size.height.rounded(), 1))
     }
 }

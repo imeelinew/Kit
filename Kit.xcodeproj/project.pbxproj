@@ -50,6 +50,8 @@
 		CA4000000000000000000001 /* ClipboardTableCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA4000000000000000000002 /* ClipboardTableCells.swift */; };
 		CA5000000000000000000001 /* ClipboardPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5000000000000000000002 /* ClipboardPreview.swift */; };
 		CA7000000000000000000001 /* PinnedImageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7000000000000000000002 /* PinnedImageViews.swift */; };
+		CA7200000000000000000001 /* PinnedImagePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7200000000000000000002 /* PinnedImagePanel.swift */; };
+		CA7100000000000000000001 /* PinnedImageGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7100000000000000000002 /* PinnedImageGeometry.swift */; };
 		CA8000000000000000000001 /* ClipboardSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8000000000000000000002 /* ClipboardSearch.swift */; };
 		CA9000000000000000000001 /* ClipboardSQLite.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA9000000000000000000002 /* ClipboardSQLite.swift */; };
 		BB41A0000000000000000002 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB41A0000000000000000001 /* MenuBarController.swift */; };
@@ -122,6 +124,8 @@
 		CA4000000000000000000002 /* ClipboardTableCells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTableCells.swift; sourceTree = "<group>"; };
 		CA5000000000000000000002 /* ClipboardPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPreview.swift; sourceTree = "<group>"; };
 		CA7000000000000000000002 /* PinnedImageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImageViews.swift; sourceTree = "<group>"; };
+		CA7200000000000000000002 /* PinnedImagePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImagePanel.swift; sourceTree = "<group>"; };
+		CA7100000000000000000002 /* PinnedImageGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImageGeometry.swift; sourceTree = "<group>"; };
 		CA8000000000000000000002 /* ClipboardSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSearch.swift; sourceTree = "<group>"; };
 		CA9000000000000000000002 /* ClipboardSQLite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSQLite.swift; sourceTree = "<group>"; };
 		CE39A396D47F5CC467AA9FA1 /* KitSettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KitSettingsWindowController.swift; sourceTree = "<group>"; };
@@ -164,6 +168,8 @@
 				19FB08D4568B366C9339712C /* ImageQuickLook.swift */,
 				A1B2C3D4E5F60718293A4B5C /* PinnedImageWindow.swift */,
 				CA7000000000000000000002 /* PinnedImageViews.swift */,
+				CA7200000000000000000002 /* PinnedImagePanel.swift */,
+				CA7100000000000000000002 /* PinnedImageGeometry.swift */,
 			);
 			path = Clipboard;
 			sourceTree = "<group>";
@@ -435,6 +441,8 @@
 				2E9B78A0D95CFE4179A41718 /* ImageQuickLook.swift in Sources */,
 				B1C2D3E4F5061728394A5B6C /* PinnedImageWindow.swift in Sources */,
 				CA7000000000000000000001 /* PinnedImageViews.swift in Sources */,
+				CA7200000000000000000001 /* PinnedImagePanel.swift in Sources */,
+				CA7100000000000000000001 /* PinnedImageGeometry.swift in Sources */,
 				F1E4B87385492A86C5F5CDFE /* ImageThumbnail.swift in Sources */,
 				EE9F57DEDBD7C12EA72E7D9E /* InputSourceSwitcher.swift in Sources */,
 				2637AC2FB6592F5FCA9ADA7C /* LaunchAtLogin.swift in Sources */,

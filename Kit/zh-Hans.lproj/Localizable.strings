@@ -131,3 +131,8 @@
 "3 Months" = "3 个月";
 "6 Months" = "6 个月";
 "Sound Effect %d" = "音效%d";
+
+/* Pinned card sizing */
+"Zoom Out" = "缩小";
+"Reset Size" = "恢复尺寸";
+"Zoom In" = "放大";

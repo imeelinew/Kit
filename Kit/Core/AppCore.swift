@@ -231,14 +231,12 @@ final class AppCore {
     func pinToScreen(_ item: ClipboardItem, dismissPalette: Bool = true) {
         guard item.kind == .image, let url = clipboardStore.imageURL(for: item) else { return }
         let title = item.displayTitle(locale: settings.language.locale)
-        if dismissPalette { hidePalette() }
+        if dismissPalette { hidePalette(restoreFocus: false) }
         pinnedImageWindows.show(
             itemID: item.id,
             url: url,
             title: title,
-            preferredLongEdge: { [weak settings] in
-                settings?.pinnedImageSize.longestEdge ?? PinnedImageSize.medium.longestEdge
-            }
+            preferredLongEdge: settings.pinnedImageSize.longestEdge
         )
     }
 

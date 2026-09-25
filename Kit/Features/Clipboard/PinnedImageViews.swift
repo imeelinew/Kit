@@ -1,103 +1,5 @@
 import AppKit
-import Carbon.HIToolbox
 import SwiftUI
-
-final class PinnedImagePanel: NSPanel {
-    var onClose: (() -> Void)?
-
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { false }
-
-    override func sendEvent(_ event: NSEvent) {
-        if event.type == .keyDown {
-            if isEditingTitle {
-                super.sendEvent(event)
-                return
-            }
-            if isCloseShortcut(event) {
-                if !event.isARepeat {
-                    onClose?()
-                }
-                return
-            }
-        }
-        if event.type == .magnify {
-            resize(
-                by: max(1 + event.magnification, 0.1),
-                anchorInWindow: event.locationInWindow
-            )
-            return
-        }
-        super.sendEvent(event)
-    }
-
-    private var isEditingTitle: Bool {
-        (firstResponder as? NSTextView)?.isEditable == true
-    }
-
-    func resize(by requestedScale: CGFloat, anchorInWindow requestedAnchor: NSPoint? = nil) {
-        guard requestedScale.isFinite, requestedScale > 0, requestedScale != 1 else { return }
-
-        let current = frame
-        guard current.width > 0, current.height > 0 else { return }
-
-        let visibleFrame = resizeVisibleFrame()
-        let maximumScale = min(
-            visibleFrame.width / current.width,
-            visibleFrame.height / current.height
-        )
-        guard maximumScale.isFinite, maximumScale > 0 else { return }
-        let minimumScale = min(max(
-            contentMinSize.width / current.width,
-            contentMinSize.height / current.height
-        ), maximumScale)
-        let scale = min(max(requestedScale, minimumScale), maximumScale)
-        let size = CGSize(width: current.width * scale, height: current.height * scale)
-
-        let rawAnchor = requestedAnchor ?? NSPoint(x: current.width / 2, y: current.height / 2)
-        let anchor = NSPoint(
-            x: min(max(rawAnchor.x, 0), current.width),
-            y: min(max(rawAnchor.y, 0), current.height)
-        )
-        let unitAnchor = NSPoint(x: anchor.x / current.width, y: anchor.y / current.height)
-        let screenAnchor = NSPoint(x: current.minX + anchor.x, y: current.minY + anchor.y)
-        let proposedOrigin = NSPoint(
-            x: screenAnchor.x - size.width * unitAnchor.x,
-            y: screenAnchor.y - size.height * unitAnchor.y
-        )
-        let origin = NSPoint(
-            x: min(max(proposedOrigin.x, visibleFrame.minX), visibleFrame.maxX - size.width),
-            y: min(max(proposedOrigin.y, visibleFrame.minY), visibleFrame.maxY - size.height)
-        )
-        let resizedFrame = NSRect(origin: origin, size: size)
-        guard !resizedFrame.nearlyEquals(current) else { return }
-
-        setFrame(resizedFrame, display: true)
-        // Magnify events arrive much faster than SwiftUI's normal display pass. Keep the hosting
-        // tree and its clipping layer synchronized with every window frame so stale bounds cannot
-        // crop the image or card controls mid-gesture.
-        contentView?.layoutSubtreeIfNeeded()
-    }
-
-    private func resizeVisibleFrame() -> NSRect {
-        let visible = screen?.visibleFrame ?? NSScreen.main?.visibleFrame
-            ?? NSRect(x: 0, y: 0, width: 1_280, height: 800)
-        let inset = min(12, max(min(visible.width, visible.height) / 4, 0))
-        return visible.insetBy(dx: inset, dy: inset)
-    }
-
-    private func isCloseShortcut(_ event: NSEvent) -> Bool {
-        event.keyCode == UInt16(kVK_ANSI_W)
-            && event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command
-    }
-}
-
-private extension NSRect {
-    func nearlyEquals(_ other: NSRect, tolerance: CGFloat = 0.01) -> Bool {
-        abs(minX - other.minX) <= tolerance && abs(minY - other.minY) <= tolerance
-            && abs(width - other.width) <= tolerance && abs(height - other.height) <= tolerance
-    }
-}
 
 @MainActor
 private struct PinnedCardBackground: View {
@@ -113,6 +15,9 @@ struct PinnedImageContent: View {
     let url: URL
     let decodeMaxPixel: CGFloat
     let onClose: () -> Void
+    let onZoomOut: () -> Void
+    let onResetSize: () -> Void
+    let onZoomIn: () -> Void
 
     @State private var image: NSImage?
     @State private var loadFailed = false
@@ -152,6 +57,16 @@ struct PinnedImageContent: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .bottom) {
+            HStack(spacing: 8) {
+                PinnedCardButton(systemName: "minus", label: "Zoom Out", action: onZoomOut)
+                PinnedCardButton(
+                    systemName: "arrow.counterclockwise", label: "Reset Size", action: onResetSize
+                )
+                PinnedCardButton(systemName: "plus", label: "Zoom In", action: onZoomIn)
+            }
+            .padding(10)
+        }
         .contentShape(Rectangle())
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .ignoresSafeArea()

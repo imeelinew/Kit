@@ -131,3 +131,8 @@
 "3 Months" = "3 Months";
 "6 Months" = "6 Months";
 "Sound Effect %d" = "Sound Effect %d";
+
+/* Pinned card sizing */
+"Zoom Out" = "Zoom Out";
+"Reset Size" = "Reset Size";
+"Zoom In" = "Zoom In";
