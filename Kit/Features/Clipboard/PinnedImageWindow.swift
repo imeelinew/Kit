@@ -40,11 +40,9 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
 
         install(
             PinnedImageContent(
-                itemID: itemID,
                 url: url,
                 decodeMaxPixel: imageDecodeMaxPixel,
-                onClose: { [weak self] in self?.close(itemID) },
-                onResetSize: { [weak panel] in panel?.resetSize() }
+                onClose: { [weak self] in self?.close(itemID) }
             ),
             in: panel
         )

@@ -12,12 +12,6 @@ final class PinnedImagePanel: NSPanel {
         applyGeometry()
     }
 
-    func resetSize() {
-        fitToScreen()
-        geometry?.reset(visibleFrame: visibleFrame)
-        applyGeometry()
-    }
-
     func fitToScreen() {
         // Window Server drags are asynchronous and may not deliver mouseUp. Adopt the actual
         // position before the next sizing action, while retaining the exact zoom center otherwise.

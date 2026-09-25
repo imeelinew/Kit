@@ -11,11 +11,9 @@ private struct PinnedCardBackground: View {
 
 @MainActor
 struct PinnedImageContent: View {
-    let itemID: ClipboardItem.ID
     let url: URL
     let decodeMaxPixel: CGFloat
     let onClose: () -> Void
-    let onResetSize: () -> Void
 
     @State private var image: NSImage?
     @State private var loadFailed = false
@@ -43,16 +41,7 @@ struct PinnedImageContent: View {
             PinnedImageDragSurface()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            PinnedCardChrome(
-                itemID: itemID,
-                trailingWidth: 28,
-                closeLabel: "Close Pinned Image",
-                onClose: onClose
-            ) {
-                PinnedCardButton(
-                    systemName: "arrow.counterclockwise", label: "Reset Size", action: onResetSize
-                )
-            }
+            PinnedCardChrome(closeLabel: "Close Pinned Image", onClose: onClose)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
@@ -65,56 +54,18 @@ struct PinnedImageContent: View {
     }
 }
 
-private struct PinnedCardChrome<Trailing: View>: View {
-    let itemID: ClipboardItem.ID
-    let trailingWidth: CGFloat
+private struct PinnedCardChrome: View {
     let closeLabel: LocalizedStringKey
     let onClose: () -> Void
-    @ViewBuilder var trailing: Trailing
 
     var body: some View {
-        GeometryReader { geometry in
-            let titleWidth = max(geometry.size.width - 2 * (trailingWidth + 8), 0)
-
-            ZStack {
-                PinnedCardTitle(itemID: itemID)
-                    .frame(width: titleWidth)
-                    .clipped()
-
-                PinnedCardButton(
-                    systemName: "xmark",
-                    label: closeLabel,
-                    action: onClose
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                trailing
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
-        }
-        .frame(height: 28)
+        PinnedCardButton(
+            systemName: "xmark",
+            label: closeLabel,
+            action: onClose
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
-        .frame(maxWidth: .infinity)
-    }
-}
-
-private struct PinnedCardTitle: View {
-    let itemID: ClipboardItem.ID
-
-    @ObservedObject private var store = AppCore.shared.clipboardStore
-    @ObservedObject private var settings = AppCore.shared.settings
-
-    private var title: String {
-        store.item(id: itemID)?.displayTitle(locale: settings.language.locale) ?? ""
-    }
-
-    var body: some View {
-        Text(title)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(.primary)
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .frame(minWidth: 0, maxWidth: 280)
     }
 }
 

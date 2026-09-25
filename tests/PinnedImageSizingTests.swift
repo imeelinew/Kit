@@ -38,6 +38,13 @@ struct PinnedImageSizingTests {
                 )
                 checkBounds(card.frame, in: desktop)
                 let center = card.center
+                let initial = card.frame
+                for _ in 0..<2_000 {
+                    card.zoom(by: 0.02, visibleFrame: desktop)
+                    card.zoom(by: -0.02, visibleFrame: desktop)
+                }
+                expect(near(card.frame.width, initial.width), "No accumulated size error")
+                expect(card.center == center, "No accumulated position error")
                 card.zoom(by: -1_000, visibleFrame: desktop)
                 checkBounds(card.frame, in: desktop)
                 let small = card.frame
@@ -49,14 +56,6 @@ struct PinnedImageSizingTests {
                 card.zoom(by: -0.01, visibleFrame: desktop)
                 expect(card.frame.width < large.width, "Immediate reversal from maximum")
                 expect(card.center == center, "Limits never move the center")
-                card.reset(visibleFrame: desktop)
-                let reset = card.frame
-                for _ in 0..<2_000 {
-                    card.zoom(by: 0.02, visibleFrame: desktop)
-                    card.zoom(by: -0.02, visibleFrame: desktop)
-                }
-                expect(near(card.frame.width, reset.width), "No accumulated size error")
-                expect(card.center == center, "No accumulated position error")
                 for delta: CGFloat in [.nan, .infinity, -.infinity] {
                     let before = card.frame
                     card.zoom(by: delta, visibleFrame: desktop)
@@ -75,15 +74,12 @@ struct PinnedImageSizingTests {
                     )
                     card.fit(visibleFrame: display, movedCenter: CGPoint(x: x, y: y))
                     let center = card.center
-                    let size = card.frame.size
                     for _ in 0..<1_000 {
                         card.zoom(by: 1, visibleFrame: display)
                         card.zoom(by: -1, visibleFrame: display)
                         checkBounds(card.frame, in: display)
                         expect(card.center == center, "No drift at corner")
                     }
-                    card.reset(visibleFrame: display)
-                    expect(near(card.frame.width, size.width), "Reset at corner")
                 }
             }
         }
@@ -129,6 +125,14 @@ struct PinnedImageSizingTests {
         expect(near(panel.frame.midX, original.midX, tolerance: 1), "AppKit center X stable")
         expect(near(panel.frame.midY, original.midY, tolerance: 1), "AppKit center Y stable")
         expect(near(panel.frame.width, original.width, tolerance: 1), "AppKit size stable")
+
+        // Window Server can move a panel without a mouseUp delivered to the drag view.
+        panel.setFrameOrigin(CGPoint(x: visible.minX + 80, y: visible.minY + 80))
+        let moved = panel.frame
+        panel.zoom(by: -0.1)
+        expect(near(panel.frame.midX, moved.midX, tolerance: 1), "Adopt dragged X before zoom")
+        expect(near(panel.frame.midY, moved.midY, tolerance: 1), "Adopt dragged Y before zoom")
+
         panel.zoom(by: -1_000)
         checkBounds(panel.frame, in: visible)
         panel.zoom(by: 1_000)
@@ -139,20 +143,9 @@ struct PinnedImageSizingTests {
         expect(
             near(hosting.frame.height, panel.frame.height, tolerance: 1),
             "Hosting height follows zoom")
-        panel.resetSize()
-
-        // Window Server can move a panel without a mouseUp delivered to the drag view.
-        panel.setFrameOrigin(CGPoint(x: visible.minX + 80, y: visible.minY + 80))
-        let moved = panel.frame
-        panel.zoom(by: -0.1)
-        expect(near(panel.frame.midX, moved.midX, tolerance: 1), "Adopt dragged X before zoom")
-        expect(near(panel.frame.midY, moved.midY, tolerance: 1), "Adopt dragged Y before zoom")
-        panel.resetSize()
-        expect(
-            near(panel.frame.width, geometry.baseSize.width, tolerance: 1), "Restore initial size")
         expect(!panel.styleMask.contains(.resizable), "Native resizing cannot bypass geometry")
         panel.close()
-        print("PASS: real NSPanel + NSHostingView, 500 round trips, drag then zoom, reset")
+        print("PASS: real NSPanel + NSHostingView, 500 round trips, drag then zoom")
     }
 
     @MainActor

@@ -49,10 +49,6 @@ struct PinnedImageGeometry {
         logarithmicScale = min(max(logarithmicScale + delta, log(minimum)), log(maximum))
     }
 
-    mutating func reset(visibleFrame: CGRect) {
-        zoom(by: -logarithmicScale, visibleFrame: visibleFrame)
-    }
-
     /// Reposition only after a deliberate drag or a display change, never during zooming.
     mutating func fit(visibleFrame: CGRect, movedCenter: CGPoint? = nil) {
         let bounds = Self.usableBounds(visibleFrame)
