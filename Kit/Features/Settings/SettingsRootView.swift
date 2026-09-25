@@ -17,15 +17,16 @@ enum SettingsTab: Int, CaseIterable, Hashable, Identifiable {
         }
     }
 
-    var symbolName: String {
+    /// Lucide icons in the asset catalog. Names follow lucide.dev.
+    var iconAsset: String {
         switch self {
-        case .general: return "gearshape"
-        case .shortcuts: return "keyboard"
-        case .appearance: return "eyeglasses"
-        case .sound: return "speaker.wave.2"
-        case .clipboard: return "clipboard"
-        case .history: return "clock"
-        case .about: return "info.circle"
+        case .general: return "lucide-settings"
+        case .shortcuts: return "lucide-keyboard"
+        case .appearance: return "lucide-sun-moon"
+        case .sound: return "lucide-volume-2"
+        case .clipboard: return "lucide-clipboard"
+        case .history: return "lucide-history"
+        case .about: return "lucide-info"
         }
     }
 }

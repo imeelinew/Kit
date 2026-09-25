@@ -103,8 +103,11 @@ private struct SettingsWindowRoot: View {
                     Label {
                         Text(LocalizedStringKey(tab.localizationKey))
                     } icon: {
-                        Image(systemName: tab.symbolName)
-                            .font(.system(size: 12, weight: .semibold))
+                        Image(tab.iconAsset)
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 16, height: 16)
                     }
                     .listItemTint(.preferred(Color.secondary))
                     .tag(tab)
