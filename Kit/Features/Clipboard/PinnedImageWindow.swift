@@ -44,9 +44,7 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
                 url: url,
                 decodeMaxPixel: imageDecodeMaxPixel,
                 onClose: { [weak self] in self?.close(itemID) },
-                onZoomOut: { [weak panel] in panel?.zoom(by: -0.2) },
-                onResetSize: { [weak panel] in panel?.resetSize() },
-                onZoomIn: { [weak panel] in panel?.zoom(by: 0.2) }
+                onResetSize: { [weak panel] in panel?.resetSize() }
             ),
             in: panel
         )

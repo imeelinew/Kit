@@ -15,9 +15,7 @@ struct PinnedImageContent: View {
     let url: URL
     let decodeMaxPixel: CGFloat
     let onClose: () -> Void
-    let onZoomOut: () -> Void
     let onResetSize: () -> Void
-    let onZoomIn: () -> Void
 
     @State private var image: NSImage?
     @State private var loadFailed = false
@@ -51,22 +49,12 @@ struct PinnedImageContent: View {
                 closeLabel: "Close Pinned Image",
                 onClose: onClose
             ) {
-                Color.clear
-                    .frame(width: 28, height: 28)
-                    .allowsHitTesting(false)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .bottom) {
-            HStack(spacing: 8) {
-                PinnedCardButton(systemName: "minus", label: "Zoom Out", action: onZoomOut)
                 PinnedCardButton(
                     systemName: "arrow.counterclockwise", label: "Reset Size", action: onResetSize
                 )
-                PinnedCardButton(systemName: "plus", label: "Zoom In", action: onZoomIn)
             }
-            .padding(10)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .ignoresSafeArea()
