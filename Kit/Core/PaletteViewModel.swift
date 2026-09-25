@@ -58,6 +58,7 @@ enum PaletteCommand: Equatable {
     case toggleActions
     case pinToScreen
     case revealInFinder
+    case cycleStack(Int)
     case toggleQuickLook
     case clearQuery
     case settings
@@ -466,6 +467,8 @@ final class PaletteViewModel {
                 item.kind == .image || item.kind == .path else { return true }
             overlay = .none
             core.revealClipboardItem(item)
+        case .cycleStack(let delta):
+            cycleStack(by: delta)
         case .toggleQuickLook:
             guard canToggleQuickLook else { return menuOpen }
             imageQuickLookOpen.toggle()
@@ -636,6 +639,20 @@ final class PaletteViewModel {
         if stackFilter == stack.id {
             applyStackFilter(nil)
         }
+    }
+
+    /// Clipboard is the first stop, then stacks in menu order. The list wraps.
+    private func cycleStack(by delta: Int) {
+        let destinations: [ClipboardStack.ID?] = [nil] + core.clipboardStore.stacks.map(\.id)
+        guard destinations.count > 1, delta != 0 else { return }
+        let current = destinations.firstIndex(of: stackFilter) ?? 0
+        let count = destinations.count
+        let next = ((current + delta) % count + count) % count
+        guard next != current else { return }
+        overlay = .none
+        menuSelection = 0
+        applyStackFilter(destinations[next])
+        onSearchFocusRequested?()
     }
 
     private func applyStackFilter(_ stackID: ClipboardStack.ID?) {

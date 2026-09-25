@@ -87,6 +87,12 @@ final class PalettePanel: NSPanel {
         if PaletteShortcut.showInFinder.matches(shortcut) {
             return handleOnce(.revealInFinder, event: event)
         }
+        if PaletteShortcut.showNextStack.matches(shortcut) {
+            return paletteViewModel.handle(.cycleStack(1))
+        }
+        if PaletteShortcut.showPreviousStack.matches(shortcut) {
+            return paletteViewModel.handle(.cycleStack(-1))
+        }
 
         if modifiers == .command {
             switch keyCode {

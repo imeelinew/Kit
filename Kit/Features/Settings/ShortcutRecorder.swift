@@ -16,6 +16,14 @@ extension KeyboardShortcuts.Name {
     )
     static let palettePinToScreen = Self("palettePinToScreen")
     static let paletteShowInFinder = Self("paletteShowInFinder")
+    static let paletteShowNextStack = Self(
+        "paletteShowNextStack",
+        default: .init(.downArrow, modifiers: [.option])
+    )
+    static let paletteShowPreviousStack = Self(
+        "paletteShowPreviousStack",
+        default: .init(.upArrow, modifiers: [.option])
+    )
     static let pinnedImageClose = Self(
         "pinnedImageClose",
         default: .init(.w, modifiers: [.command])
@@ -39,11 +47,15 @@ enum PaletteShortcut {
     case copyToClipboard
     case pinToScreen
     case showInFinder
+    case showNextStack
+    case showPreviousStack
 
     private static let actionsName = local(.paletteActions)
     private static let copyToClipboardName = local(.paletteCopyToClipboard)
     private static let pinToScreenName = local(.palettePinToScreen)
     private static let showInFinderName = local(.paletteShowInFinder)
+    private static let showNextStackName = local(.paletteShowNextStack)
+    private static let showPreviousStackName = local(.paletteShowPreviousStack)
 
     var name: KeyboardShortcuts.Name {
         switch self {
@@ -51,6 +63,8 @@ enum PaletteShortcut {
         case .copyToClipboard: Self.copyToClipboardName
         case .pinToScreen: Self.pinToScreenName
         case .showInFinder: Self.showInFinderName
+        case .showNextStack: Self.showNextStackName
+        case .showPreviousStack: Self.showPreviousStackName
         }
     }
 
@@ -135,6 +149,8 @@ struct ShortcutsSettingsView: View {
                 shortcutRow("Copy to Clipboard", shortcut: .copyToClipboard)
                 shortcutRow("Pin to Screen", shortcut: .pinToScreen)
                 shortcutRow("Show in Finder", shortcut: .showInFinder)
+                shortcutRow("Show Next Stack", shortcut: .showNextStack)
+                shortcutRow("Show Previous Stack", shortcut: .showPreviousStack)
             }
 
             Section("Pinned Images") {
