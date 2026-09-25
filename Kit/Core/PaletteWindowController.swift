@@ -109,6 +109,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         panel.orderOut(nil)
         hiding = false
         ImageThumbnail.purgePreviews()
+        core.palette.prepareForNextPresentation()
         if restoreFocus { previousApp?.activate() }
     }
 
@@ -151,7 +152,11 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         panel?.orderOut(nil)
         panel = nil
         panelStyle = nil
-        if visible { show() }
+        if visible {
+            show()
+        } else {
+            prewarm()
+        }
     }
 
     private func positionedFrame() -> NSRect? {

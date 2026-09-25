@@ -112,22 +112,14 @@ struct ClipboardPreview: View {
     @ViewBuilder
     private func content(for item: ClipboardItem, payload: ClipboardPreviewPayload?) -> some View {
         switch item.kind {
-        case .text, .path:
-            AttributedTextPreview(
-                attributed: SearchHighlight.attributed(item.text ?? "", query: query)
-            )
+        case .text, .path, .link:
+            ClipboardTextPreview(text: item.text ?? "", query: query).equatable()
         case .markdown:
             if settings.renderMarkdown {
                 MarkdownPreview(source: item.text ?? "", query: query)
             } else {
-                AttributedTextPreview(
-                    attributed: SearchHighlight.attributed(item.text ?? "", query: query)
-                )
+                ClipboardTextPreview(text: item.text ?? "", query: query).equatable()
             }
-        case .link:
-            AttributedTextPreview(
-                attributed: SearchHighlight.attributed(item.text ?? "", query: query)
-            )
         case .code:
             CodePreview(code: item.text ?? "", query: query)
         case .image:
@@ -162,6 +154,16 @@ struct ClipboardPreview: View {
                 .allowsHitTesting(false)
             }
         }
+    }
+}
+
+/// Selection, footer and metadata changes must not reformat unchanged preview text.
+private struct ClipboardTextPreview: View, Equatable {
+    let text: String
+    let query: String
+
+    var body: some View {
+        AttributedTextPreview(attributed: SearchHighlight.attributed(text, query: query))
     }
 }
 

@@ -279,12 +279,29 @@ final class PaletteViewModel {
         menuSelection = 0
     }
 
-    func prepare() async {
-        overlay = .none
-        menuSelection = 0
-        imageQuickLookOpen = false
-        if !query.isEmpty { query = "" }
+    /// Reset while hidden so clearing a previous search does not delay the next shortcut.
+    func prepareForNextPresentation() {
+        resetPresentationState()
         scrollIntent = ScrollIntent(kind: .top)
+        if searchReady { selectFirstResult() }
+    }
+
+    private func resetPresentationState() {
+        if overlay != .none { overlay = .none }
+        if menuSelection != 0 { menuSelection = 0 }
+        if imageQuickLookOpen { imageQuickLookOpen = false }
+        if !query.isEmpty { query = "" }
+    }
+
+    private func selectFirstResult() {
+        let firstID = results.first?.id
+        if selectedID != firstID { selectedID = firstID }
+        let payload = results.first.flatMap { ClipboardPreviewPayload.cached(for: $0) }
+        if preparedPreview !== payload { preparedPreview = payload }
+    }
+
+    func prepare() async {
+        resetPresentationState()
 
         // A revision can replace either the search or the first item while its image loads.
         // Hold the prepared payload strongly until SwiftUI has consumed the first frame.
@@ -293,7 +310,7 @@ final class PaletteViewModel {
                 await task.value
                 guard !Task.isCancelled else { return }
             }
-            selectedID = results.first?.id
+            selectFirstResult()
             guard let item = selectedItem else {
                 preparedPreview = nil
                 return
@@ -302,7 +319,7 @@ final class PaletteViewModel {
                 for: item, imageURL: core.clipboardStore.imageURL(for: item))
             guard !Task.isCancelled else { return }
             guard searchTask == nil, results.first?.id == item.id else { continue }
-            preparedPreview = payload
+            if preparedPreview !== payload { preparedPreview = payload }
             return
         }
     }
