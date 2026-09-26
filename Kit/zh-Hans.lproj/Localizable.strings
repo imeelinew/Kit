@@ -100,6 +100,8 @@
 "Show in Finder" = "在 Finder 中显示";
 "Show Next Stack" = "显示下一个 Stack";
 "Show Previous Stack" = "显示上一个 Stack";
+"Show Next Type" = "显示下一个类型";
+"Show Previous Type" = "显示上一个类型";
 "Show Menu Bar Icon" = "显示菜单栏图标";
 "Simplified Chinese" = "简体中文";
 "Size" = "大小";

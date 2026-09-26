@@ -24,6 +24,14 @@ extension KeyboardShortcuts.Name {
         "paletteShowPreviousStack",
         default: .init(.upArrow, modifiers: [.option])
     )
+    static let paletteShowNextType = Self(
+        "paletteShowNextType",
+        default: .init(.downArrow, modifiers: [.option, .command])
+    )
+    static let paletteShowPreviousType = Self(
+        "paletteShowPreviousType",
+        default: .init(.upArrow, modifiers: [.option, .command])
+    )
 }
 
 enum PaletteShortcut {
@@ -33,6 +41,8 @@ enum PaletteShortcut {
     case showInFinder
     case showNextStack
     case showPreviousStack
+    case showNextType
+    case showPreviousType
 
     private static let actionsName = local(.paletteActions)
     private static let copyToClipboardName = local(.paletteCopyToClipboard)
@@ -40,6 +50,8 @@ enum PaletteShortcut {
     private static let showInFinderName = local(.paletteShowInFinder)
     private static let showNextStackName = local(.paletteShowNextStack)
     private static let showPreviousStackName = local(.paletteShowPreviousStack)
+    private static let showNextTypeName = local(.paletteShowNextType)
+    private static let showPreviousTypeName = local(.paletteShowPreviousType)
 
     var name: KeyboardShortcuts.Name {
         switch self {
@@ -49,6 +61,8 @@ enum PaletteShortcut {
         case .showInFinder: Self.showInFinderName
         case .showNextStack: Self.showNextStackName
         case .showPreviousStack: Self.showPreviousStackName
+        case .showNextType: Self.showNextTypeName
+        case .showPreviousType: Self.showPreviousTypeName
         }
     }
 
@@ -103,6 +117,8 @@ struct ShortcutsSettingsView: View {
                 shortcutRow("Show in Finder", shortcut: .showInFinder)
                 shortcutRow("Show Next Stack", shortcut: .showNextStack)
                 shortcutRow("Show Previous Stack", shortcut: .showPreviousStack)
+                shortcutRow("Show Next Type", shortcut: .showNextType)
+                shortcutRow("Show Previous Type", shortcut: .showPreviousType)
             }
         }
     }

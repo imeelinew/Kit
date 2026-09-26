@@ -59,6 +59,7 @@ enum PaletteCommand: Equatable {
     case pinToScreen
     case revealInFinder
     case cycleStack(Int)
+    case cycleType(Int)
     case toggleQuickLook
     case clearQuery
     case settings
@@ -469,6 +470,8 @@ final class PaletteViewModel {
             core.revealClipboardItem(item)
         case .cycleStack(let delta):
             cycleStack(by: delta)
+        case .cycleType(let delta):
+            cycleType(by: delta)
         case .toggleQuickLook:
             guard canToggleQuickLook else { return menuOpen }
             imageQuickLookOpen.toggle()
@@ -652,6 +655,20 @@ final class PaletteViewModel {
         overlay = .none
         menuSelection = 0
         applyStackFilter(destinations[next])
+        onSearchFocusRequested?()
+    }
+
+    /// All Types is the first stop, then each kind in menu order. The list wraps.
+    private func cycleType(by delta: Int) {
+        let destinations = ClipboardKindFilter.allCases
+        guard destinations.count > 1, delta != 0 else { return }
+        let current = destinations.firstIndex(of: kindFilter) ?? 0
+        let count = destinations.count
+        let next = ((current + delta) % count + count) % count
+        guard next != current else { return }
+        overlay = .none
+        menuSelection = 0
+        applyKindFilter(destinations[next])
         onSearchFocusRequested?()
     }
 
