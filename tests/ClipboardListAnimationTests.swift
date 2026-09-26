@@ -145,11 +145,13 @@ struct ClipboardListAnimationTests {
         fixture.scroll = ScrollIntent(kind: .follow)
         fixture.update([item("restored")] + many)
         settle()
+        NSLog("DIAG afterInsert: probe=\(selectionScrollsItself) rows=\(table.numberOfRows) selRow=\(table.selectedRow) row0=\(table.rect(ofRow: 0)) vis=\(table.visibleRect) origin=\(table.enclosingScrollView!.contentView.bounds.origin.y) reduceMotion=\(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) windowVisible=\(window.isVisible)")
         if !selectionScrollsItself {
             precondition(!table.visibleRect.intersects(table.rect(ofRow: 0)),
                          "The follow scroll defers past the animated insert")
         }
         settle(0.4)
+        NSLog("DIAG afterWait: row0=\(table.rect(ofRow: 0)) vis=\(table.visibleRect) origin=\(table.enclosingScrollView!.contentView.bounds.origin.y)")
         precondition(table.visibleRect.intersects(table.rect(ofRow: 0)),
                      "The deferred follow scroll completes")
 
