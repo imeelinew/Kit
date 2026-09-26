@@ -275,7 +275,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 applyingSelection = true
                 updateRows(
                     from: previousRows, in: tableView,
-                    animate: !appearanceChanged && lastScroll == scroll
+                    animate: !appearanceChanged && (lastScroll == scroll || scroll.kind == .follow)
                         && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
                 if appearanceChanged { updateVisibleText(in: tableView) }
             } else if appearanceChanged {

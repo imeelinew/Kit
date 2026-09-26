@@ -46,8 +46,11 @@ Press `Option + W` to show or hide the palette. Type to filter history, move wit
 | `⌘ Return` | Copy the selected item |
 | `Space` | Preview an image |
 | `Backspace` | Delete the selected item when the search is empty (or from its action menu) |
+| `⌘ Z` | Undo the last deletion; after typing, undo the text edit first |
 
 The action menu also lets you paste while keeping the palette open, reveal an image in Finder, or delete an item. You can record a different global shortcut in Settings.
+
+Deletion undo keeps the last 20 entries for the current app session, including images and Stack membership. Restored entries retain their original timestamps. Clearing history, deleting a Stack, or expiration removes the corresponding undo records.
 
 ## Privacy and Permissions
 

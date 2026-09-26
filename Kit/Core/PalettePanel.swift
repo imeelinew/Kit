@@ -60,6 +60,17 @@ final class PalettePanel: NSPanel {
         }
         let shortcut = KeyboardShortcuts.Shortcut(event: event)
 
+        if modifiers == .command, keyCode == kVK_ANSI_Z {
+            if event.isARepeat { return true }
+            if !paletteViewModel.menuOpen {
+                if let editor = firstResponder as? NSTextView, editor.hasMarkedText() {
+                    return false
+                }
+                if !paletteViewModel.prefersDeletionUndo, undoTextEdit() { return true }
+            }
+            return paletteViewModel.handle(.undoDelete)
+        }
+
         if modifiers == .command {
             switch keyCode {
             case kVK_ANSI_Comma:
@@ -171,6 +182,9 @@ final class PalettePanel: NSPanel {
         }
         if modifiers == .command {
             switch keyCode {
+            case kVK_ANSI_Z:
+                _ = undoTextEdit()
+                return true
             case kVK_ANSI_C, kVK_ANSI_X, kVK_ANSI_V, kVK_ANSI_A:
                 return handleEditingShortcut(keyCode)
             default:
@@ -225,6 +239,16 @@ final class PalettePanel: NSPanel {
         guard let editor = firstResponder as? NSTextView else { return }
         editor.insertionPointColor = hidden ? .clear : .textColor
         editor.updateInsertionPointStateAndRestartTimer(!hidden)
+    }
+
+    /// Search edits take precedence after typing; a just-deleted entry takes precedence
+    /// even when it was deleted from filtered results with the search editor focused.
+    private func undoTextEdit() -> Bool {
+        guard let editor = firstResponder as? NSTextView, editor.isEditable,
+            !editor.hasMarkedText(), let manager = editor.undoManager, manager.canUndo
+        else { return false }
+        manager.undo()
+        return true
     }
 
     /// This accessory app has no visible Edit menu, so route standard editing commands to the

@@ -7,7 +7,7 @@ final class AppCore {
 
     let settings = AppSettings()
     let updateService = UpdateService()
-    let clipboardStore = ClipboardStore()
+    let clipboardStore: ClipboardStore
     let clipboardManager: ClipboardManager
     lazy var palette = PaletteViewModel(core: self)
     let systemClipboardHistory = SystemClipboardHistory()
@@ -26,7 +26,12 @@ final class AppCore {
     private var clipboardResumeTask: Task<Void, Never>?
     private var clipboardShortcutIsDown = false
 
-    private init() {
+    private convenience init() {
+        self.init(clipboardStore: ClipboardStore())
+    }
+
+    init(clipboardStore: ClipboardStore) {
+        self.clipboardStore = clipboardStore
         clipboardManager = ClipboardManager(store: clipboardStore, settings: settings)
     }
 

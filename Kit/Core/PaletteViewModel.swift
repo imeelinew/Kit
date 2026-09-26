@@ -55,6 +55,7 @@ enum PaletteCommand: Equatable {
     case activate
     case copy
     case delete
+    case undoDelete
     case cancel
     case toggleActions
     case pinToScreen
@@ -203,6 +204,8 @@ final class PaletteViewModel {
     @ObservationIgnored private var loadMoreTask: Task<Void, Never>?
     @ObservationIgnored private var nextCursor: ClipboardSearchCursor?
     @ObservationIgnored private var loadedPageCount = 1
+    @ObservationIgnored private var pendingRestoredItemID: ClipboardItem.ID?
+    private var deletionWasLastEdit = false
     @ObservationIgnored private var revisionObserver: AnyCancellable?
 
     init(core: AppCore) {
@@ -217,6 +220,8 @@ final class PaletteViewModel {
     }
 
     var menuOpen: Bool { overlay.isMenu }
+
+    var prefersDeletionUndo: Bool { deletionWasLastEdit && core.clipboardStore.canUndoDeletion }
 
     /// At an empty query, Space is reserved for Quick Look instead of starting blank search text.
     var canToggleQuickLook: Bool {
@@ -463,6 +468,9 @@ final class PaletteViewModel {
                 menuOpen || query.isEmpty else { return true }
             overlay = .none
             perform(.delete(item))
+        case .undoDelete:
+            guard !isNamingStack else { return true }
+            undoDeletion()
         case .cancel:
             if imageQuickLookOpen {
                 imageQuickLookOpen = false
@@ -578,7 +586,11 @@ final class PaletteViewModel {
             let removedIndex = selectionIndex
             imageQuickLookOpen = false
             ImageQuickLook.close()
-            core.clipboardStore.remove(item)
+            guard core.clipboardStore.remove(item) else {
+                NSSound.beep()
+                return
+            }
+            deletionWasLastEdit = true
             results.removeAll { $0.id == item.id }
             resultsGeneration &+= 1
             if results.isEmpty {
@@ -599,6 +611,26 @@ final class PaletteViewModel {
         case .deleteStack(let stack):
             confirmDelete(stack)
         }
+    }
+
+    private func undoDeletion() {
+        guard core.clipboardStore.canUndoDeletion else { return }
+        guard let restored = core.clipboardStore.undoLastDeletion() else {
+            NSSound.beep()
+            return
+        }
+        overlay = .none
+        imageQuickLookOpen = false
+        ImageQuickLook.close()
+        // Keep useful filters, but never leave a restored entry hidden by the current scope.
+        if !queryIsEmpty, !restored.matches(query) { query = "" }
+        if let kind = kindFilter.kind, restored.kind != kind { applyKindFilter(.all) }
+        if let stackFilter, core.clipboardStore.stackID(for: restored.id) != stackFilter {
+            applyStackFilter(nil)
+        }
+        pendingRestoredItemID = restored.id
+        deletionWasLastEdit = true
+        refreshResults(resetSelection: false, blockCommands: true)
     }
 
     func beginStackName() {
@@ -697,6 +729,7 @@ final class PaletteViewModel {
 
     private func applyStackFilter(_ stackID: ClipboardStack.ID?) {
         guard stackFilter != stackID else { return }
+        pendingRestoredItemID = nil
         stackFilter = stackID
         imageQuickLookOpen = false
         ImageQuickLook.close()
@@ -706,6 +739,7 @@ final class PaletteViewModel {
 
     private func applyKindFilter(_ filter: ClipboardKindFilter) {
         guard kindFilter != filter else { return }
+        pendingRestoredItemID = nil
         kindFilter = filter
         imageQuickLookOpen = false
         ImageQuickLook.close()
@@ -714,6 +748,8 @@ final class PaletteViewModel {
     }
 
     private func queryChanged() {
+        deletionWasLastEdit = false
+        pendingRestoredItemID = nil
         overlay = .none
         menuSelection = 0
         imageQuickLookOpen = false
@@ -735,11 +771,31 @@ final class PaletteViewModel {
         let stackID = stackFilter
         let filter = kindFilter
         let pageLimit = Self.pageSize * loadedPageCount
+        let startingPageCount = loadedPageCount
+        let restoredID = pendingRestoredItemID
         searchTask = Task { [weak self] in
             guard let self else { return }
-            let page = await core.clipboardStore.searchAsync(
+            if restoredID != nil { await core.clipboardStore.waitForSearchMetadata() }
+            guard !Task.isCancelled else { return }
+            var page = await core.clipboardStore.searchAsync(
                 query, kind: filter.kind, stackID: stackID,
                 after: nil, limit: pageLimit)
+            var pageCount = startingPageCount
+            // An undo may reveal an older search result after the user changed filters.
+            // Load through that entry so selection and subsequent pagination stay coherent.
+            if let restoredID {
+                var restoredResults = page.items
+                while !restoredResults.contains(where: { $0.id == restoredID }),
+                    let cursor = page.nextCursor, !Task.isCancelled
+                {
+                    page = await core.clipboardStore.searchAsync(
+                        query, kind: filter.kind, stackID: stackID,
+                        after: cursor, limit: Self.pageSize)
+                    restoredResults.append(contentsOf: page.items)
+                    pageCount += 1
+                }
+                page = ClipboardSearchPage(items: restoredResults, nextCursor: page.nextCursor)
+            }
             guard !Task.isCancelled,
                 self.query.trimmingCharacters(in: .whitespacesAndNewlines) == query,
                 self.kindFilter == filter,
@@ -747,7 +803,15 @@ final class PaletteViewModel {
             else { return }
             nextCursor = page.nextCursor
             hasMoreResults = page.nextCursor != nil
+            loadedPageCount = pageCount
             applyResults(page.items, resetSelection: resetSelection)
+            if let restoredID, pendingRestoredItemID == restoredID {
+                pendingRestoredItemID = nil
+                if results.contains(where: { $0.id == restoredID }) {
+                    selectedID = restoredID
+                    scrollIntent = ScrollIntent(kind: .follow)
+                }
+            }
             searchTask = nil
         }
     }

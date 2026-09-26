@@ -76,7 +76,19 @@ final class ClipboardStore: ObservableObject {
         """
 
     private let imagesDir: URL
+    private let deletedImagesDir: URL
     private let dbURL: URL
+    private struct DeletedEntry {
+        let item: ClipboardItem
+        let stackID: ClipboardStack.ID?
+        let imageBackup: URL?
+    }
+    private var deletedEntries: [DeletedEntry] = []
+    private static let deletionUndoLimit = 20
+
+    var canUndoDeletion: Bool {
+        deletedEntries.contains { $0.item.createdAt >= Date().addingTimeInterval(-maxAge) }
+    }
     private var db: OpaquePointer?
     private var insertStmt: OpaquePointer?
     private var loadStmt: OpaquePointer?
@@ -96,7 +108,10 @@ final class ClipboardStore: ObservableObject {
     init(directory: URL? = nil) {
         let base = directory ?? Self.defaultDirectory
         imagesDir = base.appendingPathComponent("images", isDirectory: true)
+        deletedImagesDir = base.appendingPathComponent("deleted-images", isDirectory: true)
         dbURL = base.appendingPathComponent("clipboard.sqlite3")
+        // Undo is session-local. Also remove backups left by an interrupted previous run.
+        try? FileManager.default.removeItem(at: deletedImagesDir)
         try? FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
         _ = openDatabase()
     }
@@ -113,6 +128,7 @@ final class ClipboardStore: ObservableObject {
     // Isolated so teardown may touch the main-actor statement/db pointers; AppCore only ever releases the store on the main actor, so no hop.
     isolated deinit {
         closeDatabase()
+        try? FileManager.default.removeItem(at: deletedImagesDir)
     }
 
     func load() {
@@ -188,13 +204,99 @@ final class ClipboardStore: ObservableObject {
         return loadItem(id: id)
     }
 
-    func remove(_ item: ClipboardItem) {
-        guard let stmt = deleteByIDStmt else { return }
-        sqlite3_bind_text(stmt, 1, item.id.uuidString, -1, SQLITE_TRANSIENT)
-        guard stepAndReset(stmt) else { return }
-        items.removeAll { $0.id == item.id }
-        deleteMembership(item.id)
+    @discardableResult
+    func remove(_ item: ClipboardItem) -> Bool {
+        guard let item = self.item(id: item.id), let stmt = deleteByIDStmt else { return false }
+        var backup: URL?
+        if item.imagePath != nil {
+            guard let imageURL = imageURL(for: item) else { return false }
+            let destination = deletedImagesDir.appendingPathComponent(UUID().uuidString + ".png")
+            do {
+                try FileManager.default.createDirectory(at: deletedImagesDir, withIntermediateDirectories: true)
+                // Keep the live image intact until the database transaction commits.
+                try FileManager.default.copyItem(at: imageURL, to: destination)
+                backup = destination
+            } catch {
+                return false
+            }
+        }
+        let entry = DeletedEntry(item: item, stackID: stackMembership[item.id], imageBackup: backup)
+        let deleted = transaction {
+            sqlite3_bind_text(stmt, 1, item.id.uuidString, -1, SQLITE_TRANSIENT)
+            return stepAndReset(stmt) && sqlite3_changes(db) == 1 && deleteMembership(item.id)
+        }
+        guard deleted else {
+            if let backup { try? FileManager.default.removeItem(at: backup) }
+            return false
+        }
+        deletedEntries.append(entry)
+        while deletedEntries.count > Self.deletionUndoLimit {
+            discardBackup(deletedEntries.removeFirst())
+        }
+        stackMembership.removeValue(forKey: item.id)
         deleteBlob(item)
+        items.removeAll { $0.id == item.id }
+        return true
+    }
+
+    /// Restore original metadata without treating undo as a new clipboard capture.
+    /// A newer copy of the same content wins; undo never creates a duplicate or overwrites it.
+    @discardableResult
+    func undoLastDeletion() -> ClipboardItem? {
+        discardDeletedEntries { $0.item.createdAt < Date().addingTimeInterval(-maxAge) }
+        guard let entry = deletedEntries.last, let stmt = insertStmt else { return nil }
+        let existing = item(id: entry.item.id)
+            ?? entry.item.text.flatMap { textItem(matching: $0) }
+            ?? entry.item.imageFingerprint.flatMap { image(matching: $0) }
+        let restored = existing ?? entry.item
+        let stackID = stackMembership[restored.id]
+            ?? entry.stackID.flatMap { id in stacks.contains { $0.id == id } ? id : nil }
+
+        var copiedImage: URL?
+        if existing == nil, let backup = entry.imageBackup {
+            guard let destination = imageURL(for: restored) else { return nil }
+            if !FileManager.default.fileExists(atPath: destination.path) {
+                do {
+                    try FileManager.default.copyItem(at: backup, to: destination)
+                    copiedImage = destination
+                } catch {
+                    return nil
+                }
+            }
+        }
+        guard transaction({
+            if existing == nil, !bindAndInsert(stmt, restored) { return false }
+            if let stackID, !writeMembership(restored.id, stackID: stackID) { return false }
+            return true
+        }) else {
+            if let copiedImage { try? FileManager.default.removeItem(at: copiedImage) }
+            return nil
+        }
+        discardBackup(deletedEntries.removeLast())
+        if let stackID { stackMembership[restored.id] = stackID }
+        items = Array(Self.displayOrder(
+            [restored] + items.filter { $0.id != restored.id }).prefix(Self.memoryWindow))
+        if existing == nil { scheduleSearchMetadataUpdate(for: restored) }
+        return restored
+    }
+
+    private func transaction(_ body: () -> Bool) -> Bool {
+        guard sqlite3_exec(db, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { return false }
+        if body(), sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK { return true }
+        sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+        return false
+    }
+
+    private func discardBackup(_ entry: DeletedEntry) {
+        if let url = entry.imageBackup { try? FileManager.default.removeItem(at: url) }
+    }
+
+    private func discardDeletedEntries(where shouldDiscard: (DeletedEntry) -> Bool) {
+        deletedEntries.removeAll { entry in
+            guard shouldDiscard(entry) else { return false }
+            discardBackup(entry)
+            return true
+        }
     }
 
     func clearAll() {
@@ -202,6 +304,7 @@ final class ClipboardStore: ObservableObject {
         searchMetadataTask?.cancel()
         pendingSearchMetadata.removeAll()
         guard sqlite3_exec(db, "DELETE FROM items", nil, nil, nil) == SQLITE_OK else { return }
+        discardDeletedEntries { _ in true }
         items = []
         sqlite3_exec(db, "DELETE FROM stack_items", nil, nil, nil)
         stackMembership.removeAll()
@@ -282,6 +385,7 @@ final class ClipboardStore: ObservableObject {
         else { return false }
         committed = true
 
+        discardDeletedEntries { $0.stackID == id }
         stacks.removeAll { $0.id == id }
         stackMembership = stackMembership.filter { $0.value != id }
         let remaining = items.filter { !contents.itemIDs.contains($0.id) }
@@ -380,13 +484,12 @@ final class ClipboardStore: ObservableObject {
         return stepAndReset(stmt)
     }
 
-    private func deleteMembership(_ itemID: ClipboardItem.ID) {
-        stackMembership.removeValue(forKey: itemID)
-        guard let stmt = deleteMembershipStmt else { return }
+    private func deleteMembership(_ itemID: ClipboardItem.ID) -> Bool {
+        guard let stmt = deleteMembershipStmt else { return false }
         sqlite3_reset(stmt)
         sqlite3_clear_bindings(stmt)
         sqlite3_bind_text(stmt, 1, itemID.uuidString, -1, SQLITE_TRANSIENT)
-        _ = stepAndReset(stmt)
+        return stepAndReset(stmt)
     }
 
     /// Query the complete history in pages. All filters run in SQLite before the page limit.
@@ -593,6 +696,7 @@ final class ClipboardStore: ObservableObject {
     private func prune() {
         lastPrunedAt = Date()
         let cutoff = Date().addingTimeInterval(-maxAge)
+        discardDeletedEntries { $0.item.createdAt < cutoff }
         guard let imagesStmt = staleImagesStmt, let deleteStmt = deleteStaleStmt else { return }
         sqlite3_bind_double(imagesStmt, 1, cutoff.timeIntervalSince1970)
         var stalePaths: [String] = []

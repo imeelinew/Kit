@@ -54,7 +54,7 @@ struct ClipboardListAnimationTests {
     }
 
     @MainActor
-    static func main() throws {
+    static func main() async throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("kit-list-tests-\(UUID())")
@@ -122,5 +122,6 @@ struct ClipboardListAnimationTests {
         precondition(fixture.selectionCallbacks == 0, "Updates never publish transient AppKit selections")
         window.close()
         print("PASS: animated deletion, rapid deletion, date headers, async refresh, pagination, empty results")
+        try await ClipboardUndoTests.run()
     }
 }
