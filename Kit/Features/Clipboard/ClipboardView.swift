@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import SwiftUI
 
 struct ClipboardList: View {
@@ -74,10 +75,24 @@ private enum ClipboardTableSection: Int, CaseIterable {
     }
 }
 
-private enum ClipboardTableRow {
+private enum ClipboardTableRow: Equatable {
     case header(ClipboardTableSection)
     case item(ClipboardItem)
     case more
+
+    enum ID: Hashable {
+        case header(ClipboardTableSection)
+        case item(ClipboardItem.ID)
+        case more
+    }
+
+    var id: ID {
+        switch self {
+        case .header(let section): .header(section)
+        case .item(let item): .item(item.id)
+        case .more: .more
+        }
+    }
 }
 
 private struct ClipboardTableRepresentable: NSViewRepresentable {
@@ -238,6 +253,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             let contentChanged = lastResultsGeneration != resultsGeneration
                 || lastHasMoreResults != hasMoreResults
             let appearanceChanged = self.query != query || self.locale != locale
+            let previousRows = rows
             if contentChanged {
                 rows = Self.makeRows(results, hasMoreResults: hasMoreResults)
                 itemRowIndex = Dictionary(uniqueKeysWithValues: rows.enumerated().compactMap {
@@ -250,14 +266,18 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             }
             self.query = query
             self.locale = locale
+            self.selectedID = selectedID
 
             let wasApplyingSelection = applyingSelection
             if contentChanged {
-                // AppKit temporarily chooses the first selectable row during reload. Suppress
-                // that implementation-detail callback until the model selection is restored.
+                // Suppress AppKit's intermediate selections until the model is restored.
                 tableView.clearHover()
                 applyingSelection = true
-                tableView.reloadData()
+                updateRows(
+                    from: previousRows, in: tableView,
+                    animate: !appearanceChanged && lastScroll == scroll
+                        && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+                if appearanceChanged { updateVisibleText(in: tableView) }
             } else if appearanceChanged {
                 updateVisibleText(in: tableView)
             }
@@ -275,6 +295,50 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
 
         private var tableView: ClipboardTableView? {
             hostedContainerView?.tableView
+        }
+
+        private func updateRows(
+            from previousRows: [ClipboardTableRow], in tableView: ClipboardTableView,
+            animate: Bool
+        ) {
+            // The asynchronous store refresh often republishes exactly the same rows after
+            // a deletion. Reloading here would interrupt the animation already in flight.
+            guard previousRows != rows else { return }
+            let difference = rows.map(\.id).difference(from: previousRows.map(\.id))
+            let oldRowsByID = Dictionary(uniqueKeysWithValues: previousRows.map { ($0.id, $0) })
+            let retainedContentUnchanged = rows.allSatisfy { row in
+                oldRowsByID[row.id].map { $0 == row } ?? true
+            }
+            // Small edits with unchanged presentation animate; large replacements and page
+            // loads stay immediate so typing and navigation remain responsive.
+            guard animate, !previousRows.isEmpty, !rows.isEmpty,
+                !difference.isEmpty, difference.count <= 32, retainedContentUnchanged
+            else {
+                tableView.reloadData()
+                return
+            }
+            var removals = IndexSet()
+            var insertions = IndexSet()
+            for change in difference {
+                switch change {
+                case .remove(let index, _, _): removals.insert(index)
+                case .insert(let index, _, _): insertions.insert(index)
+                }
+            }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = Theme.Motion.contentDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                tableView.beginUpdates()
+                tableView.removeRows(at: removals, withAnimation: [.effectFade, .slideUp])
+                tableView.insertRows(at: insertions, withAnimation: [.effectFade, .slideDown])
+                tableView.endUpdates()
+                // Removing an entire date group promotes the next header to the shorter
+                // first-header layout; update both its height and its text inset.
+                if previousRows.first?.id != rows.first?.id {
+                    tableView.noteHeightOfRows(withIndexesChanged: IndexSet(integer: 0))
+                }
+                updateVisibleText(in: tableView)
+            }
         }
 
         private func updateVisibleText(in tableView: ClipboardTableView) {

@@ -45,6 +45,7 @@ Press `Option + W` to show or hide the palette. Type to filter history, move wit
 | `Return` | Paste and close the palette |
 | `⌘ Return` | Copy the selected item |
 | `Space` | Preview an image |
+| `Backspace` | Delete the selected item when the search is empty (or from its action menu) |
 
 The action menu also lets you paste while keeping the palette open, reveal an image in Finder, or delete an item. You can record a different global shortcut in Settings.
 

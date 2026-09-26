@@ -54,6 +54,7 @@ enum PaletteCommand: Equatable {
     case move(Int)
     case activate
     case copy
+    case delete
     case cancel
     case toggleActions
     case pinToScreen
@@ -457,6 +458,11 @@ final class PaletteViewModel {
             guard searchReady, let item = actionTarget else { return true }
             overlay = .none
             core.copyToClipboard(item)
+        case .delete:
+            guard searchReady, !isNamingStack, let item = actionTarget,
+                menuOpen || query.isEmpty else { return true }
+            overlay = .none
+            perform(.delete(item))
         case .cancel:
             if imageQuickLookOpen {
                 imageQuickLookOpen = false
@@ -570,8 +576,11 @@ final class PaletteViewModel {
             core.clipboardStore.assign(item.id, to: stack.id)
         case .delete(let item):
             let removedIndex = selectionIndex
+            imageQuickLookOpen = false
+            ImageQuickLook.close()
             core.clipboardStore.remove(item)
             results.removeAll { $0.id == item.id }
+            resultsGeneration &+= 1
             if results.isEmpty {
                 selectedID = nil
             } else {

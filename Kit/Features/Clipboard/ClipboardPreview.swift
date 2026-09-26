@@ -78,9 +78,10 @@ struct ClipboardPreview: View {
     @ObservedObject private var settings = AppCore.shared.settings
 
     @State private var loadedPayload: ClipboardPreviewPayload?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Group {
+        ZStack {
             if let item {
                 let payload = (vm.preparedPreview?.itemID == item.id ? vm.preparedPreview : nil)
                     ?? ClipboardPreviewPayload.cached(for: item)
@@ -92,11 +93,14 @@ struct ClipboardPreview: View {
                         item: item, details: payload?.details ?? .init(), store: store)
                 }
                 .padding(.horizontal, 12)
+                .id(item.id)
+                .transition(.opacity)
             } else {
                 Color.clear
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(reduceMotion ? nil : Theme.Motion.menu, value: item?.id)
         .task(id: item?.id) {
             guard let item else {
                 loadedPayload = nil

@@ -5,6 +5,7 @@ struct RootPaletteView: View {
     @Bindable var vm: PaletteViewModel
     let store: ClipboardStore
     @ObservedObject private var settings = AppCore.shared.settings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isQueryEmpty: Bool {
         vm.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -57,13 +58,14 @@ struct RootPaletteView: View {
         let clips = vm.results
         let selected = vm.selectedItem
 
-        return Group {
+        return ZStack {
             if clips.isEmpty {
                 EmptyResults(
                     text: isQueryEmpty && vm.kindFilter == .all && vm.stackFilter == nil
                         ? "Clipboard history is empty" : "No matching entries",
                     systemImage: "magnifyingglass"
                 )
+                .transition(contentTransition)
             } else {
                 HStack(spacing: 0) {
                     ClipboardList(
@@ -90,8 +92,10 @@ struct RootPaletteView: View {
                         .frame(width: 1)
                     ClipboardPreview(item: selected, query: vm.query, vm: vm, store: store)
                 }
+                .transition(contentTransition)
             }
         }
+        .animation(reduceMotion ? nil : Theme.Motion.content, value: clips.isEmpty)
         .safeAreaInset(edge: .top, spacing: 0) { header }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomBar(showActionGroup: selected != nil)
@@ -110,7 +114,7 @@ struct RootPaletteView: View {
                     onActivate: activateMenuItem
                 )
                 .padding(Self.menuInset)
-                .transition(Self.menuTransition(.bottomLeading))
+                .transition(menuTransition(.bottomLeading))
             }
         }
         .overlay(alignment: .bottomTrailing) {
@@ -121,7 +125,7 @@ struct RootPaletteView: View {
                     onActivate: activateMenuItem
                 )
                 .padding(Self.menuInset)
-                .transition(Self.menuTransition(.bottomTrailing))
+                .transition(menuTransition(.bottomTrailing))
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -136,7 +140,7 @@ struct RootPaletteView: View {
                     .trailing,
                     Theme.Spacing.md * 2 + stackControlWidth + Theme.Spacing.md
                 )
-                .transition(Self.menuTransition(.topTrailing))
+                .transition(menuTransition(.topTrailing))
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -155,10 +159,10 @@ struct RootPaletteView: View {
                 )
                 .padding(.top, Theme.Size.headerPadding + Theme.Size.headerHeight)
                 .padding(.trailing, Theme.Spacing.md * 2)
-                .transition(Self.menuTransition(.topTrailing))
+                .transition(menuTransition(.topTrailing))
             }
         }
-        .animation(Self.menuAnimation, value: vm.overlay)
+        .animation(reduceMotion ? nil : Theme.Motion.menu, value: vm.overlay)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .environment(\.locale, settings.language.locale)
     }
@@ -231,11 +235,15 @@ struct RootPaletteView: View {
         HStack(spacing: 0) {
             MenuCircleButton(pressed: showAppMenu) { vm.toggleAppMenu() }
             Spacer()
-            if showActionGroup { actionGroup }
+            if showActionGroup {
+                actionGroup
+                    .transition(menuTransition(.trailing))
+            }
         }
         .padding(.horizontal, Theme.Spacing.md)
         .frame(height: Theme.Size.bottomBarHeight)
         .frame(maxWidth: .infinity)
+        .animation(reduceMotion ? nil : Theme.Motion.content, value: showActionGroup)
     }
 
     @MainActor
@@ -277,10 +285,13 @@ struct RootPaletteView: View {
     }
 
     private static let menuInset: CGFloat = 8
-    private static let menuAnimation: Animation = .easeOut(duration: 0.14)
 
-    private static func menuTransition(_ anchor: UnitPoint) -> AnyTransition {
-        .opacity.combined(with: .scale(scale: 0.96, anchor: anchor))
+    private var contentTransition: AnyTransition {
+        reduceMotion ? .opacity : Theme.Motion.transition()
+    }
+
+    private func menuTransition(_ anchor: UnitPoint) -> AnyTransition {
+        reduceMotion ? .opacity : Theme.Motion.transition(anchor: anchor)
     }
 }
 

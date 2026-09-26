@@ -2,6 +2,17 @@ import SwiftUI
 
 /// Central design tokens for Kit's adaptive palette UI.
 enum Theme {
+    enum Motion {
+        static let menuDuration = 0.14
+        static let contentDuration = 0.20
+        static let menu: Animation = .easeOut(duration: menuDuration)
+        static let content: Animation = .easeOut(duration: contentDuration)
+
+        static func transition(anchor: UnitPoint = .center) -> AnyTransition {
+            .opacity.combined(with: .scale(scale: 0.96, anchor: anchor))
+        }
+    }
+
     enum Spacing {
         static let xxs: CGFloat = 2
         static let xs: CGFloat = 4

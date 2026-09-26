@@ -75,6 +75,18 @@ final class PalettePanel: NSPanel {
             return paletteViewModel.handle(.clearQuery)
         }
 
+        // Backspace is a fixed entry command only when it cannot erase search text.
+        // Naming fields are routed above, and IME composition belongs to the editor.
+        if modifiers.isEmpty, keyCode == kVK_Delete {
+            if !paletteViewModel.menuOpen {
+                if let editor = firstResponder as? NSTextView, editor.hasMarkedText() {
+                    return false
+                }
+                guard paletteViewModel.query.isEmpty else { return false }
+            }
+            return handleOnce(.delete, event: event)
+        }
+
         if PaletteShortcut.actions.matches(shortcut) {
             return handleOnce(.toggleActions, event: event)
         }
