@@ -154,6 +154,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private var boundsToken: NotificationToken?
         private weak var hostedContainerView: ClipboardTableContainerView?
         private var lastScroll: ScrollIntent?
+        private var pendingScrollApply: DispatchWorkItem?
         private var applyingSelection = false
         private var lastGeometry = ClipboardTableGeometry()
         private var lastBoundsOrigin: NSPoint?
@@ -269,11 +270,12 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             self.selectedID = selectedID
 
             let wasApplyingSelection = applyingSelection
+            var animatedRows = false
             if contentChanged {
                 // Suppress AppKit's intermediate selections until the model is restored.
                 tableView.clearHover()
                 applyingSelection = true
-                updateRows(
+                animatedRows = updateRows(
                     from: previousRows, in: tableView,
                     animate: !appearanceChanged && (lastScroll == scroll || scroll.kind == .follow)
                         && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
@@ -286,7 +288,21 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
 
             if lastScroll != scroll {
                 lastScroll = scroll
-                apply(scroll, selectedID: selectedID, to: tableView)
+                // Scrolling while row frames still animate leaves the animating rows offset
+                // from their logical positions, so a scroll paired with an animated edit
+                // waits for the animation; rapid undos replace the pending scroll.
+                pendingScrollApply?.cancel()
+                if animatedRows {
+                    let work = DispatchWorkItem { [weak self] in
+                        guard let self, let tableView = self.tableView else { return }
+                        self.apply(scroll, selectedID: self.selectedID, to: tableView)
+                    }
+                    pendingScrollApply = work
+                    DispatchQueue.main.asyncAfter(
+                        deadline: .now() + Theme.Motion.contentDuration + 0.05, execute: work)
+                } else {
+                    apply(scroll, selectedID: selectedID, to: tableView)
+                }
             }
             tableView.hoverEnabled = hoverEnabled
             queueHoverRefresh()
@@ -297,13 +313,16 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             hostedContainerView?.tableView
         }
 
+        /// Returns whether the update ran as an animated row edit (callers must not scroll
+        /// the table until that animation has settled).
+        @discardableResult
         private func updateRows(
             from previousRows: [ClipboardTableRow], in tableView: ClipboardTableView,
             animate: Bool
-        ) {
+        ) -> Bool {
             // The asynchronous store refresh often republishes exactly the same rows after
             // a deletion. Reloading here would interrupt the animation already in flight.
-            guard previousRows != rows else { return }
+            guard previousRows != rows else { return false }
             let difference = rows.map(\.id).difference(from: previousRows.map(\.id))
             let oldRowsByID = Dictionary(uniqueKeysWithValues: previousRows.map { ($0.id, $0) })
             let retainedContentUnchanged = rows.allSatisfy { row in
@@ -315,7 +334,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 !difference.isEmpty, difference.count <= 32, retainedContentUnchanged
             else {
                 tableView.reloadData()
-                return
+                return false
             }
             var removals = IndexSet()
             var insertions = IndexSet()
@@ -339,6 +358,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 }
                 updateVisibleText(in: tableView)
             }
+            return true
         }
 
         private func updateVisibleText(in tableView: ClipboardTableView) {

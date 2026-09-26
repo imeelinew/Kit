@@ -120,6 +120,25 @@ struct ClipboardListAnimationTests {
         precondition(table.numberOfRows == 0 && table.selectedRow == -1,
                      "Deleting the last entries clears selection")
         precondition(fixture.selectionCallbacks == 0, "Updates never publish transient AppKit selections")
+
+        // A follow scroll paired with an animated insert waits out the row animation;
+        // scrolling mid-animation offsets the animating rows from their logical frames.
+        let many = (0..<30).map { item("scroll row \($0)") }
+        fixture.update(many)
+        settle(0.3)
+        let clip = table.enclosingScrollView!.contentView
+        let offsetAtRest = clip.bounds.origin.y
+        precondition(!table.visibleRect.contains(table.rect(ofRow: table.numberOfRows - 1)),
+                     "The bottom row starts offscreen")
+        fixture.scroll = ScrollIntent(kind: .follow)
+        fixture.update([item("restored")] + many)
+        fixture.selectedID = many.last!.id
+        settle()
+        precondition(clip.bounds.origin.y == offsetAtRest,
+                     "The follow scroll defers past the animated insert")
+        settle(0.4)
+        precondition(clip.bounds.origin.y != offsetAtRest, "The deferred follow scroll completes")
+
         window.close()
         print("PASS: animated deletion, rapid deletion, date headers, async refresh, pagination, empty results")
         try await ClipboardUndoTests.run()
