@@ -123,9 +123,9 @@ struct ClipboardListAnimationTests {
 
         // A follow scroll paired with an animated insert waits out the row animation —
         // the production shape of undo: scrolled down the list, a restored entry is
-        // inserted at the top, selected, and followed with a scroll-to-top. Some AppKit
-        // builds also scroll an offscreen selection into view on their own; probe for
-        // that first, because it makes the deferral window unobservable on those systems.
+        // inserted at the top, selected, and followed with a scroll-to-top. Under
+        // Reduce Motion the edit skips animation entirely and scrolls immediately,
+        // so the deferral window is only asserted where animations run at all.
         let many = (0..<30).map { item("scroll row \($0)") }
         fixture.update(many)
         settle(0.3)
@@ -135,23 +135,14 @@ struct ClipboardListAnimationTests {
         precondition(!table.visibleRect.intersects(table.rect(ofRow: 0)),
                      "The setup scrolls away from the top")
 
-        fixture.selectedID = many.first!.id
-        settle(0.1)
-        let selectionScrollsItself =
-            table.visibleRect.intersects(table.rect(ofRow: 0))
-        fixture.selectedID = many.last!.id
-        settle(0.1)
-
         fixture.scroll = ScrollIntent(kind: .follow)
         fixture.update([item("restored")] + many)
         settle()
-        NSLog("DIAG afterInsert: probe=\(selectionScrollsItself) rows=\(table.numberOfRows) selRow=\(table.selectedRow) row0=\(table.rect(ofRow: 0)) vis=\(table.visibleRect) origin=\(table.enclosingScrollView!.contentView.bounds.origin.y) reduceMotion=\(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) windowVisible=\(window.isVisible)")
-        if !selectionScrollsItself {
+        if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             precondition(!table.visibleRect.intersects(table.rect(ofRow: 0)),
                          "The follow scroll defers past the animated insert")
         }
         settle(0.4)
-        NSLog("DIAG afterWait: row0=\(table.rect(ofRow: 0)) vis=\(table.visibleRect) origin=\(table.enclosingScrollView!.contentView.bounds.origin.y)")
         precondition(table.visibleRect.intersects(table.rect(ofRow: 0)),
                      "The deferred follow scroll completes")
 
