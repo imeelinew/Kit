@@ -15,7 +15,9 @@ concurrency:
 
 jobs:
   test:
-    runs-on: macos-latest
+    # The app uses macOS 27 APIs (e.g. NSMenuItem.preferredImageVisibility) that only
+    # exist in the Xcode 27 toolchain; the stock macos-latest image tops out at Xcode 26.6.
+    runs-on: xcode-27
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
