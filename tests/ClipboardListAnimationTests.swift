@@ -123,9 +123,9 @@ struct ClipboardListAnimationTests {
 
         // A follow scroll paired with an animated insert waits out the row animation —
         // the production shape of undo: scrolled down the list, a restored entry is
-        // inserted at the top, selected, and followed with a scroll-to-top. Asserted
-        // through top-row visibility; raw offsets are not comparable across systems
-        // because AppKit compensates the origin for inserts above the viewport.
+        // inserted at the top, selected, and followed with a scroll-to-top. Some AppKit
+        // builds also scroll an offscreen selection into view on their own; probe for
+        // that first, because it makes the deferral window unobservable on those systems.
         let many = (0..<30).map { item("scroll row \($0)") }
         fixture.update(many)
         settle(0.3)
@@ -134,11 +134,21 @@ struct ClipboardListAnimationTests {
         settle(0.1)
         precondition(!table.visibleRect.intersects(table.rect(ofRow: 0)),
                      "The setup scrolls away from the top")
+
+        fixture.selectedID = many.first!.id
+        settle(0.1)
+        let selectionScrollsItself =
+            table.visibleRect.intersects(table.rect(ofRow: 0))
+        fixture.selectedID = many.last!.id
+        settle(0.1)
+
         fixture.scroll = ScrollIntent(kind: .follow)
         fixture.update([item("restored")] + many)
         settle()
-        precondition(!table.visibleRect.intersects(table.rect(ofRow: 0)),
-                     "The follow scroll defers past the animated insert")
+        if !selectionScrollsItself {
+            precondition(!table.visibleRect.intersects(table.rect(ofRow: 0)),
+                         "The follow scroll defers past the animated insert")
+        }
         settle(0.4)
         precondition(table.visibleRect.intersects(table.rect(ofRow: 0)),
                      "The deferred follow scroll completes")
