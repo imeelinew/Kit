@@ -76,6 +76,11 @@ struct RootPaletteView: View {
                         hoverEnabled: !vm.menuOpen,
                         store: store,
                         onSelect: { vm.select($0.id) },
+                        onActivate: { item in
+                            guard !vm.menuOpen, vm.searchReady else { return }
+                            vm.select(item.id)
+                            vm.handle(.activate)
+                        },
                         onActions: { item in vm.openActions(for: item.id) },
                         onLoadMore: { vm.loadMoreResults() }
                     )

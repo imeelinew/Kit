@@ -12,6 +12,7 @@ struct ClipboardList: View {
     let hoverEnabled: Bool
     let store: ClipboardStore
     let onSelect: (ClipboardItem) -> Void
+    let onActivate: (ClipboardItem) -> Void
     let onActions: (ClipboardItem) -> Void
     let onLoadMore: () -> Void
     @State private var geometry = ClipboardTableGeometry()
@@ -28,6 +29,7 @@ struct ClipboardList: View {
             hoverEnabled: hoverEnabled,
             store: store,
             onSelect: onSelect,
+            onActivate: onActivate,
             onActions: onActions,
             onLoadMore: onLoadMore,
             onGeometryChange: { geometry = $0 },
@@ -88,6 +90,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
     let hoverEnabled: Bool
     let store: ClipboardStore
     let onSelect: (ClipboardItem) -> Void
+    let onActivate: (ClipboardItem) -> Void
     let onActions: (ClipboardItem) -> Void
     let onLoadMore: () -> Void
     let onGeometryChange: (ClipboardTableGeometry) -> Void
@@ -111,6 +114,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             locale: context.environment.locale,
             store: store,
             onSelect: onSelect,
+            onActivate: onActivate,
             onActions: onActions,
             onLoadMore: onLoadMore,
             onGeometryChange: onGeometryChange,
@@ -127,6 +131,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private var locale = Locale.current
         private weak var store: ClipboardStore?
         private var onSelect: ((ClipboardItem) -> Void)?
+        private var onActivate: ((ClipboardItem) -> Void)?
         private var onActions: ((ClipboardItem) -> Void)?
         private var onLoadMore: (() -> Void)?
         private var onGeometryChange: ((ClipboardTableGeometry) -> Void)?
@@ -160,6 +165,8 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             tableView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
             tableView.dataSource = self
             tableView.delegate = self
+            tableView.target = self
+            tableView.action = #selector(clicked(_:))
             tableView.onRightClick = { [weak self] row in self?.rightClicked(row) }
             tableView.isItemRow = { [weak self] row in
                 guard let self, self.rows.indices.contains(row) else { return false }
@@ -208,6 +215,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             selectedID: ClipboardItem.ID?, query: String,
             scroll: ScrollIntent, hoverEnabled: Bool, locale: Locale, store: ClipboardStore,
             onSelect: @escaping (ClipboardItem) -> Void,
+            onActivate: @escaping (ClipboardItem) -> Void,
             onActions: @escaping (ClipboardItem) -> Void,
             onLoadMore: @escaping () -> Void,
             onGeometryChange: @escaping (ClipboardTableGeometry) -> Void,
@@ -219,6 +227,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             }
             self.store = store
             self.onSelect = onSelect
+            self.onActivate = onActivate
             self.onActions = onActions
             self.onLoadMore = onLoadMore
             self.onGeometryChange = onGeometryChange
@@ -373,6 +382,17 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                     isFirst: false)
                 return view
             }
+        }
+
+        @objc private func clicked(_ tableView: NSTableView) {
+            // Activation belongs to the table's click action, never its selection delegate:
+            // hovering and keyboard navigation also change selection.
+            let row = tableView.clickedRow
+            guard rows.indices.contains(row), case .item(let item) = rows[row],
+                NSApp.currentEvent?.modifierFlags.contains(.control) != true,
+                (NSApp.currentEvent?.clickCount ?? 1) == 1
+            else { return }
+            onActivate?(item)
         }
 
         private func rightClicked(_ row: Int) {
@@ -603,6 +623,14 @@ private final class ClipboardTableView: NSTableView {
         super.viewDidMoveToWindow()
         if window == nil {
             clearHover()
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.control) {
+            rightMouseDown(with: event)
+        } else {
+            super.mouseDown(with: event)
         }
     }
 
