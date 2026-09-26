@@ -155,7 +155,7 @@ final class AppCore {
 
     func paste(_ item: ClipboardItem) {
         guard let previous = windowController.pasteTargetApp else { return }
-        startHidingTransfer(item) { [clipboardStore] willDeliver in
+        startHidingTransfer { [clipboardStore] willDeliver in
             await Paster.paste(
                 item, store: clipboardStore, previousApp: previous, willDeliver: willDeliver)
         }
@@ -167,21 +167,20 @@ final class AppCore {
         guard let previous = windowController.pasteTargetApp else { return }
         startTransfer { [weak self] generation in
             guard let self else { return }
-            if await Paster.pasteInPlace(item, store: self.clipboardStore, into: previous) {
-                self.palette.select(item.id)
-            }
+            // Selection may have moved while the image payload was loading.
+            // Completion must not pull the user back to the item just pasted.
+            await Paster.pasteInPlace(item, store: self.clipboardStore, into: previous)
             self.finishTransfer(generation)
         }
     }
 
     func copyToClipboard(_ item: ClipboardItem) {
-        startHidingTransfer(item) { [clipboardStore] willWrite in
+        startHidingTransfer { [clipboardStore] willWrite in
             await Paster.copy(item, store: clipboardStore, willWrite: willWrite)
         }
     }
 
     private func startHidingTransfer(
-        _ item: ClipboardItem,
         operation: @escaping @MainActor (_ willHide: () -> Void) async -> Bool
     ) {
         startTransfer { [weak self] generation in
@@ -195,9 +194,7 @@ final class AppCore {
                 if hidden { self.windowController.show() }
                 return
             }
-            if succeeded {
-                self.palette.select(item.id)
-            } else if hidden {
+            if !succeeded && hidden {
                 self.windowController.show()
             }
             self.finishTransfer(generation)

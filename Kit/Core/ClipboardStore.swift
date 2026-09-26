@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import SQLite3
 
 /// SQLite-backed clipboard history (rows + trigram FTS5 index in `clipboard.sqlite3`, image blobs on disk).
@@ -13,7 +14,7 @@ final class ClipboardStore: ObservableObject {
     @Published private(set) var stacks: [ClipboardStack] = []
     /// Item id to the single stack that owns it.
     private var stackMembership: [ClipboardItem.ID: ClipboardStack.ID] = [:]
-    /// Fired after a new history row is inserted, not on recopy-of-top or image refresh.
+    /// Fired after a new history row is inserted, not when an existing item is recopied.
     var onItemInserted: (() -> Void)?
     private(set) var captureGeneration: UInt64 = 0
     var maxAge: TimeInterval = ClipboardRetention.threeMonths.maxAge
@@ -84,6 +85,7 @@ final class ClipboardStore: ObservableObject {
     private var staleImagesStmt: OpaquePointer?
     private var deleteStaleStmt: OpaquePointer?
     private var imageByFingerprintStmt: OpaquePointer?
+    private var textByContentStmt: OpaquePointer?
     private var itemByIDStmt: OpaquePointer?
     private var insertStackStmt: OpaquePointer?
     private var upsertMembershipStmt: OpaquePointer?
@@ -91,8 +93,8 @@ final class ClipboardStore: ObservableObject {
     private var pendingSearchMetadata: [SearchMetadataUpdate] = []
     private var searchMetadataTask: Task<Void, Never>?
 
-    init() {
-        let base = Self.defaultDirectory
+    init(directory: URL? = nil) {
+        let base = directory ?? Self.defaultDirectory
         imagesDir = base.appendingPathComponent("images", isDirectory: true)
         dbURL = base.appendingPathComponent("clipboard.sqlite3")
         try? FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
@@ -142,7 +144,10 @@ final class ClipboardStore: ObservableObject {
         expectedGeneration: UInt64? = nil
     ) -> ClipboardItem? {
         if let expectedGeneration, expectedGeneration != captureGeneration { return nil }
-        if items.first?.kind != .image, items.first?.text == text { return items.first }
+        if let existing = textItem(matching: text) {
+            let updated = existing.refreshed(sourceBundleID: sourceBundleID)
+            return refresh(updated) ? updated : nil
+        }
         let item = ClipboardItem(text: text, kind: kind, sourceBundleID: sourceBundleID)
         return insert(item) ? item : nil
     }
@@ -176,14 +181,6 @@ final class ClipboardStore: ObservableObject {
             try? FileManager.default.removeItem(at: url)
             return
         }
-    }
-
-    /// Move an item to the top of history after it is used.
-    func promote(_ item: ClipboardItem) {
-        guard items.first?.id != item.id else { return }
-        // An asynchronous paste may finish after the item or its stack was deleted.
-        guard let stored = loadItem(id: item.id) else { return }
-        refresh(stored.with(createdAt: Date()))
     }
 
     func item(id: ClipboardItem.ID) -> ClipboardItem? {
@@ -491,9 +488,10 @@ final class ClipboardStore: ObservableObject {
         }.map(\.element)
     }
 
-    /// A recopy or paste changes history order without rebuilding its full-text index.
-    private func refresh(_ updated: ClipboardItem) {
-        guard let stmt = refreshStmt else { return }
+    /// Only a new external copy refreshes history; reusing an item never calls this path.
+    @discardableResult
+    private func refresh(_ updated: ClipboardItem) -> Bool {
+        guard let stmt = refreshStmt else { return false }
         sqlite3_bind_double(stmt, 1, updated.createdAt.timeIntervalSince1970)
         if let source = updated.sourceBundleID {
             sqlite3_bind_text(stmt, 2, source, -1, SQLITE_TRANSIENT)
@@ -501,10 +499,10 @@ final class ClipboardStore: ObservableObject {
             sqlite3_bind_null(stmt, 2)
         }
         sqlite3_bind_text(stmt, 3, updated.id.uuidString, -1, SQLITE_TRANSIENT)
-        guard stepAndReset(stmt) else { return }
-        items.removeAll { $0.id == updated.id }
-        items.insert(updated, at: 0)
-        trimWindow()
+        guard stepAndReset(stmt) else { return false }
+        // Publish one complete revision, without briefly removing the selected item.
+        items = Array(([updated] + items.filter { $0.id != updated.id }).prefix(Self.memoryWindow))
+        return true
     }
 
     /// Cap the in-memory window.
@@ -529,7 +527,7 @@ final class ClipboardStore: ObservableObject {
         sqlite3_bind_text(stmt, 1, item.id.uuidString, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 2, item.kind.rawValue, -1, SQLITE_TRANSIENT)
         if let text = item.text {
-            sqlite3_bind_text(stmt, 3, text, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, text, Int32(text.utf8.count), SQLITE_TRANSIENT)
         } else {
             sqlite3_bind_null(stmt, 3)
         }
@@ -575,6 +573,16 @@ final class ClipboardStore: ObservableObject {
         sqlite3_reset(stmt)
         sqlite3_clear_bindings(stmt)
         return status == SQLITE_ROW || status == SQLITE_DONE ? item : nil
+    }
+
+    private func textItem(matching text: String) -> ClipboardItem? {
+        guard let stmt = textByContentStmt else { return nil }
+        sqlite3_bind_text(stmt, 1, text, Int32(text.utf8.count), SQLITE_TRANSIENT)
+        let status = sqlite3_step(stmt)
+        let item = status == SQLITE_ROW ? ClipboardSQLite.row(stmt) : nil
+        sqlite3_reset(stmt)
+        sqlite3_clear_bindings(stmt)
+        return item
     }
 
     private func pruneIfDue() {
@@ -647,6 +655,7 @@ final class ClipboardStore: ObservableObject {
         guard sqlite3_exec(db, Self.searchSchema, nil, nil, nil) == SQLITE_OK else { return false }
         ensureCustomTitleColumn()
         guard migrateMarkdownKinds() else { return false }
+        guard migrateDuplicateText() else { return false }
         insertStmt = prepare(
             """
             INSERT INTO items(
@@ -676,6 +685,13 @@ final class ClipboardStore: ObservableObject {
                    image_fingerprint, custom_title
             FROM items WHERE image_fingerprint = ? LIMIT 1
             """)
+        textByContentStmt = prepare(
+            """
+            SELECT id, kind, text, image_path, created_at, source_app,
+                   image_fingerprint, custom_title
+            FROM items WHERE kind != 'image' AND text = ? COLLATE BINARY
+            ORDER BY created_at DESC, rowid DESC LIMIT 1
+            """)
         itemByIDStmt = prepare(
             """
             SELECT id, kind, text, image_path, created_at, source_app,
@@ -693,7 +709,77 @@ final class ClipboardStore: ObservableObject {
         return insertStmt != nil && loadStmt != nil && refreshStmt != nil
             && deleteByIDStmt != nil && staleImagesStmt != nil
             && deleteStaleStmt != nil && imageByFingerprintStmt != nil
-            && itemByIDStmt != nil
+            && itemByIDStmt != nil && textByContentStmt != nil
+    }
+
+    /// Merge legacy duplicates once, retaining an annotated identity, the newest copy metadata,
+    /// and compatible names/stack membership. Conflicting user organization is left intact.
+    private func migrateDuplicateText() -> Bool {
+        guard let versionStatement = prepare("PRAGMA user_version") else { return false }
+        let status = sqlite3_step(versionStatement)
+        let version = sqlite3_column_int(versionStatement, 0)
+        sqlite3_finalize(versionStatement)
+        guard status == SQLITE_ROW else { return false }
+        guard version < 2 else { return true }
+        guard sqlite3_exec(db, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { return false }
+        var committed = false
+        defer {
+            if !committed { sqlite3_exec(db, "ROLLBACK", nil, nil, nil) }
+        }
+        let sql = """
+            CREATE INDEX IF NOT EXISTS items_text_content
+              ON items(text, created_at DESC) WHERE kind != 'image';
+            CREATE TEMP TABLE text_duplicates AS
+            WITH compatible AS (
+              SELECT i.text FROM items i LEFT JOIN stack_items s ON s.item_id = i.id
+              WHERE i.kind != 'image' AND i.text IS NOT NULL
+              GROUP BY i.text
+              HAVING COUNT(*) > 1
+                AND COUNT(DISTINCT NULLIF(TRIM(i.custom_title), '')) <= 1
+                AND COUNT(DISTINCT s.stack_id) <= 1
+            )
+            SELECT i.rowid AS old_row,
+              FIRST_VALUE(i.rowid) OVER (
+                PARTITION BY i.text ORDER BY
+                  (NULLIF(TRIM(i.custom_title), '') IS NOT NULL OR s.item_id IS NOT NULL) DESC,
+                  i.created_at DESC, i.rowid DESC
+              ) AS keep_row,
+              FIRST_VALUE(i.rowid) OVER (
+                PARTITION BY i.text ORDER BY i.created_at DESC, i.rowid DESC
+              ) AS newest_row
+            FROM items i LEFT JOIN stack_items s ON s.item_id = i.id
+            WHERE i.kind != 'image' AND i.text IN (SELECT text FROM compatible);
+
+            UPDATE items AS keeper SET
+              created_at = (SELECT i.created_at FROM items i JOIN text_duplicates d
+                ON i.rowid = d.newest_row WHERE d.keep_row = keeper.rowid LIMIT 1),
+              source_app = (SELECT i.source_app FROM items i JOIN text_duplicates d
+                ON i.rowid = d.newest_row WHERE d.keep_row = keeper.rowid LIMIT 1),
+              custom_title = COALESCE((SELECT i.custom_title FROM items i JOIN text_duplicates d
+                ON i.rowid = d.old_row WHERE d.keep_row = keeper.rowid
+                AND NULLIF(TRIM(i.custom_title), '') IS NOT NULL LIMIT 1), keeper.custom_title)
+            WHERE rowid IN (SELECT keep_row FROM text_duplicates);
+
+            INSERT OR IGNORE INTO stack_items(item_id, stack_id)
+              SELECT keeper.id, s.stack_id FROM text_duplicates d
+              JOIN items old ON old.rowid = d.old_row
+              JOIN items keeper ON keeper.rowid = d.keep_row
+              JOIN stack_items s ON s.item_id = old.id;
+            DELETE FROM stack_items WHERE item_id IN (
+              SELECT i.id FROM items i JOIN text_duplicates d ON i.rowid = d.old_row
+              WHERE d.old_row != d.keep_row
+            );
+            DELETE FROM items WHERE rowid IN (
+              SELECT old_row FROM text_duplicates WHERE old_row != keep_row
+            );
+            DROP TABLE text_duplicates;
+            PRAGMA user_version = 2;
+            """
+        guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK,
+            sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK
+        else { return false }
+        committed = true
+        return true
     }
 
     /// Classify pre-existing rows once, then persist Markdown as an ordinary `kind` value.
@@ -799,7 +885,7 @@ final class ClipboardStore: ObservableObject {
     private func closeDatabase() {
         [
             insertStmt, loadStmt, refreshStmt, deleteByIDStmt,
-            staleImagesStmt, deleteStaleStmt, imageByFingerprintStmt, itemByIDStmt,
+            staleImagesStmt, deleteStaleStmt, imageByFingerprintStmt, textByContentStmt, itemByIDStmt,
             insertStackStmt, upsertMembershipStmt, deleteMembershipStmt,
         ].forEach { sqlite3_finalize($0) }
         insertStmt = nil
@@ -809,6 +895,7 @@ final class ClipboardStore: ObservableObject {
         staleImagesStmt = nil
         deleteStaleStmt = nil
         imageByFingerprintStmt = nil
+        textByContentStmt = nil
         itemByIDStmt = nil
         insertStackStmt = nil
         upsertMembershipStmt = nil

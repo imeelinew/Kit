@@ -57,14 +57,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
         self.customTitle = customTitle
     }
 
-    func with(createdAt: Date) -> ClipboardItem {
-        ClipboardItem(
-            id: id, kind: kind, text: text, imagePath: imagePath,
-            imageFingerprint: imageFingerprint, createdAt: createdAt,
-            sourceBundleID: sourceBundleID, customTitle: customTitle)
-    }
-
-    /// A repeated image is the same entry with a fresh copy time and source application.
+    /// An external recopy reuses the entry with a fresh copy time and source application.
     func refreshed(sourceBundleID: String?) -> ClipboardItem {
         ClipboardItem(
             id: id, kind: kind, text: text, imagePath: imagePath,

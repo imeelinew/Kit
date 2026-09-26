@@ -13,8 +13,8 @@ enum Paster {
     }
 
     /// Prepare, target, write, and deliver as one ordered transaction. The caller hides the palette
-    /// only after permission and payload preparation succeed; the item becomes recent only after a
-    /// key event has been posted directly to the confirmed target process.
+    /// only after permission and payload preparation succeed. Reusing history never changes its
+    /// copy time, source, or ordering.
     @MainActor @discardableResult
     static func paste(
         _ item: ClipboardItem, store: ClipboardStore, previousApp: NSRunningApplication?,
@@ -28,8 +28,7 @@ enum Paster {
             willDeliver: willDeliver,
             targetReady: { await activateAndWait(app) },
             write: write,
-            deliver: { postCommandV(toPid: pid) },
-            commit: { store.promote(item) })
+            deliver: { postCommandV(toPid: pid) })
     }
 
     /// Put the item on the pasteboard without pasting. Image bytes are loaded before the caller
@@ -43,7 +42,6 @@ enum Paster {
         else { return false }
         willWrite()
         guard write(payload) else { return false }
-        store.promote(item)
         return true
     }
 
@@ -69,8 +67,7 @@ enum Paster {
             willDeliver: {},
             targetReady: { !app.isTerminated },
             write: write,
-            deliver: { postCommandV(toPid: pid) },
-            commit: { store.promote(item) })
+            deliver: { postCommandV(toPid: pid) })
     }
 
     @MainActor

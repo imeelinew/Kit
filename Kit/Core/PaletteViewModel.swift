@@ -690,8 +690,6 @@ final class PaletteViewModel {
         hasMoreResults = false
         if resetSelection { loadedPageCount = 1 }
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let priorID = selectedID
-        let priorIndex = selectionIndex
         if blockCommands { searchReady = false }
 
         let stackID = stackFilter
@@ -709,11 +707,7 @@ final class PaletteViewModel {
             else { return }
             nextCursor = page.nextCursor
             hasMoreResults = page.nextCursor != nil
-            applyResults(
-                page.items,
-                resetSelection: resetSelection,
-                priorID: priorID,
-                priorIndex: priorIndex)
+            applyResults(page.items, resetSelection: resetSelection)
             searchTask = nil
         }
     }
@@ -750,9 +744,12 @@ final class PaletteViewModel {
     }
 
     private func applyResults(
-        _ newResults: [ClipboardItem], resetSelection: Bool,
-        priorID: ClipboardItem.ID?, priorIndex: Int
+        _ newResults: [ClipboardItem], resetSelection: Bool
     ) {
+        // Preserve the user's current selection, including navigation performed while the
+        // background query was running, rather than restoring its request-time snapshot.
+        let priorID = selectedID
+        let priorIndex = selectionIndex
         results = newResults
         resultsGeneration &+= 1
         searchReady = true
