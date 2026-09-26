@@ -100,7 +100,7 @@ struct SoundSettingsView: View {
 
     var body: some View {
         PreferencesForm {
-            Section {
+            Section("Sound Effects") {
                 Toggle("Enable Sound Effects", isOn: $settings.soundEffectsEnabled)
 
                 PreferencesRow(label: "Sound Effect") {
@@ -115,6 +115,10 @@ struct SoundSettingsView: View {
                     .disabled(!settings.soundEffectsEnabled)
                     .accessibilityLabel("Sound Effect")
                 }
+            }
+
+            Section("Haptics") {
+                Toggle("Haptic Feedback", isOn: $settings.hapticFeedbackEnabled)
             }
         }
         .onChange(of: settings.copySoundEffect) {

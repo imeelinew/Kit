@@ -35,6 +35,9 @@
 "Disabled Applications" = "Disabled Applications";
 "Disable System Clipboard" = "Disable System Clipboard";
 "Enable Sound Effects" = "Enable Sound Effects";
+"Haptic Feedback" = "Haptic Feedback";
+"Haptics" = "Haptics";
+"Sound Effects" = "Sound Effects";
 "Earlier" = "Earlier";
 "English" = "English";
 "Follow System" = "Follow System";
@@ -105,7 +108,7 @@
 "Show Menu Bar Icon" = "Show Menu Bar Icon";
 "Simplified Chinese" = "Simplified Chinese";
 "Size" = "Size";
-"Sound" = "Sound";
+"Sound & Haptics" = "Sound & Haptics";
 "Sound Effect" = "Sound Effect";
 "Source" = "Source";
 "Stack" = "Stack";

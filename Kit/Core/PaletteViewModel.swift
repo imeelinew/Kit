@@ -124,6 +124,20 @@ enum ClipboardKindFilter: Equatable, CaseIterable {
     }
 }
 
+/// Experimental trackpad haptics for list navigation. No-ops on hardware without a
+/// haptic trackpad (mice, older MacBooks).
+@MainActor
+enum PaletteHaptics {
+    private static let performer = NSHapticFeedbackManager.defaultPerformer
+
+    /// The weakest pattern: one tick when the pointer crosses a row, or a row crosses
+    /// the viewport edge during two-finger scrolling.
+    static func tick() {
+        guard AppCore.shared.settings.hapticFeedbackEnabled else { return }
+        performer.perform(.alignment, performanceTime: .now)
+    }
+}
+
 /// The palette's single interaction state machine. AppKit keyboard events and SwiftUI mouse
 /// actions both enter here, so commands do not depend on whichever embedded view is first responder.
 @MainActor

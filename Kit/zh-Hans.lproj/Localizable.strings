@@ -35,6 +35,9 @@
 "Disabled Applications" = "排除的应用";
 "Disable System Clipboard" = "禁用系统剪贴板";
 "Enable Sound Effects" = "开启音效";
+"Haptic Feedback" = "触感反馈";
+"Haptics" = "触感";
+"Sound Effects" = "音效";
 "Earlier" = "更早";
 "English" = "English";
 "Follow System" = "跟随系统";
@@ -105,7 +108,7 @@
 "Show Menu Bar Icon" = "显示菜单栏图标";
 "Simplified Chinese" = "简体中文";
 "Size" = "大小";
-"Sound" = "声音";
+"Sound & Haptics" = "声音与触感";
 "Sound Effect" = "音效";
 "Source" = "来源";
 "Stack" = "Stack";

@@ -10,7 +10,7 @@ enum SettingsTab: Int, CaseIterable, Hashable, Identifiable {
         case .general: return "General"
         case .shortcuts: return "Shortcuts"
         case .appearance: return "Appearance"
-        case .sound: return "Sound"
+        case .sound: return "Sound & Haptics"
         case .clipboard: return "Clipboard"
         case .history: return "History"
         case .about: return "About"

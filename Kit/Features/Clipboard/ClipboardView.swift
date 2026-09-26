@@ -145,6 +145,8 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private var hoverRefreshQueued = false
         private var lastResultsGeneration: UInt64?
         private var lastHasMoreResults = false
+        private var hapticRow = -1
+        private var suppressScrollHaptics = false
 
         private let itemIdentifier = NSUserInterfaceItemIdentifier("ClipboardItemCell")
         private let headerIdentifier = NSUserInterfaceItemIdentifier("ClipboardHeaderCell")
@@ -334,6 +336,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             guard rows.indices.contains(row), case .item(let item) = rows[row] else { return }
             selectedID = item.id
             updateVisibleSelection(in: tableView)
+            PaletteHaptics.tick()
             onSelect?(item)
         }
 
@@ -438,6 +441,9 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private func apply(
             _ scroll: ScrollIntent, selectedID: ClipboardItem.ID?, to tableView: NSTableView
         ) {
+            // Programmatic scrolls must not play the scrolling ratchet.
+            suppressScrollHaptics = true
+            defer { suppressScrollHaptics = false }
             switch scroll.kind {
             case .top:
                 scrollToTop(tableView)
@@ -499,7 +505,22 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             let scrolling = lastBoundsOrigin.map { $0 != origin } ?? false
             lastBoundsOrigin = origin
             queueHoverRefresh()
+            scrollHaptic()
             reportGeometry(scrolling: scrolling)
+        }
+
+        /// One tick per row boundary crossing the viewport edge. Quiet while hover selection
+        /// is following the pointer over rows (its selection ticks already speak) and while
+        /// the scroll came from keyboard navigation or a list reset.
+        private func scrollHaptic() {
+            guard let tableView else { return }
+            let visible = tableView.rows(in: tableView.visibleRect)
+            guard visible.location != NSNotFound else { return }
+            defer { hapticRow = visible.location }
+            guard !suppressScrollHaptics, hapticRow >= 0, hapticRow != visible.location,
+                !tableView.pointerDrivesSelection
+            else { return }
+            PaletteHaptics.tick()
         }
 
         private func queueHoverRefresh() {
@@ -582,6 +603,17 @@ private final class ClipboardTableView: NSTableView {
     private var pendingHoverTask: Task<Void, Never>?
 
     override var acceptsFirstResponder: Bool { false }
+
+    /// Hover selection is armed over rows: scrolling feedback defers to its selection ticks.
+    var pointerDrivesSelection: Bool {
+        guard let panel = window as? PalettePanel, panel.allowsHoverSelection,
+            let isItemRow
+        else { return false }
+        let point = convert(panel.mouseLocationOutsideOfEventStream, from: nil)
+        guard visibleRect.contains(point) else { return false }
+        let row = row(at: point)
+        return row >= 0 && isItemRow(row)
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

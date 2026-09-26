@@ -143,6 +143,7 @@ final class AppSettings: ObservableObject {
         static let animateMenuBarIconOnCopy = "animateMenuBarIconOnCopy"
         static let soundEffectsEnabled = "soundEffectsEnabled"
         static let copySoundEffect = "copySoundEffect"
+        static let hapticFeedbackEnabled = "hapticFeedbackEnabled"
     }
 
     @Published var clipboardRetention: ClipboardRetention {
@@ -209,6 +210,11 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(copySoundEffect.rawValue, forKey: Key.copySoundEffect) }
     }
 
+    /// Trackpad ticks when the pointer crosses a list row or a row crosses the viewport edge.
+    @Published var hapticFeedbackEnabled: Bool {
+        didSet { defaults.set(hapticFeedbackEnabled, forKey: Key.hapticFeedbackEnabled) }
+    }
+
     var savedClipboardPause: (isPaused: Bool, until: Date?) {
         (
             defaults.bool(forKey: Key.clipboardPaused),
@@ -259,5 +265,7 @@ final class AppSettings: ObservableObject {
             defaults.object(forKey: Key.copySoundEffect) == nil
             ? .one
             : CopySoundEffect(rawValue: defaults.integer(forKey: Key.copySoundEffect)) ?? .one
+        hapticFeedbackEnabled =
+            defaults.object(forKey: Key.hapticFeedbackEnabled) as? Bool ?? true
     }
 }
