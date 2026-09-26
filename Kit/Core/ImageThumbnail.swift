@@ -29,7 +29,7 @@ enum ImageThumbnail {
     }()
 
     /// Longest-edge size at or below which a decode is a "row" thumbnail; larger is a "preview".
-    private static let rowThreshold: CGFloat = 128
+    private static let rowThreshold: CGFloat = 512
 
     private static func pick(_ maxPixel: CGFloat) -> NSCache<NSString, NSImage> {
         maxPixel <= rowThreshold ? rowCache : previewCache

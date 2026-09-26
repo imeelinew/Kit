@@ -331,7 +331,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
             guard rows.indices.contains(row) else { return 0 }
             switch rows[row] {
-            case .item: return 36
+            case .item(let item): return ClipboardItemCellView.rowHeight(for: item)
             case .header: return row == 0 ? 24 : 32
             case .more: return 32
             }

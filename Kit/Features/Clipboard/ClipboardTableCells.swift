@@ -47,6 +47,8 @@ final class ClipboardItemCellView: NSTableCellView {
     private let thumbnailView = ClipboardThumbnailView()
     private let titleLabel = NSTextField(labelWithString: "")
     private var fullTitle = NSAttributedString(string: "")
+    private var standardConstraints: [NSLayoutConstraint] = []
+    private var imageConstraints: [NSLayoutConstraint] = []
     private var truncatesFromHead = false
     private var renderedTitleWidth: CGFloat = -1
     private var representedID: ClipboardItem.ID?
@@ -87,16 +89,26 @@ final class ClipboardItemCellView: NSTableCellView {
             highlightView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Theme.Spacing.xxs),
 
             thumbnailView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            titleLabel.heightAnchor.constraint(lessThanOrEqualToConstant: Theme.Size.rowIcon),
+        ])
+        standardConstraints = [
             thumbnailView.centerYAnchor.constraint(equalTo: centerYAnchor),
             thumbnailView.widthAnchor.constraint(equalToConstant: Theme.Size.rowIcon),
             thumbnailView.heightAnchor.constraint(equalToConstant: Theme.Size.rowIcon),
 
             titleLabel.leadingAnchor.constraint(
                 equalTo: thumbnailView.trailingAnchor, constant: Theme.Spacing.lg),
-            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            titleLabel.heightAnchor.constraint(lessThanOrEqualToConstant: Theme.Size.rowIcon),
-        ])
+        ]
+        imageConstraints = [
+            thumbnailView.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            thumbnailView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            thumbnailView.heightAnchor.constraint(equalToConstant: 56),
+            titleLabel.leadingAnchor.constraint(equalTo: thumbnailView.leadingAnchor),
+            titleLabel.topAnchor.constraint(equalTo: thumbnailView.bottomAnchor, constant: 4),
+        ]
+        NSLayoutConstraint.activate(standardConstraints)
         updateHighlightColor()
         setHighlightOpacity(0)
     }
@@ -143,6 +155,14 @@ final class ClipboardItemCellView: NSTableCellView {
     func updateTitle(item: ClipboardItem, query: String, locale: Locale) {
         let customTitle = item.customTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasCustomTitle = customTitle?.isEmpty == false
+        let isImage = item.kind == .image
+        NSLayoutConstraint.deactivate(isImage ? standardConstraints : imageConstraints)
+        NSLayoutConstraint.activate(isImage ? imageConstraints : standardConstraints)
+        titleLabel.isHidden = isImage && !hasCustomTitle
+        // Keep image-only rows identifiable to VoiceOver without a redundant visible label.
+        thumbnailView.setAccessibilityElement(isImage)
+        thumbnailView.setAccessibilityRole(isImage ? .image : .unknown)
+        thumbnailView.setAccessibilityLabel(isImage ? item.displayTitle(locale: locale) : nil)
         truncatesFromHead = item.kind == .path && !hasCustomTitle
         fullTitle = SearchHighlight.nsAttributed(
             Self.listTitle(for: item, customTitle: customTitle, locale: locale),
@@ -150,6 +170,13 @@ final class ClipboardItemCellView: NSTableCellView {
             font: .preferredFont(forTextStyle: .body))
         renderedTitleWidth = -1
         renderTitle()
+    }
+
+    static func rowHeight(for item: ClipboardItem) -> CGFloat {
+        guard item.kind == .image else { return 36 }
+        let hasCustomTitle = item.customTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty == false
+        return hasCustomTitle ? 92 : 72
     }
 
     private func renderTitle() {
@@ -337,9 +364,8 @@ final class ClipboardItemCellView: NSTableCellView {
 }
 
 private final class ClipboardThumbnailView: NSView {
-    /// Well above the 48 device pixels needed by the 24pt row slot on a 2× display, leaving enough
-    /// source detail for high-quality final downsampling.
-    private static let imageMaxPixel: CGFloat = 128
+    /// Covers a full-width preview on a 2× display, including wide screenshots.
+    private static let imageMaxPixel: CGFloat = 512
 
     private let symbolView = NSImageView()
     private var representedID: ClipboardItem.ID?
@@ -350,10 +376,6 @@ private final class ClipboardThumbnailView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.cornerRadius = Theme.Radius.thumbnail
-        layer?.cornerCurve = .continuous
-        layer?.masksToBounds = true
-        layer?.contentsGravity = .resizeAspectFill
 
         symbolView.imageScaling = .scaleProportionallyDown
         symbolView.translatesAutoresizingMaskIntoConstraints = false
@@ -387,15 +409,20 @@ private final class ClipboardThumbnailView: NSView {
         guard let image = displayedImage, image.size.width > 0, image.size.height > 0 else {
             return
         }
-        let factor = max(bounds.width / image.size.width, bounds.height / image.size.height)
+        let factor = min(bounds.width / image.size.width, bounds.height / image.size.height)
         let size = NSSize(width: image.size.width * factor, height: image.size.height * factor)
         let destination = NSRect(
-            x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2,
+            x: bounds.minX, y: bounds.midY - size.height / 2,
             width: size.width, height: size.height)
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current?.imageInterpolation = .high
+        let radius = min(Theme.Radius.thumbnail, min(size.width, size.height) / 2)
+        let outline = NSBezierPath(roundedRect: destination, xRadius: radius, yRadius: radius)
+        outline.addClip()
+        NSColor.labelColor.withAlphaComponent(0.04).setFill()
+        outline.fill()
         image.draw(
-            in: destination, from: .zero, operation: .copy, fraction: 1,
+            in: destination, from: .zero, operation: .sourceOver, fraction: 1,
             respectFlipped: true, hints: nil)
         NSGraphicsContext.restoreGraphicsState()
     }
@@ -448,6 +475,7 @@ private final class ClipboardThumbnailView: NSView {
         placeholderKind = kind
         displayedImage = nil
         layer?.contents = nil
+        layer?.cornerRadius = Theme.Radius.thumbnail
         layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.08).cgColor
         needsDisplay = true
         symbolView.isHidden = false
