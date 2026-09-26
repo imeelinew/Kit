@@ -115,10 +115,10 @@ struct ShortcutsSettingsView: View {
                 shortcutRow("Copy to Clipboard", shortcut: .copyToClipboard)
                 shortcutRow("Pin to Screen", shortcut: .pinToScreen)
                 shortcutRow("Show in Finder", shortcut: .showInFinder)
-                shortcutRow("Show Next Stack", shortcut: .showNextStack)
-                shortcutRow("Show Previous Stack", shortcut: .showPreviousStack)
                 shortcutRow("Show Next Type", shortcut: .showNextType)
                 shortcutRow("Show Previous Type", shortcut: .showPreviousType)
+                shortcutRow("Show Next Stack", shortcut: .showNextStack)
+                shortcutRow("Show Previous Stack", shortcut: .showPreviousStack)
             }
         }
     }
