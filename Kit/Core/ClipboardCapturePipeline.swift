@@ -81,3 +81,28 @@ actor ClipboardCapturePipeline {
         return NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
     }
 }
+
+/// Gatekeeper deciding whether an observed pasteboard change may become a capture.
+/// Pure so the privacy rules stay testable without a live pasteboard.
+enum ClipboardCapturePolicy {
+    /// Marker attached to Kit's own writes so monitoring ignores them.
+    static let internalType = NSPasteboard.PasteboardType("com.eli.Kit.internal")
+
+    /// Pasteboard markers password managers, browsers, and the OS put on secret copies.
+    static let sensitiveTypes: Set<NSPasteboard.PasteboardType> = [
+        .init("org.nspasteboard.ConcealedType"),
+        .init("org.nspasteboard.TransientType"),
+        .init("com.apple.is-sensitive"),
+    ]
+
+    static func shouldCapture(
+        types: [NSPasteboard.PasteboardType],
+        sourceBundleID: String?,
+        disabledApps: [String]
+    ) -> Bool {
+        if types.contains(internalType) { return false }
+        if !Set(types).isDisjoint(with: sensitiveTypes) { return false }
+        if let sourceBundleID, disabledApps.contains(sourceBundleID) { return false }
+        return true
+    }
+}

@@ -4,14 +4,7 @@ import UniformTypeIdentifiers
 @MainActor
 final class ClipboardManager {
     /// Marker attached to Kit's own writes so monitoring ignores them.
-    static let internalType = NSPasteboard.PasteboardType("com.eli.Kit.internal")
-
-    /// Pasteboard markers password managers, browsers, and the OS put on secret copies.
-    static let sensitiveTypes: Set<NSPasteboard.PasteboardType> = [
-        .init("org.nspasteboard.ConcealedType"),
-        .init("org.nspasteboard.TransientType"),
-        .init("com.apple.is-sensitive"),
-    ]
+    static let internalType = ClipboardCapturePolicy.internalType
 
     private static let pollInterval: TimeInterval = 0.1
 
@@ -62,11 +55,12 @@ final class ClipboardManager {
         guard !isPaused else { return }
 
         let types = pasteboard.types ?? []
-        if types.contains(Self.internalType) { return }
-        if !Set(types).isDisjoint(with: Self.sensitiveTypes) { return }
-
         let sourceBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        if let sourceBundleID, settings.clipboardDisabledApps.contains(sourceBundleID) { return }
+        guard ClipboardCapturePolicy.shouldCapture(
+            types: types,
+            sourceBundleID: sourceBundleID,
+            disabledApps: settings.clipboardDisabledApps
+        ) else { return }
 
         // A browser may advertise several representations while only some of them are readable.
         // Keep every image type so a missing promised PNG can fall through to TIFF or another

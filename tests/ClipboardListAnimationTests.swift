@@ -123,5 +123,6 @@ struct ClipboardListAnimationTests {
         window.close()
         print("PASS: animated deletion, rapid deletion, date headers, async refresh, pagination, empty results")
         try await ClipboardUndoTests.run()
+        ClipboardTextClassifierTests.run()
     }
 }

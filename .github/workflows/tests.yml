@@ -25,6 +25,12 @@ jobs:
           swift --version
       - name: Store deduplication
         run: ./scripts/test-clipboard-deduplication.sh
+      - name: Search pagination
+        run: ./scripts/test-clipboard-search.sh
+      - name: Capture pipeline
+        run: ./scripts/test-capture.sh
+      - name: Pinyin matching
+        run: ./scripts/test-pinyin.sh
       - name: Paste transactions
         run: ./scripts/test-paste-transactions.sh
       - name: Pinned images
