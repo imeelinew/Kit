@@ -123,21 +123,23 @@ struct ClipboardListAnimationTests {
 
         // A follow scroll paired with an animated insert waits out the row animation;
         // scrolling mid-animation offsets the animating rows from their logical frames.
+        // Asserted via bottom-row visibility: an immediate scroll reveals it at once,
+        // a deferred one only after the animation. (Raw offsets are not comparable —
+        // AppKit compensates the origin for inserts above the viewport on some systems.)
         let many = (0..<30).map { item("scroll row \($0)") }
         fixture.update(many)
         settle(0.3)
-        let clip = table.enclosingScrollView!.contentView
-        let offsetAtRest = clip.bounds.origin.y
-        precondition(!table.visibleRect.contains(table.rect(ofRow: table.numberOfRows - 1)),
+        precondition(!table.visibleRect.intersects(table.rect(ofRow: table.numberOfRows - 1)),
                      "The bottom row starts offscreen")
         fixture.scroll = ScrollIntent(kind: .follow)
         fixture.update([item("restored")] + many)
         fixture.selectedID = many.last!.id
         settle()
-        precondition(clip.bounds.origin.y == offsetAtRest,
+        precondition(!table.visibleRect.intersects(table.rect(ofRow: table.numberOfRows - 1)),
                      "The follow scroll defers past the animated insert")
         settle(0.4)
-        precondition(clip.bounds.origin.y != offsetAtRest, "The deferred follow scroll completes")
+        precondition(table.visibleRect.intersects(table.rect(ofRow: table.numberOfRows - 1)),
+                     "The deferred follow scroll completes")
 
         window.close()
         print("PASS: animated deletion, rapid deletion, date headers, async refresh, pagination, empty results")
