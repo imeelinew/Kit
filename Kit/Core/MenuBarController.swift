@@ -113,14 +113,24 @@ final class MenuBarController: NSObject {
         }
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if event.type == .rightMouseUp || modifiers.contains(.control) {
-            popMenu(event)
+            popMenu()
         } else {
             AppCore.shared.togglePalette()
         }
     }
 
-    private func popMenu(_ event: NSEvent) {
+    private func popMenu() {
         guard let button = statusItem?.button else { return }
+        let menu = makeMenu()
+        // Popping through standard status-item tracking instead of NSMenu.popUpContextMenu:
+        // the legacy path resolves the menu's appearance separately from the app and can
+        // render a dark menu in light mode (macOS 26+ menu rendering regression).
+        statusItem?.menu = menu
+        button.performClick(nil)
+        statusItem?.menu = nil
+    }
+
+    private func makeMenu() -> NSMenu {
         let locale = settings.language.locale
         let menu = NSMenu()
 
@@ -181,7 +191,7 @@ final class MenuBarController: NSObject {
         quitItem.target = self
         menu.addItem(quitItem)
 
-        NSMenu.popUpContextMenu(menu, with: event, for: button)
+        return menu
     }
 
     private func pauseOption(
