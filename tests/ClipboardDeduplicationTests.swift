@@ -1,16 +1,8 @@
 import Foundation
 import SQLite3
 
-// UI localization and the unrelated Markdown v1 migration are outside this store-only harness.
-// Legacy fixtures start at schema v1; newly created databases have no text to classify.
 enum AppLocalization {
     static func string(_ key: String, locale: Locale) -> String { key }
-}
-enum MarkdownAttributedRenderer {
-    static func isMarkdown(_ text: String) -> Bool { false }
-}
-enum ClipboardTextClassifier {
-    static func kind(for text: String) -> ClipboardItem.Kind { .text }
 }
 
 @main
@@ -79,58 +71,9 @@ struct ClipboardDeduplicationTests {
         print("PASS: interleaved/consecutive copies, full-history lookup, exact content, search, restart")
     }
 
-    @MainActor
-    static func migrationTests(in directory: URL) async {
-        var initial: ClipboardStore? = ClipboardStore(directory: directory)
-        initial?.load()
-        initial = nil
-        let db = database(directory)
-        defer { sqlite3_close(db) }
-        let older = Date().timeIntervalSince1970 - 100
-        let newer = older + 50
-        let namedID = UUID().uuidString
-        let stackedID = UUID().uuidString
-        let newestID = UUID().uuidString
-        let stackID = UUID().uuidString
-        execute(db, """
-            INSERT INTO stacks VALUES('\(stackID)', 'Saved', 0);
-            INSERT INTO items(id, kind, text, created_at, source_app, custom_title) VALUES
-              ('\(namedID)', 'text', 'duplicate content', \(older), 'old', 'My title'),
-              ('\(stackedID)', 'text', 'duplicate content', \(older + 1), 'old', NULL),
-              ('\(newestID)', 'text', 'duplicate content', \(newer), 'new', NULL),
-              ('\(UUID().uuidString)', 'text', 'plain duplicate', \(older), 'old', NULL),
-              ('\(UUID().uuidString)', 'text', 'plain duplicate', \(newer), 'new', NULL),
-              ('\(UUID().uuidString)', 'text', 'conflicting names', \(older), 'old', 'Name A'),
-              ('\(UUID().uuidString)', 'text', 'conflicting names', \(newer), 'new', 'Name B');
-            INSERT INTO stack_items VALUES('\(stackedID)', '\(stackID)');
-            PRAGMA user_version = 1;
-            """)
-        let store = ClipboardStore(directory: directory)
-        store.load()
-        let matches = store.items.filter { $0.text == "duplicate content" }
-        precondition(matches.count == 1)
-        let keeper = matches[0]
-        precondition(keeper.customTitle == "My title" && keeper.sourceBundleID == "new")
-        precondition(keeper.createdAt.timeIntervalSince1970 == newer)
-        precondition(store.stackID(for: keeper.id)?.uuidString == stackID)
-        precondition(store.items.filter { $0.text == "plain duplicate" }.count == 1)
-        precondition(store.items.filter { $0.text == "conflicting names" }.count == 2,
-                     "Do not discard conflicting user names")
-        precondition(scalar(db, "SELECT COUNT(*) FROM stack_items WHERE item_id NOT IN (SELECT id FROM items)") == 0)
-        let search = await store.searchAsync("duplicate content", after: nil, limit: 20)
-        precondition(search.items.map(\.id) == [keeper.id], "FTS must not retain deleted duplicates")
-        execute(db, "INSERT INTO items_fts(items_fts, rank) VALUES('integrity-check', 1)")
-        let reopened = ClipboardStore(directory: directory)
-        reopened.load()
-        precondition(reopened.items == store.items, "Migration is idempotent")
-        precondition(reopened.addText("duplicate content", kind: .text, sourceBundleID: "recopy")?.id == keeper.id)
-        print("PASS: legacy merge, latest metadata, names and stacks, conflicting names, FTS integrity, idempotency")
-    }
-
     static func main() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         await recopyTests(in: root.appendingPathComponent("recopy"))
-        await migrationTests(in: root.appendingPathComponent("migration"))
     }
 }

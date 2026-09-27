@@ -37,7 +37,8 @@ final class ClipboardStore: ObservableObject {
         );
         CREATE INDEX IF NOT EXISTS items_created_at ON items(created_at);
         CREATE INDEX IF NOT EXISTS items_kind ON items(kind);
-        DROP INDEX IF EXISTS items_pinned_at;
+        CREATE INDEX IF NOT EXISTS items_text_content
+          ON items(text, created_at DESC) WHERE kind != 'image';
         CREATE UNIQUE INDEX IF NOT EXISTS items_image_fingerprint
           ON items(image_fingerprint) WHERE image_fingerprint IS NOT NULL;
         CREATE TABLE IF NOT EXISTS stacks(
@@ -757,9 +758,6 @@ final class ClipboardStore: ObservableObject {
             sqlite3_exec(db, Self.coreSchema, nil, nil, nil) == SQLITE_OK
         else { return false }
         guard sqlite3_exec(db, Self.searchSchema, nil, nil, nil) == SQLITE_OK else { return false }
-        ensureCustomTitleColumn()
-        guard migrateMarkdownKinds() else { return false }
-        guard migrateDuplicateText() else { return false }
         insertStmt = prepare(
             """
             INSERT INTO items(
@@ -814,162 +812,6 @@ final class ClipboardStore: ObservableObject {
             && deleteByIDStmt != nil && staleImagesStmt != nil
             && deleteStaleStmt != nil && imageByFingerprintStmt != nil
             && itemByIDStmt != nil && textByContentStmt != nil
-    }
-
-    /// Merge legacy duplicates once, retaining an annotated identity, the newest copy metadata,
-    /// and compatible names/stack membership. Conflicting user organization is left intact.
-    private func migrateDuplicateText() -> Bool {
-        guard let versionStatement = prepare("PRAGMA user_version") else { return false }
-        let status = sqlite3_step(versionStatement)
-        let version = sqlite3_column_int(versionStatement, 0)
-        sqlite3_finalize(versionStatement)
-        guard status == SQLITE_ROW else { return false }
-        guard version < 2 else { return true }
-        guard sqlite3_exec(db, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { return false }
-        var committed = false
-        defer {
-            if !committed { sqlite3_exec(db, "ROLLBACK", nil, nil, nil) }
-        }
-        let sql = """
-            CREATE INDEX IF NOT EXISTS items_text_content
-              ON items(text, created_at DESC) WHERE kind != 'image';
-            CREATE TEMP TABLE text_duplicates AS
-            WITH compatible AS (
-              SELECT i.text FROM items i LEFT JOIN stack_items s ON s.item_id = i.id
-              WHERE i.kind != 'image' AND i.text IS NOT NULL
-              GROUP BY i.text
-              HAVING COUNT(*) > 1
-                AND COUNT(DISTINCT NULLIF(TRIM(i.custom_title), '')) <= 1
-                AND COUNT(DISTINCT s.stack_id) <= 1
-            )
-            SELECT i.rowid AS old_row,
-              FIRST_VALUE(i.rowid) OVER (
-                PARTITION BY i.text ORDER BY
-                  (NULLIF(TRIM(i.custom_title), '') IS NOT NULL OR s.item_id IS NOT NULL) DESC,
-                  i.created_at DESC, i.rowid DESC
-              ) AS keep_row,
-              FIRST_VALUE(i.rowid) OVER (
-                PARTITION BY i.text ORDER BY i.created_at DESC, i.rowid DESC
-              ) AS newest_row
-            FROM items i LEFT JOIN stack_items s ON s.item_id = i.id
-            WHERE i.kind != 'image' AND i.text IN (SELECT text FROM compatible);
-
-            UPDATE items AS keeper SET
-              created_at = (SELECT i.created_at FROM items i JOIN text_duplicates d
-                ON i.rowid = d.newest_row WHERE d.keep_row = keeper.rowid LIMIT 1),
-              source_app = (SELECT i.source_app FROM items i JOIN text_duplicates d
-                ON i.rowid = d.newest_row WHERE d.keep_row = keeper.rowid LIMIT 1),
-              custom_title = COALESCE((SELECT i.custom_title FROM items i JOIN text_duplicates d
-                ON i.rowid = d.old_row WHERE d.keep_row = keeper.rowid
-                AND NULLIF(TRIM(i.custom_title), '') IS NOT NULL LIMIT 1), keeper.custom_title)
-            WHERE rowid IN (SELECT keep_row FROM text_duplicates);
-
-            INSERT OR IGNORE INTO stack_items(item_id, stack_id)
-              SELECT keeper.id, s.stack_id FROM text_duplicates d
-              JOIN items old ON old.rowid = d.old_row
-              JOIN items keeper ON keeper.rowid = d.keep_row
-              JOIN stack_items s ON s.item_id = old.id;
-            DELETE FROM stack_items WHERE item_id IN (
-              SELECT i.id FROM items i JOIN text_duplicates d ON i.rowid = d.old_row
-              WHERE d.old_row != d.keep_row
-            );
-            DELETE FROM items WHERE rowid IN (
-              SELECT old_row FROM text_duplicates WHERE old_row != keep_row
-            );
-            DROP TABLE text_duplicates;
-            PRAGMA user_version = 2;
-            """
-        guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK,
-            sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK
-        else { return false }
-        committed = true
-        return true
-    }
-
-    /// Classify pre-existing rows once, then persist Markdown as an ordinary `kind` value.
-    /// Updating only `kind` leaves the text FTS index and row order untouched.
-    private func migrateMarkdownKinds() -> Bool {
-        var versionStatement: OpaquePointer?
-        guard sqlite3_prepare_v2(db, "PRAGMA user_version", -1, &versionStatement, nil) == SQLITE_OK
-        else {
-            sqlite3_finalize(versionStatement)
-            return false
-        }
-        let versionStatus = sqlite3_step(versionStatement)
-        let version = sqlite3_column_int(versionStatement, 0)
-        sqlite3_finalize(versionStatement)
-        guard versionStatus == SQLITE_ROW else { return false }
-        guard version < 1 else { return true }
-
-        guard sqlite3_exec(db, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { return false }
-        var committed = false
-        defer {
-            if !committed { sqlite3_exec(db, "ROLLBACK", nil, nil, nil) }
-        }
-
-        var readStatement: OpaquePointer?
-        guard sqlite3_prepare_v2(
-            db, "SELECT rowid, kind, text FROM items WHERE kind IN ('text', 'code')", -1,
-            &readStatement, nil
-        ) == SQLITE_OK else {
-            sqlite3_finalize(readStatement)
-            return false
-        }
-        var markdownRowIDs: [sqlite3_int64] = []
-        var status = sqlite3_step(readStatement)
-        while status == SQLITE_ROW {
-            if let storedKind = ClipboardSQLite.columnString(readStatement, 1),
-                let text = ClipboardSQLite.columnString(readStatement, 2)
-            {
-                let isMarkdown = storedKind == ClipboardItem.Kind.text.rawValue
-                    ? MarkdownAttributedRenderer.isMarkdown(text)
-                    : ClipboardTextClassifier.kind(for: text) == .markdown
-                if isMarkdown {
-                    markdownRowIDs.append(sqlite3_column_int64(readStatement, 0))
-                }
-            }
-            status = sqlite3_step(readStatement)
-        }
-        sqlite3_finalize(readStatement)
-        guard status == SQLITE_DONE else { return false }
-
-        var updateStatement: OpaquePointer?
-        guard sqlite3_prepare_v2(
-            db, "UPDATE items SET kind = 'markdown' WHERE rowid = ?", -1,
-            &updateStatement, nil
-        ) == SQLITE_OK else {
-            sqlite3_finalize(updateStatement)
-            return false
-        }
-        defer { sqlite3_finalize(updateStatement) }
-        for rowID in markdownRowIDs {
-            sqlite3_bind_int64(updateStatement, 1, rowID)
-            guard sqlite3_step(updateStatement) == SQLITE_DONE else { return false }
-            sqlite3_reset(updateStatement)
-            sqlite3_clear_bindings(updateStatement)
-        }
-        guard sqlite3_exec(db, "PRAGMA user_version = 1", nil, nil, nil) == SQLITE_OK,
-            sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK
-        else { return false }
-        committed = true
-        return true
-    }
-
-    private func ensureCustomTitleColumn() {
-        var stmt: OpaquePointer?
-        defer { sqlite3_finalize(stmt) }
-        guard sqlite3_prepare_v2(db, "PRAGMA table_info(items)", -1, &stmt, nil) == SQLITE_OK else {
-            return
-        }
-        var hasColumn = false
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            if let name = ClipboardSQLite.columnString(stmt, 1), name == "custom_title" {
-                hasColumn = true
-                break
-            }
-        }
-        guard !hasColumn else { return }
-        sqlite3_exec(db, "ALTER TABLE items ADD COLUMN custom_title TEXT", nil, nil, nil)
     }
 
     private func prepare(_ sql: String) -> OpaquePointer? {
