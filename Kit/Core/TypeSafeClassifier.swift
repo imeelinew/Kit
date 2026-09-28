@@ -11,6 +11,10 @@ enum TypeSafeClassifier {
     /// answers were exactly its wrong ones.
     static let minimumConfidence = 0.75
 
+    /// The question only offers these three; a stray link/path/image answer must never re-grade
+    /// a text row into a kind with different rendering and actions (the bench saw it happen).
+    static let refinableKinds: Set<String> = ["code", "markdown", "text"]
+
     struct Verdict: Sendable {
         let kind: ClipboardItem.Kind
         let confidence: Double
@@ -65,6 +69,7 @@ enum TypeSafeClassifier {
             let answers = root["answers"] as? [String: Any],
             let kindAnswer = answers["kind"] as? [String: Any],
             let choice = kindAnswer["choice"] as? String,
+            refinableKinds.contains(choice),
             let kind = ClipboardItem.Kind(rawValue: choice),
             let confidence = kindAnswer["confidence"] as? Double
         else { return nil }

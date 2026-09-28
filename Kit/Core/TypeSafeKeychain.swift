@@ -31,11 +31,15 @@ enum TypeSafeKeychain {
     @discardableResult
     static func save(_ key: String) -> Bool {
         guard let data = key.data(using: .utf8) else { return false }
-        var attributes = query
-        attributes[kSecValueData as String] = data
-        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        // attributesToUpdate may only carry real attributes; search keys such as kSecClass
+        // are rejected by SecItemUpdate on macOS. The insert path stays on the plain
+        // login keychain: kSecUseDataProtectionKeychain needs entitlements this app
+        // does not carry (verified: errSecMissingEntitlement without them).
+        let update: [String: Any] = [kSecValueData as String: data]
+        let status = SecItemUpdate(query as CFDictionary, update as CFDictionary)
         if status == errSecItemNotFound {
-            attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            var attributes = query
+            attributes[kSecValueData as String] = data
             return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
         }
         return status == errSecSuccess
