@@ -4,7 +4,7 @@ import SwiftUI
 struct RootPaletteView: View {
     @Bindable var vm: PaletteViewModel
     let store: ClipboardStore
-    @ObservedObject private var settings = AppCore.shared.settings
+    @ObservedObject var settings: AppSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isQueryEmpty: Bool {
@@ -351,6 +351,11 @@ private struct PaletteSearchField: NSViewRepresentable {
 }
 
 private final class PaletteSearchTextField: NSTextField {
+    override class var cellClass: AnyClass? {
+        get { PaletteSearchCell.self }
+        set {}
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         (window as? PalettePanel)?.registerSearchField(self)
@@ -361,6 +366,21 @@ private final class PaletteSearchTextField: NSTextField {
             return false
         }
         return super.becomeFirstResponder()
+    }
+}
+
+private final class PaletteSearchCell: NSTextFieldCell {
+    override func drawInterior(withFrame cellFrame: NSRect, in controlView: NSView) {
+        // AppKit's inactive placeholder drawing does not preserve the attributed color.
+        // Match the field editor's placeholder while the Stack name owns first responder.
+        if stringValue.isEmpty,
+            (controlView as? NSTextField)?.currentEditor() == nil,
+            let placeholderAttributedString
+        {
+            placeholderAttributedString.draw(in: titleRect(forBounds: cellFrame).insetBy(dx: 2, dy: 0))
+        } else {
+            super.drawInterior(withFrame: cellFrame, in: controlView)
+        }
     }
 }
 

@@ -9,7 +9,11 @@ final class PalettePanel: NSPanel {
     weak var paletteViewModel: PaletteViewModel? {
         didSet {
             paletteViewModel?.onMenuOpenChanged = { [weak self] open in
-                self?.setSearchCaretHidden(open)
+                if open {
+                    self?.setSearchCaretHidden(true)
+                } else {
+                    self?.requestSearchFocus()
+                }
             }
             paletteViewModel?.onSearchFocusRequested = { [weak self] in
                 self?.requestSearchFocus()
@@ -232,11 +236,14 @@ final class PalettePanel: NSPanel {
         else { return false }
         guard makeFirstResponder(searchField) else { return false }
         pendingSearchFocusRequest = nil
+        setSearchCaretHidden(paletteViewModel?.menuOpen == true)
         return true
     }
 
     private func setSearchCaretHidden(_ hidden: Bool) {
-        guard let editor = firstResponder as? NSTextView else { return }
+        guard let editor = searchField?.currentEditor() as? NSTextView,
+            firstResponder === editor
+        else { return }
         editor.insertionPointColor = hidden ? .clear : .textColor
         editor.updateInsertionPointStateAndRestartTimer(!hidden)
     }

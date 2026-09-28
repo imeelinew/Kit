@@ -133,7 +133,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         let style = core.settings.paletteVisualStyle
         if let panel, panelStyle == style { return panel }
         panel?.orderOut(nil)
-        let root = RootPaletteView(vm: core.palette, store: core.clipboardStore)
+        let root = RootPaletteView(vm: core.palette, store: core.clipboardStore, settings: core.settings)
         let panel = PalettePanel(rootView: root, visualStyle: style)
         panel.delegate = self
         panel.paletteViewModel = core.palette

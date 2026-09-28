@@ -198,6 +198,7 @@ private struct StackNameField: NSViewRepresentable {
         DispatchQueue.main.async {
             context.coordinator.focusScheduled = false
             guard !context.coordinator.didFocus, let window = field.window else { return }
+            guard (window as? PalettePanel)?.paletteViewModel?.isNamingStack == true else { return }
             guard window.makeFirstResponder(field) else { return }
             context.coordinator.didFocus = true
             if let editor = window.fieldEditor(true, for: field) as? NSTextView {
