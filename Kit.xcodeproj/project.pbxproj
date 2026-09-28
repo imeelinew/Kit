@@ -57,7 +57,6 @@
 		CA2000000000000000000001 /* Pinyin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA2000000000000000000002 /* Pinyin.swift */; };
 		CA3000000000000000000001 /* ClipboardTextClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3000000000000000000002 /* ClipboardTextClassifier.swift */; };
 		CA6000000000000000000001 /* TypeSafeClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA6000000000000000000002 /* TypeSafeClassifier.swift */; };
-		CAB000000000000000000001 /* TypeSafeKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAB000000000000000000002 /* TypeSafeKeychain.swift */; };
 		CAA000000000000000000001 /* ExperimentsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAA000000000000000000002 /* ExperimentsSettingsView.swift */; };
 		CA4000000000000000000001 /* ClipboardTableCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA4000000000000000000002 /* ClipboardTableCells.swift */; };
 		CA5000000000000000000001 /* ClipboardPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5000000000000000000002 /* ClipboardPreview.swift */; };
@@ -129,7 +128,6 @@
 		CA2000000000000000000002 /* Pinyin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pinyin.swift; sourceTree = "<group>"; };
 		CA3000000000000000000002 /* ClipboardTextClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTextClassifier.swift; sourceTree = "<group>"; };
 		CA6000000000000000000002 /* TypeSafeClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeSafeClassifier.swift; sourceTree = "<group>"; };
-		CAB000000000000000000002 /* TypeSafeKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeSafeKeychain.swift; sourceTree = "<group>"; };
 		CAA000000000000000000002 /* ExperimentsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperimentsSettingsView.swift; sourceTree = "<group>"; };
 		CA4000000000000000000002 /* ClipboardTableCells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTableCells.swift; sourceTree = "<group>"; };
 		CA5000000000000000000002 /* ClipboardPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPreview.swift; sourceTree = "<group>"; };
@@ -197,7 +195,6 @@
 				FCFFE5C6B9CC83C972FD0B0D /* ClipboardStore.swift */,
 				CA3000000000000000000002 /* ClipboardTextClassifier.swift */,
 				CA6000000000000000000002 /* TypeSafeClassifier.swift */,
-				CAB000000000000000000002 /* TypeSafeKeychain.swift */,
 				C6853210949502E0C47D69B9 /* EdgeDissolve.swift */,
 				AF2FD6AB5017BBFF5EE420A4 /* ImageThumbnail.swift */,
 				D22A18A2E99B807E7716432E /* InputSourceSwitcher.swift */,
@@ -445,7 +442,6 @@
 				E2C25F35DF0B1F8C9960CD38 /* ClipboardStore.swift in Sources */,
 				CA3000000000000000000001 /* ClipboardTextClassifier.swift in Sources */,
 				CA6000000000000000000001 /* TypeSafeClassifier.swift in Sources */,
-				CAB000000000000000000001 /* TypeSafeKeychain.swift in Sources */,
 				1D9AA5ECC0F41C5EE2E43336 /* ClipboardView.swift in Sources */,
 				CA4000000000000000000001 /* ClipboardTableCells.swift in Sources */,
 				CA5000000000000000000001 /* ClipboardPreview.swift in Sources */,

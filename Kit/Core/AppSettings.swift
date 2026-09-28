@@ -145,6 +145,7 @@ final class AppSettings: ObservableObject {
         static let copySoundEffect = "copySoundEffect"
         static let hapticFeedbackEnabled = "hapticFeedbackEnabled"
         static let typesafeAIEnabled = "typesafeAIEnabled"
+        static let typesafeAPIKey = "typesafeAPIKey"
     }
 
     @Published var clipboardRetention: ClipboardRetention {
@@ -221,17 +222,18 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(typesafeAIEnabled, forKey: Key.typesafeAIEnabled) }
     }
 
-    /// Credential, so it lives in the Keychain and is written only through the method below.
+    /// Saved when the user submits the settings field, not on each keystroke.
     @Published private(set) var typesafeAPIKey: String?
 
-    @discardableResult
-    func saveTypeSafeAPIKey(_ key: String) -> Bool {
+    func saveTypeSafeAPIKey(_ key: String) {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed != (typesafeAPIKey ?? "") else { return true }
-        let saved = trimmed.isEmpty ? TypeSafeKeychain.delete() : TypeSafeKeychain.save(trimmed)
-        guard saved else { return false }
+        guard trimmed != (typesafeAPIKey ?? "") else { return }
+        if trimmed.isEmpty {
+            defaults.removeObject(forKey: Key.typesafeAPIKey)
+        } else {
+            defaults.set(trimmed, forKey: Key.typesafeAPIKey)
+        }
         typesafeAPIKey = trimmed.isEmpty ? nil : trimmed
-        return true
     }
 
     var savedClipboardPause: (isPaused: Bool, until: Date?) {
@@ -287,6 +289,6 @@ final class AppSettings: ObservableObject {
         hapticFeedbackEnabled =
             defaults.object(forKey: Key.hapticFeedbackEnabled) as? Bool ?? true
         typesafeAIEnabled = defaults.object(forKey: Key.typesafeAIEnabled) as? Bool ?? false
-        typesafeAPIKey = TypeSafeKeychain.read()
+        typesafeAPIKey = defaults.string(forKey: Key.typesafeAPIKey)
     }
 }
