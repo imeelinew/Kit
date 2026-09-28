@@ -106,9 +106,21 @@ final class ClipboardManager {
                     ClipboardTextClassifier.kind(for: text)
                 }.value
                 guard !Task.isCancelled else { return }
-                self.store.addText(
+                let item = self.store.addText(
                     text, kind: kind, sourceBundleID: capture.sourceBundleID,
                     expectedGeneration: capture.generation)
+                // The rules answer instantly; TypeSafe (when enabled) re-grades only the
+                // judgment-call kinds, and a failed or low-confidence call keeps the local one.
+                if let item, self.settings.typesafeAIEnabled, let apiKey = self.settings.typesafeAPIKey,
+                    kind != .link, kind != .path
+                {
+                    Task { [weak self] in
+                        guard
+                            let verdict = await TypeSafeClassifier.refine(text, apiKey: apiKey)
+                        else { return }
+                        self?.store.updateKind(id: item.id, to: verdict.kind)
+                    }
+                }
             case .image(let png):
                 await self.store.addImage(
                     png, sourceBundleID: capture.sourceBundleID,

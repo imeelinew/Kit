@@ -6,6 +6,7 @@
 "Add Application…" = "添加应用…";
 "Add to Stack" = "添加到 Stack";
 "All Types" = "全部类型";
+"API Key" = "API 密钥";
 "App Language" = "应用语言";
 "Appearance" = "外观";
 "Back" = "返回";
@@ -19,6 +20,9 @@
 "Clear History" = "清空历史";
 "Check for Updates" = "检查更新…";
 "Clipboard" = "剪贴板";
+"Enable TypeSafe AI" = "开启 TypeSafe AI";
+"Experiments" = "实验";
+"Save" = "保存";
 "Show Kit" = "打开 Kit";
 "Code" = "代码";
 "Content Preview" = "内容预览";

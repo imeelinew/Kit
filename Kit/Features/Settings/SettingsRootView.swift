@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum SettingsTab: Int, CaseIterable, Hashable, Identifiable {
-    case general, shortcuts, appearance, sound, clipboard, history, about
+    case general, shortcuts, appearance, sound, clipboard, history, about, experiments
 
     var id: Int { rawValue }
 
@@ -14,6 +14,7 @@ enum SettingsTab: Int, CaseIterable, Hashable, Identifiable {
         case .clipboard: return "Clipboard"
         case .history: return "History"
         case .about: return "About"
+        case .experiments: return "Experiments"
         }
     }
 
@@ -27,6 +28,7 @@ enum SettingsTab: Int, CaseIterable, Hashable, Identifiable {
         case .clipboard: return "lucide-clipboard"
         case .history: return "lucide-history"
         case .about: return "lucide-info"
+        case .experiments: return "lucide-flask-conical"
         }
     }
 }

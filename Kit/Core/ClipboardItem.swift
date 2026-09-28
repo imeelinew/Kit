@@ -65,6 +65,14 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
             sourceBundleID: sourceBundleID, customTitle: customTitle)
     }
 
+    /// Same capture re-graded (async TypeSafe refinement); identity and every other field stay.
+    func withKind(_ kind: Kind) -> ClipboardItem {
+        ClipboardItem(
+            id: id, kind: kind, text: text, imagePath: imagePath,
+            imageFingerprint: imageFingerprint, createdAt: createdAt,
+            sourceBundleID: sourceBundleID, customTitle: customTitle)
+    }
+
     /// Visible list/card title: a persisted custom name, otherwise the first line of text or "Image".
     func displayTitle(locale: Locale) -> String {
         if let customTitle {

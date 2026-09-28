@@ -6,6 +6,7 @@
 "Add Application…" = "Add Application…";
 "Add to Stack" = "Add to Stack";
 "All Types" = "All Types";
+"API Key" = "API Key";
 "App Language" = "App Language";
 "Appearance" = "Appearance";
 "Back" = "Back";
@@ -19,6 +20,9 @@
 "Clear History" = "Clear History";
 "Check for Updates" = "Check for Updates…";
 "Clipboard" = "Clipboard";
+"Enable TypeSafe AI" = "Enable TypeSafe AI";
+"Experiments" = "Experiments";
+"Save" = "Save";
 "Show Kit" = "Show Kit";
 "Code" = "Code";
 "Content Preview" = "Content Preview";
