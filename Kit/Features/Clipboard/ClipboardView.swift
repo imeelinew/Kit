@@ -341,6 +341,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                                 makeIfNecessary: false) as? ClipboardItemCellView
                         else { continue }
                         cell.updateKind(item.kind, animated: animate)
+                        cell.updateTitle(item: item, query: query, locale: locale)
                     }
                     return false
                 }

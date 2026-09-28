@@ -102,24 +102,29 @@ final class ClipboardManager {
 
             switch capture.content {
             case .text(let text):
-                let kind = await Task.detached(priority: .utility) {
-                    ClipboardTextClassifier.kind(for: text)
-                }.value
-                guard !Task.isCancelled else { return }
-                let item = self.store.addText(
-                    text, kind: kind, sourceBundleID: capture.sourceBundleID,
-                    expectedGeneration: capture.generation)
-                // The rules answer instantly; TypeSafe (when enabled) re-grades only the
-                // judgment-call kinds, and a failed or low-confidence call keeps the local one.
-                if let item, self.settings.typesafeAIEnabled, let apiKey = self.settings.typesafeAPIKey,
-                    kind != .link, kind != .path
-                {
+                if self.settings.typesafeAIEnabled {
+                    // Capture immediately; only jev decides the eventual classification.
+                    guard let item = self.store.addText(
+                        text, kind: .text, sourceBundleID: capture.sourceBundleID,
+                        expectedGeneration: capture.generation),
+                        let apiKey = self.settings.typesafeAPIKey
+                    else { return }
                     Task { [weak self] in
-                        guard
-                            let verdict = await TypeSafeClassifier.refine(text, apiKey: apiKey)
+                        guard let kind = await TypeSafeClassifier.classify(text, apiKey: apiKey),
+                            let self, self.settings.typesafeAIEnabled,
+                            self.store.captureGeneration == capture.generation,
+                            self.store.item(id: item.id)?.createdAt == item.createdAt
                         else { return }
-                        self?.store.updateKind(id: item.id, to: verdict.kind)
+                        self.store.updateKind(id: item.id, to: kind)
                     }
+                } else {
+                    let kind = await Task.detached(priority: .utility) {
+                        ClipboardTextClassifier.kind(for: text)
+                    }.value
+                    guard !Task.isCancelled else { return }
+                    self.store.addText(
+                        text, kind: kind, sourceBundleID: capture.sourceBundleID,
+                        expectedGeneration: capture.generation)
                 }
             case .image(let png):
                 await self.store.addImage(

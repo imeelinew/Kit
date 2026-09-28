@@ -157,7 +157,7 @@ final class ClipboardItemCellView: NSTableCellView {
         displayedKind = item.kind
     }
 
-    /// A TypeSafe verdict changes only the symbol for text, Markdown, and code rows.
+    /// A TypeSafe verdict can change any text-backed row's kind.
     /// Keep the existing cell and fade its thumbnail to the new kind.
     func updateKind(_ kind: ClipboardItem.Kind, animated: Bool) {
         guard representedID != nil, displayedKind != kind else { return }

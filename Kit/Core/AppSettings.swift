@@ -216,7 +216,7 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(hapticFeedbackEnabled, forKey: Key.hapticFeedbackEnabled) }
     }
 
-    /// Experimental: refine captured kinds through the TypeSafe API instead of rules alone.
+    /// Experimental: classify captured text exclusively through TypeSafe instead of local rules.
     @Published var typesafeAIEnabled: Bool {
         didSet { defaults.set(typesafeAIEnabled, forKey: Key.typesafeAIEnabled) }
     }

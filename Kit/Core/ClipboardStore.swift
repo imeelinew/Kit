@@ -163,7 +163,7 @@ final class ClipboardStore: ObservableObject {
     ) -> ClipboardItem? {
         if let expectedGeneration, expectedGeneration != captureGeneration { return nil }
         if let existing = textItem(matching: text) {
-            let updated = existing.refreshed(sourceBundleID: sourceBundleID)
+            let updated = existing.refreshed(sourceBundleID: sourceBundleID).withKind(kind)
             return refresh(updated) ? updated : nil
         }
         let item = ClipboardItem(text: text, kind: kind, sourceBundleID: sourceBundleID)
@@ -206,7 +206,7 @@ final class ClipboardStore: ObservableObject {
         return loadItem(id: id)
     }
 
-    /// Re-grade an existing row's kind (async TypeSafe refinement). The row id is stable across
+    /// Re-grade an existing row's kind (async TypeSafe classification). The row id is stable across
     /// recopies of the same content, so a late answer lands on the right item or on nothing if
     /// the item was deleted in the meantime.
     @discardableResult
@@ -619,6 +619,7 @@ final class ClipboardStore: ObservableObject {
             sqlite3_bind_null(stmt, 2)
         }
         sqlite3_bind_text(stmt, 3, updated.id.uuidString, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 4, updated.kind.rawValue, -1, SQLITE_TRANSIENT)
         guard stepAndReset(stmt) else { return false }
         // Publish one complete revision, without briefly removing the selected item.
         items = Array(([updated] + items.filter { $0.id != updated.id }).prefix(Self.memoryWindow))
@@ -789,7 +790,7 @@ final class ClipboardStore: ObservableObject {
             FROM items ORDER BY created_at DESC, rowid DESC LIMIT ?
             """)
         refreshStmt = prepare(
-            "UPDATE items SET created_at = ?, source_app = ? WHERE id = ?")
+            "UPDATE items SET created_at = ?1, source_app = ?2, kind = ?4 WHERE id = ?3")
         deleteByIDStmt = prepare("DELETE FROM items WHERE id = ?")
         staleImagesStmt = prepare(
             """
