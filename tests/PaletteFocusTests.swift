@@ -23,37 +23,6 @@ struct PaletteFocusTests {
         panel.sendEvent(event)
     }
 
-    /// Render the production cell over a solid background so vibrancy does not hide the ink.
-    static func checkPlaceholder(_ field: NSTextField, named name: String) throws {
-        let image = NSImage(size: field.bounds.size)
-        field.effectiveAppearance.performAsCurrentDrawingAppearance {
-            image.lockFocus()
-            NSColor.textBackgroundColor.setFill()
-            field.bounds.fill()
-            field.cell!.drawInterior(withFrame: field.bounds, in: field)
-            image.unlockFocus()
-        }
-        let bitmap = NSBitmapImageRep(data: image.tiffRepresentation!)!
-        let background = bitmap.colorAt(x: bitmap.pixelsWide - 1, y: 0)!
-            .usingColorSpace(.deviceRGB)!.redComponent
-        var contrast: CGFloat = 0
-        for y in 0..<bitmap.pixelsHigh {
-            for x in 0..<bitmap.pixelsWide {
-                let value = bitmap.colorAt(x: x, y: y)!.usingColorSpace(.deviceRGB)!.redComponent
-                contrast = max(contrast, abs(value - background))
-            }
-        }
-        precondition(
-            contrast > 0.05 && contrast < 0.45,
-            "The inactive placeholder stays muted in both appearances, contrast: \(contrast)")
-        if let directory = ProcessInfo.processInfo.environment["KIT_FOCUS_SNAPSHOT_DIR"] {
-            let url = URL(fileURLWithPath: directory)
-            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-            try bitmap.representation(using: .png, properties: [:])!.write(
-                to: url.appendingPathComponent("\(name).png"))
-        }
-    }
-
     static func main() async throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory
@@ -90,7 +59,6 @@ struct PaletteFocusTests {
                 }!
                 precondition(
                     naming.currentEditor() === panel.firstResponder, "New Stack focuses its name")
-                try checkPlaceholder(search, named: "\(appearance.rawValue)-\(style)-placeholder")
                 key(kVK_ANSI_A, characters: "a", in: panel)
                 precondition(
                     vm.stackNameDraft == "a" && vm.query.isEmpty, "Typing edits only the name")

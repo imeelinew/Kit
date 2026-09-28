@@ -169,7 +169,7 @@ struct RootPaletteView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: Theme.Spacing.md) {
-            PaletteSearchField(text: $vm.query, enabled: true, fontSize: 20)
+            PaletteSearchField(text: $vm.query)
                 .frame(maxWidth: .infinity)
             typeFilterControl
             stackFilterControl
@@ -295,10 +295,27 @@ struct RootPaletteView: View {
     }
 }
 
-private struct PaletteSearchField: NSViewRepresentable {
+private struct PaletteSearchField: View {
     @Binding var text: String
-    let enabled: Bool
-    var fontSize: CGFloat = 17
+
+    var body: some View {
+        PaletteSearchInput(text: $text)
+            .overlay(alignment: .leading) {
+                if text.isEmpty {
+                    Text("Search")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.primary)
+                        .opacity(0.25)
+                        .padding(.leading, 2)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+    }
+}
+
+private struct PaletteSearchInput: NSViewRepresentable {
+    @Binding var text: String
 
     func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
 
@@ -309,7 +326,7 @@ private struct PaletteSearchField: NSViewRepresentable {
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
-        field.font = .systemFont(ofSize: fontSize, weight: .regular)
+        field.font = .systemFont(ofSize: 20, weight: .regular)
         field.textColor = .labelColor
         field.cell?.usesSingleLineMode = true
         field.cell?.wraps = false
@@ -320,18 +337,8 @@ private struct PaletteSearchField: NSViewRepresentable {
     func updateNSView(_ field: NSTextField, context: Context) {
         context.coordinator.text = $text
         if field.stringValue != text { field.stringValue = text }
-        field.isEnabled = enabled
-        field.font = .systemFont(ofSize: fontSize, weight: .regular)
         let searchTitle = AppLocalization.string("Search", locale: context.environment.locale)
         field.setAccessibilityLabel(searchTitle)
-        field.placeholderAttributedString = NSAttributedString(
-            string: searchTitle,
-            attributes: [
-                .font: NSFont.systemFont(ofSize: fontSize, weight: .regular),
-                .foregroundColor: NSColor.tertiaryLabelColor,
-            ]
-        )
-        if !enabled, field.currentEditor() != nil { field.window?.makeFirstResponder(nil) }
         (field.window as? PalettePanel)?.registerSearchField(field)
     }
 
@@ -351,11 +358,6 @@ private struct PaletteSearchField: NSViewRepresentable {
 }
 
 private final class PaletteSearchTextField: NSTextField {
-    override class var cellClass: AnyClass? {
-        get { PaletteSearchCell.self }
-        set {}
-    }
-
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         (window as? PalettePanel)?.registerSearchField(self)
@@ -366,21 +368,6 @@ private final class PaletteSearchTextField: NSTextField {
             return false
         }
         return super.becomeFirstResponder()
-    }
-}
-
-private final class PaletteSearchCell: NSTextFieldCell {
-    override func drawInterior(withFrame cellFrame: NSRect, in controlView: NSView) {
-        // AppKit's inactive placeholder drawing does not preserve the attributed color.
-        // Match the field editor's placeholder while the Stack name owns first responder.
-        if stringValue.isEmpty,
-            (controlView as? NSTextField)?.currentEditor() == nil,
-            let placeholderAttributedString
-        {
-            placeholderAttributedString.draw(in: titleRect(forBounds: cellFrame).insetBy(dx: 2, dy: 0))
-        } else {
-            super.drawInterior(withFrame: cellFrame, in: controlView)
-        }
     }
 }
 
