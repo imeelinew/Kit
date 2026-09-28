@@ -8,7 +8,6 @@ script_dir="${0:A:h}"
 repo_root="${script_dir:h}"
 app_name="Kit"
 installed_app="/Applications/${app_name}.app"
-derived_data="$repo_root/build/DerivedData"
 
 cd "$repo_root"
 
@@ -31,10 +30,9 @@ xcodebuild \
     -project Kit.xcodeproj \
     -scheme Kit \
     -configuration Release \
-    -derivedDataPath "$derived_data" \
     build
 
-built_app="$derived_data/Build/Products/Release/${app_name}.app"
+built_app=$(xcodebuild -project Kit.xcodeproj -scheme Kit -configuration Release -showBuildSettings 2>/dev/null | awk '$1 == "BUILT_PRODUCTS_DIR" {print $3; exit}')/${app_name}.app
 [[ -d "$built_app" ]] || {
     print -u2 "Built app not found: $built_app"
     exit 70
