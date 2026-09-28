@@ -390,6 +390,7 @@ private final class ClipboardThumbnailView: NSView {
         super.init(frame: frameRect)
         wantsLayer = true
 
+        symbolView.wantsLayer = true
         symbolView.imageScaling = .scaleProportionallyDown
         symbolView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(symbolView)
@@ -469,19 +470,20 @@ private final class ClipboardThumbnailView: NSView {
 
     func updateKind(_ kind: ClipboardItem.Kind, animated: Bool) {
         guard placeholderKind != kind else { return }
-        layer?.removeAnimation(forKey: "kindFade")
-        if animated, let layer {
+        symbolView.displayIfNeeded()
+        cancelKindTransition()
+        showKind(kind)
+        if animated, let layer = symbolView.layer {
             let fade = CATransition()
             fade.type = .fade
             fade.duration = Theme.Motion.contentDuration
             fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            layer.add(fade, forKey: "kindFade")
+            layer.add(fade, forKey: "transition")
         }
-        showKind(kind)
     }
 
     func cancelKindTransition() {
-        layer?.removeAnimation(forKey: "kindFade")
+        symbolView.layer?.removeAnimation(forKey: "transition")
     }
 
     override func prepareForReuse() {

@@ -54,6 +54,12 @@ struct ClipboardListAnimationTests {
     }
 
     @MainActor
+    static func hasKindFade(in view: NSView) -> Bool {
+        view.layer?.animation(forKey: "transition") != nil
+            || view.subviews.contains { hasKindFade(in: $0) }
+    }
+
+    @MainActor
     static func main() async throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory
@@ -95,6 +101,33 @@ struct ClipboardListAnimationTests {
         settle()
         precondition(refinedCell.displayedKind == .markdown,
                      "Consecutive verdicts update the same cell without a full reload")
+
+        // AI starts at plain text. A pagination refresh can accompany its verdict;
+        // preserve the visible cell and the actual Core Animation transition.
+        fixture.hasMore = true
+        fixture.update([a, b, c, d])
+        settle()
+        window.orderFront(nil)
+        settle()
+        let aiCell = table.view(atColumn: 0, row: 1, makeIfNecessary: true)
+            as! ClipboardItemCellView
+        fixture.hasMore = false
+        fixture.update([a.withKind(.link), b, c, d])
+        settle()
+        precondition(table.view(atColumn: 0, row: 1, makeIfNecessary: true) === aiCell,
+                     "Pagination changes must preserve the AI-classified cell")
+        precondition(aiCell.displayedKind == .link)
+        if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            precondition(hasKindFade(in: aiCell), "Visible AI verdict must animate")
+        }
+        settle(0.3)
+        fixture.scroll = ScrollIntent(kind: .top)
+        fixture.update([a.withKind(.path), b, c, d])
+        settle()
+        if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            precondition(hasKindFade(in: aiCell), "Scroll intents must not suppress the type fade")
+        }
+        window.orderOut(nil)
 
         fixture.update([b, c, d])
         settle()

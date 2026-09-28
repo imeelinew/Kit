@@ -324,31 +324,29 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             // a deletion. Reloading here would interrupt the animation already in flight.
             guard previousRows != rows else { return false }
             let difference = rows.map(\.id).difference(from: previousRows.map(\.id))
-            // TypeSafe keeps the row identity and only changes the presentation kind.
-            // Refresh those visible cells in place so an API verdict cannot flash the
-            // whole table or disturb its current selection and scroll position.
-            if difference.isEmpty, previousRows.count == rows.count {
-                let changed = rows.indices.filter { previousRows[$0] != rows[$0] }
-                if !changed.isEmpty, changed.allSatisfy({ index in
-                    guard case .item(let old) = previousRows[index],
-                        case .item(let new) = rows[index]
-                    else { return false }
-                    return old.kind != new.kind && old.withKind(new.kind) == new
-                }) {
-                    for index in changed {
-                        guard case .item(let item) = rows[index],
-                            let cell = tableView.view(atColumn: 0, row: index,
-                                makeIfNecessary: false) as? ClipboardItemCellView
-                        else { continue }
-                        cell.updateKind(item.kind, animated: animate)
-                        cell.updateTitle(item: item, query: query, locale: locale)
-                    }
-                    return false
-                }
-            }
+            // Animate retained items independently of pagination and scroll updates that
+            // may arrive with the AI verdict. Those updates must not force a row reload.
             let oldRowsByID = Dictionary(uniqueKeysWithValues: previousRows.map { ($0.id, $0) })
             let retainedContentUnchanged = rows.allSatisfy { row in
-                oldRowsByID[row.id].map { $0 == row } ?? true
+                guard let oldRow = oldRowsByID[row.id], oldRow != row else { return true }
+                guard case .item(let old) = oldRow, case .item(let new) = row else { return false }
+                return old.kind != .image && new.kind != .image
+                    && old.withKind(new.kind) == new
+            }
+            if retainedContentUnchanged {
+                for row in rows {
+                    guard case .item(let item) = row,
+                        let oldRow = oldRowsByID[row.id], case .item(let old) = oldRow,
+                        old.kind != item.kind,
+                        let oldIndex = previousRows.firstIndex(where: { $0.id == row.id }),
+                        let cell = tableView.view(atColumn: 0, row: oldIndex,
+                            makeIfNecessary: false) as? ClipboardItemCellView
+                    else { continue }
+                    cell.updateKind(item.kind,
+                        animated: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+                    cell.updateTitle(item: item, query: query, locale: locale)
+                }
+                if difference.isEmpty { return false }
             }
             // Small edits with unchanged presentation animate; large replacements and page
             // loads stay immediate so typing and navigation remain responsive.
