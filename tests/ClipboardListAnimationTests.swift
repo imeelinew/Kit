@@ -81,6 +81,21 @@ struct ClipboardListAnimationTests {
         let table = table(in: hosting)!
         precondition(table.numberOfRows == 7, "Four entries and three date headers")
 
+        // A late TypeSafe verdict must update the existing row in place. The test
+        // window stays hidden, so Reduce Motion and offscreen updates are immediate.
+        let refinedCell = table.view(atColumn: 0, row: 1, makeIfNecessary: true)
+            as! ClipboardItemCellView
+        precondition(refinedCell.displayedKind == .text)
+        fixture.update([a.withKind(.code), b, c, d])
+        settle()
+        precondition(table.view(atColumn: 0, row: 1, makeIfNecessary: true) === refinedCell)
+        precondition(refinedCell.displayedKind == .code)
+        precondition(table.numberOfRows == 7 && table.selectedRow == 1)
+        fixture.update([a.withKind(.markdown), b, c, d])
+        settle()
+        precondition(refinedCell.displayedKind == .markdown,
+                     "Consecutive verdicts update the same cell without a full reload")
+
         fixture.update([b, c, d])
         settle()
         precondition(table.numberOfRows == 6 && table.selectedRow == 1)
@@ -147,7 +162,7 @@ struct ClipboardListAnimationTests {
                      "The deferred follow scroll completes")
 
         window.close()
-        print("PASS: animated deletion, rapid deletion, date headers, async refresh, pagination, empty results")
+        print("PASS: kind refinement, animated deletion, rapid deletion, date headers, async refresh, pagination, empty results")
         try await ClipboardUndoTests.run()
         ClipboardTextClassifierTests.run()
     }

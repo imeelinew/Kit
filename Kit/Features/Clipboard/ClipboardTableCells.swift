@@ -52,6 +52,7 @@ final class ClipboardItemCellView: NSTableCellView {
     private var truncatesFromHead = false
     private var renderedTitleWidth: CGFloat = -1
     private var representedID: ClipboardItem.ID?
+    private(set) var displayedKind: ClipboardItem.Kind?
     private var selected = false
     private var fadeToken = 0
     private var entranceQueued = false
@@ -124,6 +125,7 @@ final class ClipboardItemCellView: NSTableCellView {
     override func prepareForReuse() {
         super.prepareForReuse()
         representedID = nil
+        displayedKind = nil
         selected = false
         setHighlightOpacity(0)
         titleLabel.isHidden = false
@@ -144,12 +146,23 @@ final class ClipboardItemCellView: NSTableCellView {
         if representedID != item.id {
             // Reused cells must never carry a previous item's highlight or pending fade.
             representedID = item.id
+            displayedKind = nil
+            thumbnailView.cancelKindTransition()
             self.selected = false
             setHighlightOpacity(0)
         }
         setSelected(selected)
         updateTitle(item: item, query: query, locale: locale)
         thumbnailView.configure(item: item, imageURL: imageURL)
+        displayedKind = item.kind
+    }
+
+    /// A TypeSafe verdict changes only the symbol for text, Markdown, and code rows.
+    /// Keep the existing cell and fade its thumbnail to the new kind.
+    func updateKind(_ kind: ClipboardItem.Kind, animated: Bool) {
+        guard representedID != nil, displayedKind != kind else { return }
+        thumbnailView.updateKind(kind, animated: animated && window?.isVisible == true)
+        displayedKind = kind
     }
 
     func updateTitle(item: ClipboardItem, query: String, locale: Locale) {
@@ -454,12 +467,30 @@ private final class ClipboardThumbnailView: NSView {
         }
     }
 
+    func updateKind(_ kind: ClipboardItem.Kind, animated: Bool) {
+        guard placeholderKind != kind else { return }
+        layer?.removeAnimation(forKey: "kindFade")
+        if animated, let layer {
+            let fade = CATransition()
+            fade.type = .fade
+            fade.duration = Theme.Motion.contentDuration
+            fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            layer.add(fade, forKey: "kindFade")
+        }
+        showKind(kind)
+    }
+
+    func cancelKindTransition() {
+        layer?.removeAnimation(forKey: "kindFade")
+    }
+
     override func prepareForReuse() {
         super.prepareForReuse()
         loadTask?.cancel()
         loadTask = nil
         representedID = nil
         displayedImage = nil
+        cancelKindTransition()
         showKind(.image)
     }
 

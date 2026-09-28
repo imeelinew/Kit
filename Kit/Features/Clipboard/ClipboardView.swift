@@ -324,6 +324,27 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             // a deletion. Reloading here would interrupt the animation already in flight.
             guard previousRows != rows else { return false }
             let difference = rows.map(\.id).difference(from: previousRows.map(\.id))
+            // TypeSafe keeps the row identity and only changes the presentation kind.
+            // Refresh those visible cells in place so an API verdict cannot flash the
+            // whole table or disturb its current selection and scroll position.
+            if difference.isEmpty, previousRows.count == rows.count {
+                let changed = rows.indices.filter { previousRows[$0] != rows[$0] }
+                if !changed.isEmpty, changed.allSatisfy({ index in
+                    guard case .item(let old) = previousRows[index],
+                        case .item(let new) = rows[index]
+                    else { return false }
+                    return old.kind != new.kind && old.withKind(new.kind) == new
+                }) {
+                    for index in changed {
+                        guard case .item(let item) = rows[index],
+                            let cell = tableView.view(atColumn: 0, row: index,
+                                makeIfNecessary: false) as? ClipboardItemCellView
+                        else { continue }
+                        cell.updateKind(item.kind, animated: animate)
+                    }
+                    return false
+                }
+            }
             let oldRowsByID = Dictionary(uniqueKeysWithValues: previousRows.map { ($0.id, $0) })
             let retainedContentUnchanged = rows.allSatisfy { row in
                 oldRowsByID[row.id].map { $0 == row } ?? true
