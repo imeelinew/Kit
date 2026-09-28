@@ -14,7 +14,10 @@ enum KitApp {
 
 @MainActor
 private final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let applicationMenu = ApplicationMenu()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        applicationMenu.install()
         AppCore.shared.start()
     }
 

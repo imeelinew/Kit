@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		ACA000000000000000000003 /* TextFieldPasteTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA000000000000000000004 /* TextFieldPasteTarget.swift */; };
+		ACA000000000000000000001 /* ApplicationMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA000000000000000000002 /* ApplicationMenu.swift */; };
 		02CB1E90666F628DBF9C7C78 /* EdgeDissolve.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6853210949502E0C47D69B9 /* EdgeDissolve.swift */; };
 		068B6C43C18DB6110AED985B /* PopoverMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C234D84C11C94266A6B560D /* PopoverMenu.swift */; };
 		07650D1993A6D4C0D5B7ACD8 /* PalettePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123A20E6FCB60D259A0CC145 /* PalettePanel.swift */; };
@@ -54,6 +56,9 @@
 		CA1000000000000000000001 /* ClipboardItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1000000000000000000002 /* ClipboardItem.swift */; };
 		CA2000000000000000000001 /* Pinyin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA2000000000000000000002 /* Pinyin.swift */; };
 		CA3000000000000000000001 /* ClipboardTextClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3000000000000000000002 /* ClipboardTextClassifier.swift */; };
+		CA6000000000000000000001 /* TypeSafeClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA6000000000000000000002 /* TypeSafeClassifier.swift */; };
+		CAB000000000000000000001 /* TypeSafeKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAB000000000000000000002 /* TypeSafeKeychain.swift */; };
+		CAA000000000000000000001 /* ExperimentsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAA000000000000000000002 /* ExperimentsSettingsView.swift */; };
 		CA4000000000000000000001 /* ClipboardTableCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA4000000000000000000002 /* ClipboardTableCells.swift */; };
 		CA5000000000000000000001 /* ClipboardPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5000000000000000000002 /* ClipboardPreview.swift */; };
 		CA7000000000000000000001 /* PinnedImageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7000000000000000000002 /* PinnedImageViews.swift */; };
@@ -76,6 +81,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		ACA000000000000000000004 /* TextFieldPasteTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFieldPasteTarget.swift; sourceTree = "<group>"; };
+		ACA000000000000000000002 /* ApplicationMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationMenu.swift; sourceTree = "<group>"; };
 		0C1D141FBB730290AF3CA00C /* AppCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCore.swift; sourceTree = "<group>"; };
 		11927303CFC909AE918568B6 /* PaletteViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteViewModel.swift; sourceTree = "<group>"; };
 		123A20E6FCB60D259A0CC145 /* PalettePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PalettePanel.swift; sourceTree = "<group>"; };
@@ -121,6 +128,9 @@
 		CA1000000000000000000002 /* ClipboardItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardItem.swift; sourceTree = "<group>"; };
 		CA2000000000000000000002 /* Pinyin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pinyin.swift; sourceTree = "<group>"; };
 		CA3000000000000000000002 /* ClipboardTextClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTextClassifier.swift; sourceTree = "<group>"; };
+		CA6000000000000000000002 /* TypeSafeClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeSafeClassifier.swift; sourceTree = "<group>"; };
+		CAB000000000000000000002 /* TypeSafeKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeSafeKeychain.swift; sourceTree = "<group>"; };
+		CAA000000000000000000002 /* ExperimentsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperimentsSettingsView.swift; sourceTree = "<group>"; };
 		CA4000000000000000000002 /* ClipboardTableCells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTableCells.swift; sourceTree = "<group>"; };
 		CA5000000000000000000002 /* ClipboardPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPreview.swift; sourceTree = "<group>"; };
 		CA7000000000000000000002 /* PinnedImageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImageViews.swift; sourceTree = "<group>"; };
@@ -186,6 +196,8 @@
 				CA9000000000000000000002 /* ClipboardSQLite.swift */,
 				FCFFE5C6B9CC83C972FD0B0D /* ClipboardStore.swift */,
 				CA3000000000000000000002 /* ClipboardTextClassifier.swift */,
+				CA6000000000000000000002 /* TypeSafeClassifier.swift */,
+				CAB000000000000000000002 /* TypeSafeKeychain.swift */,
 				C6853210949502E0C47D69B9 /* EdgeDissolve.swift */,
 				AF2FD6AB5017BBFF5EE420A4 /* ImageThumbnail.swift */,
 				D22A18A2E99B807E7716432E /* InputSourceSwitcher.swift */,
@@ -197,6 +209,7 @@
 				CA2000000000000000000002 /* Pinyin.swift */,
 				8738F70AF4AB873CA45EE200 /* PaletteWindowController.swift */,
 				FC678FC84A80AE731726D744 /* Paster.swift */,
+				ACA000000000000000000004 /* TextFieldPasteTarget.swift */,
 				B83EBAE1FB329C0318507DFB /* PasteTransaction.swift */,
 				EA577CC2AE8EBDA99C731955 /* Permissions.swift */,
 				1F3166EA8852EDBCC9A0D3DF /* ScrollIntent.swift */,
@@ -212,6 +225,7 @@
 		4C5F3C861CCDA820438BE9DA /* App */ = {
 			isa = PBXGroup;
 			children = (
+				ACA000000000000000000002 /* ApplicationMenu.swift */,
 				ECEFF1A363FE4929A8295A86 /* KitApp.swift */,
 			);
 			path = App;
@@ -253,6 +267,7 @@
 			isa = PBXGroup;
 			children = (
 				B42062A9B167BB7DCD3E7129 /* ClipboardSettingsView.swift */,
+				CAA000000000000000000002 /* ExperimentsSettingsView.swift */,
 				FC1779D1C157B1B6F9C37365 /* GeneralSettingsView.swift */,
 				CE39A396D47F5CC467AA9FA1 /* KitSettingsWindowController.swift */,
 				9DD90436D7A4A7E354F421DD /* SettingsComponents.swift */,
@@ -426,8 +441,11 @@
 				CA8000000000000000000001 /* ClipboardSearch.swift in Sources */,
 				CA9000000000000000000001 /* ClipboardSQLite.swift in Sources */,
 				739ADE5F09C7B1A660B5BE9F /* ClipboardSettingsView.swift in Sources */,
+				CAA000000000000000000001 /* ExperimentsSettingsView.swift in Sources */,
 				E2C25F35DF0B1F8C9960CD38 /* ClipboardStore.swift in Sources */,
 				CA3000000000000000000001 /* ClipboardTextClassifier.swift in Sources */,
+				CA6000000000000000000001 /* TypeSafeClassifier.swift in Sources */,
+				CAB000000000000000000001 /* TypeSafeKeychain.swift in Sources */,
 				1D9AA5ECC0F41C5EE2E43336 /* ClipboardView.swift in Sources */,
 				CA4000000000000000000001 /* ClipboardTableCells.swift in Sources */,
 				CA5000000000000000000001 /* ClipboardPreview.swift in Sources */,
@@ -454,6 +472,8 @@
 				CA2000000000000000000001 /* Pinyin.swift in Sources */,
 				765DF848224FB5BC506F2CDC /* PaletteWindowController.swift in Sources */,
 				09B23D64A6A4F5463BC87554 /* KitApp.swift in Sources */,
+				ACA000000000000000000003 /* TextFieldPasteTarget.swift in Sources */,
+				ACA000000000000000000001 /* ApplicationMenu.swift in Sources */,
 				459F1FFE80691847187D0437 /* KitSettingsWindowController.swift in Sources */,
 				73C5E3F78FDD5E8837E47AC0 /* PasteTransaction.swift in Sources */,
 				1C45571908BB38D3FAD1095B /* Paster.swift in Sources */,

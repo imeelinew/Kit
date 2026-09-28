@@ -31,6 +31,22 @@ enum Paster {
             deliver: { postCommandV(toPid: pid) })
     }
 
+    /// Our own field editors can receive Paste directly, including secure fields. No synthetic key
+    /// or Accessibility permission is needed, and the saved selection is restored before delivery.
+    @MainActor @discardableResult
+    static func paste(
+        _ item: ClipboardItem, store: ClipboardStore, into target: TextFieldPasteTarget,
+        keepingPaletteOpen: Bool = false, willDeliver: () -> Void = {}
+    ) async -> Bool {
+        await PasteTransaction.run(
+            permission: { true },
+            prepare: { await prepare(item, store: store, targetBundleID: Bundle.main.bundleIdentifier) },
+            willDeliver: willDeliver,
+            targetReady: { target.restoreEditing(activateWindow: !keepingPaletteOpen) },
+            write: write,
+            deliver: { target.paste() })
+    }
+
     /// Put the item on the pasteboard without pasting. Image bytes are loaded before the caller
     /// hides the palette, so a missing or large file never creates a blank-looking action.
     @MainActor @discardableResult

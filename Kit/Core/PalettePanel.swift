@@ -48,6 +48,12 @@ final class PalettePanel: NSPanel {
         .command, .option, .control, .shift,
     ]
 
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // Palette commands (including deletion undo) take priority over the application's Edit menu.
+        if event.type == .keyDown, route(event) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, route(event) { return }
         super.sendEvent(event)
@@ -258,8 +264,7 @@ final class PalettePanel: NSPanel {
         return true
     }
 
-    /// This accessory app has no visible Edit menu, so route standard editing commands to the
-    /// active AppKit field editor ourselves.
+    /// Keep palette editing behind its modal actions and mark copied search text as internal.
     private func handleEditingShortcut(_ keyCode: Int) -> Bool {
         guard paletteViewModel?.menuOpen != true || paletteViewModel?.isNamingStack == true,
             let editor = firstResponder as? NSTextView

@@ -89,6 +89,9 @@ struct ClipboardPreview: View {
                 VStack(alignment: .leading, spacing: 0) {
                     content(for: item, payload: payload)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .id(item.kind)
+                        .transition(.opacity)
+                        .animation(reduceMotion ? nil : Theme.Motion.content, value: item.kind)
                     ClipboardInfoSection(
                         item: item, details: payload?.details ?? .init(), store: store)
                 }
@@ -220,6 +223,11 @@ private struct ClipboardInfoSection: View {
                                 Text(row.value)
                             }
                         }
+                        .contentTransition(.opacity)
+                        .animation(
+                            NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                                ? nil : Theme.Motion.content,
+                            value: item.kind)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     }

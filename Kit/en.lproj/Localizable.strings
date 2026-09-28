@@ -6,6 +6,7 @@
 "Add Application…" = "Add Application…";
 "Add to Stack" = "Add to Stack";
 "All Types" = "All Types";
+"API Key" = "API Key";
 "App Language" = "App Language";
 "Appearance" = "Appearance";
 "Back" = "Back";
@@ -19,6 +20,9 @@
 "Clear History" = "Clear History";
 "Check for Updates" = "Check for Updates…";
 "Clipboard" = "Clipboard";
+"Enable TypeSafe AI" = "Enable TypeSafe AI";
+"Experiments" = "Experiments";
+"Save" = "Save";
 "Show Kit" = "Show Kit";
 "Code" = "Code";
 "Content Preview" = "Content Preview";
@@ -75,6 +79,13 @@
 "Kit" = "Kit";
 "Palette" = "Palette";
 "Paste" = "Paste";
+"Edit" = "Edit";
+"Undo" = "Undo";
+"Redo" = "Redo";
+"Cut" = "Cut";
+"Copy" = "Copy";
+"Select All" = "Select All";
+"Delete to Beginning of Line" = "Delete to Beginning of Line";
 "Paste & Keep Window Open" = "Paste & Keep Window Open";
 "Kit Settings" = "Kit Settings";
 "Paste to %@" = "Paste to %@";

@@ -144,6 +144,7 @@ final class AppSettings: ObservableObject {
         static let soundEffectsEnabled = "soundEffectsEnabled"
         static let copySoundEffect = "copySoundEffect"
         static let hapticFeedbackEnabled = "hapticFeedbackEnabled"
+        static let typesafeAIEnabled = "typesafeAIEnabled"
     }
 
     @Published var clipboardRetention: ClipboardRetention {
@@ -215,6 +216,24 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(hapticFeedbackEnabled, forKey: Key.hapticFeedbackEnabled) }
     }
 
+    /// Experimental: classify captured text exclusively through TypeSafe instead of local rules.
+    @Published var typesafeAIEnabled: Bool {
+        didSet { defaults.set(typesafeAIEnabled, forKey: Key.typesafeAIEnabled) }
+    }
+
+    /// Credential, so it lives in the Keychain and is written only through the method below.
+    @Published private(set) var typesafeAPIKey: String?
+
+    @discardableResult
+    func saveTypeSafeAPIKey(_ key: String) -> Bool {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != (typesafeAPIKey ?? "") else { return true }
+        let saved = trimmed.isEmpty ? TypeSafeKeychain.delete() : TypeSafeKeychain.save(trimmed)
+        guard saved else { return false }
+        typesafeAPIKey = trimmed.isEmpty ? nil : trimmed
+        return true
+    }
+
     var savedClipboardPause: (isPaused: Bool, until: Date?) {
         (
             defaults.bool(forKey: Key.clipboardPaused),
@@ -267,5 +286,7 @@ final class AppSettings: ObservableObject {
             : CopySoundEffect(rawValue: defaults.integer(forKey: Key.copySoundEffect)) ?? .one
         hapticFeedbackEnabled =
             defaults.object(forKey: Key.hapticFeedbackEnabled) as? Bool ?? true
+        typesafeAIEnabled = defaults.object(forKey: Key.typesafeAIEnabled) as? Bool ?? false
+        typesafeAPIKey = TypeSafeKeychain.read()
     }
 }

@@ -14,6 +14,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     private var hiding = false
     private var modalAlertDepth = 0
     private(set) var previousApp: NSRunningApplication?
+    private var previousTextField: TextFieldPasteTarget?
 
     init(core: AppCore) {
         self.core = core
@@ -33,6 +34,11 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         return previousApp
     }
 
+    var pasteTargetTextField: TextFieldPasteTarget? {
+        guard let previousTextField, previousTextField.isAvailable else { return nil }
+        return previousTextField
+    }
+
     /// Build the hosting tree while the app is idle, before the first shortcut.
     func prewarm() {
         let panel = ensurePanel()
@@ -43,11 +49,13 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         guard !isPresenting else { return }
 
         let frontmost = NSWorkspace.shared.frontmostApplication
+        previousTextField = frontmost?.processIdentifier == NSRunningApplication.current.processIdentifier
+            ? TextFieldPasteTarget(window: NSApp.keyWindow) : nil
         previousApp = frontmost.flatMap { app in
             app.processIdentifier != NSRunningApplication.current.processIdentifier
                 && !app.isTerminated ? app : nil
         }
-        let target = PasteTarget(app: previousApp)
+        let target = PasteTarget(app: previousTextField != nil ? .current : previousApp)
         core.palette.pasteTarget = target
         if let path = target?.iconPath {
             _ = IconCache.icon(forFile: path)
@@ -98,7 +106,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         guard let panel else { return }
         if !panel.isVisible {
             ImageThumbnail.purgePreviews()
-            if restoreFocus { previousApp?.activate() }
+            if restoreFocus { restorePreviousFocus() }
             return
         }
         if hiding { return }
@@ -110,7 +118,15 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         hiding = false
         ImageThumbnail.purgePreviews()
         core.palette.prepareForNextPresentation()
-        if restoreFocus { previousApp?.activate() }
+        if restoreFocus { restorePreviousFocus() }
+    }
+
+    private func restorePreviousFocus() {
+        if let previousTextField {
+            previousTextField.restoreEditing(activateWindow: true)
+        } else {
+            previousApp?.activate()
+        }
     }
 
     func windowDidResignKey(_ notification: Notification) {

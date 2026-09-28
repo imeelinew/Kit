@@ -102,13 +102,30 @@ final class ClipboardManager {
 
             switch capture.content {
             case .text(let text):
-                let kind = await Task.detached(priority: .utility) {
-                    ClipboardTextClassifier.kind(for: text)
-                }.value
-                guard !Task.isCancelled else { return }
-                self.store.addText(
-                    text, kind: kind, sourceBundleID: capture.sourceBundleID,
-                    expectedGeneration: capture.generation)
+                if self.settings.typesafeAIEnabled {
+                    // Capture immediately; only jev decides the eventual classification.
+                    guard let item = self.store.addText(
+                        text, kind: .text, sourceBundleID: capture.sourceBundleID,
+                        expectedGeneration: capture.generation),
+                        let apiKey = self.settings.typesafeAPIKey
+                    else { return }
+                    Task { [weak self] in
+                        guard let kind = await TypeSafeClassifier.classify(text, apiKey: apiKey),
+                            let self, self.settings.typesafeAIEnabled,
+                            self.store.captureGeneration == capture.generation,
+                            self.store.item(id: item.id)?.createdAt == item.createdAt
+                        else { return }
+                        self.store.updateKind(id: item.id, to: kind)
+                    }
+                } else {
+                    let kind = await Task.detached(priority: .utility) {
+                        ClipboardTextClassifier.kind(for: text)
+                    }.value
+                    guard !Task.isCancelled else { return }
+                    self.store.addText(
+                        text, kind: kind, sourceBundleID: capture.sourceBundleID,
+                        expectedGeneration: capture.generation)
+                }
             case .image(let png):
                 await self.store.addImage(
                     png, sourceBundleID: capture.sourceBundleID,

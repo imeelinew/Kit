@@ -45,6 +45,16 @@ struct ClipboardDeduplicationTests {
         let top = store.addText("新的复制", kind: .text, sourceBundleID: "third")!
         precondition(top.id == a.id && store.items.count == 2 && top.sourceBundleID == "third")
 
+        // Switching classifiers must replace the old verdict on a recopy, including on disk.
+        let reclassified = store.addText("新的复制", kind: .code, sourceBundleID: "AI")!
+        precondition(reclassified.id == a.id && reclassified.kind == .code)
+        let db = database(directory)
+        precondition(scalar(db, "SELECT COUNT(*) FROM items WHERE id = '\(a.id.uuidString)' AND kind = 'code'") == 1)
+        _ = store.addText("新的复制", kind: .text, sourceBundleID: "local")
+        precondition(store.item(id: a.id)?.kind == .text)
+        precondition(scalar(db, "SELECT COUNT(*) FROM items WHERE id = '\(a.id.uuidString)' AND kind = 'text'") == 1)
+        sqlite3_close(db)
+
         // Exact contents, not visible first lines or normalized whitespace, determine identity.
         let different = ["新的复制 ", "新的复制\n", "Case", "case", "same\nA", "same\nB",
                          "nul\0A", "nul\0B", "é", "e\u{301}"]
