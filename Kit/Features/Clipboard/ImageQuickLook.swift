@@ -8,7 +8,7 @@ enum ImageQuickLook {
     }
 }
 
-/// Space-toggled image Quick Look via `NSPopover`, sized to the room beside the thumbnail so
+/// Space-toggled image Quick Look via `NSPopover`, sized to the room left of or below the thumbnail so
 /// AppKit does not flip the popover on top of the anchor.
 ///
 /// The representable sits on the rendered thumbnail so the popover arrow targets the image.
@@ -209,8 +209,8 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
         var size: CGSize
     }
 
-    /// Size the popover to fit entirely on one side of the thumbnail (prefer leading / `.minX`)
-    /// so `NSPopover` has no reason to flip over the anchor.
+    /// Fit the image left of or below the thumbnail, then use whichever placement shows it larger.
+    /// Leave room for popover chrome so AppKit does not flip it over the anchor.
     private static func placement(url: URL, anchorView: NSView) -> Placement? {
         guard let window = anchorView.window else { return nil }
         let anchorInWindow = anchorView.convert(anchorView.bounds, to: nil)
@@ -231,48 +231,27 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
                 height: max((natural.height * scale).rounded(.down), 1))
         }
 
-        struct Candidate {
-            let edge: NSRectEdge
-            let maxW: CGFloat
-            let maxH: CGFloat
-            let rank: Int
+        let left = fit(
+            maxW: anchor.minX - visible.minX - gap - popoverChrome - screenPad,
+            maxH: visible.height - 2 * screenPad)
+        let below = fit(
+            maxW: visible.width - 2 * screenPad,
+            maxH: anchor.minY - visible.minY - gap - popoverChrome - screenPad)
+
+        switch (left, below) {
+        case let (left?, below?):
+            let leftArea = left.width * left.height
+            let belowArea = below.width * below.height
+            return belowArea > leftArea
+                ? Placement(edge: .minY, size: below)
+                : Placement(edge: .minX, size: left)
+        case let (left?, nil):
+            return Placement(edge: .minX, size: left)
+        case let (nil, below?):
+            return Placement(edge: .minY, size: below)
+        case (nil, nil):
+            return nil
         }
-
-        let candidates: [Candidate] = [
-            Candidate(
-                edge: .minX,
-                maxW: anchor.minX - visible.minX - gap - popoverChrome - screenPad,
-                maxH: visible.height - 2 * screenPad, rank: 0),
-            Candidate(
-                edge: .maxX,
-                maxW: visible.maxX - anchor.maxX - gap - popoverChrome - screenPad,
-                maxH: visible.height - 2 * screenPad, rank: 1),
-            Candidate(
-                edge: .maxY,
-                maxW: visible.width - 2 * screenPad,
-                maxH: visible.maxY - anchor.maxY - gap - popoverChrome - screenPad, rank: 2),
-            Candidate(
-                edge: .minY,
-                maxW: visible.width - 2 * screenPad,
-                maxH: anchor.minY - visible.minY - gap - popoverChrome - screenPad, rank: 3),
-        ]
-
-        let fitted: [(Candidate, CGSize)] = candidates.compactMap { c in
-            guard let size = fit(maxW: c.maxW, maxH: c.maxH) else { return nil }
-            return (c, size)
-        }
-        let best = fitted.sorted { a, b in
-            let areaA = a.1.width * a.1.height
-            let areaB = b.1.width * b.1.height
-            let aHorizontal = a.0.rank < 2
-            let bHorizontal = b.0.rank < 2
-            if aHorizontal != bHorizontal { return aHorizontal }
-            if abs(areaA - areaB) > 4_000 { return areaA > areaB }
-            return a.0.rank < b.0.rank
-        }.first
-
-        guard let (candidate, size) = best else { return nil }
-        return Placement(edge: candidate.edge, size: size)
     }
 }
 
