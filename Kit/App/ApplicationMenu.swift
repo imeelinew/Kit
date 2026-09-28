@@ -23,18 +23,20 @@ final class ApplicationMenu: NSObject, NSMenuItemValidation {
         }
 
         func add(
-            _ title: String, action: Selector, key: String, to menu: NSMenu,
+            _ title: String, action: Selector, key: String?, to menu: NSMenu,
             target: AnyObject? = nil, modifiers: NSEvent.ModifierFlags = .command
         ) {
             let item = NSMenuItem(
                 title: AppLocalization.string(title, locale: locale),
-                action: action, keyEquivalent: key)
+                action: action, keyEquivalent: key ?? "")
             item.target = target
             item.keyEquivalentModifierMask = modifiers
             menu.addItem(item)
         }
 
-        add("Settings…", action: #selector(showSettings(_:)), key: ",", to: appMenu, target: self)
+        // The menu bar only exists while the settings window is key, so there is no
+        // Settings item; About routes to the settings window's About page.
+        add("About Kit", action: #selector(about(_:)), key: nil, to: appMenu, target: self)
         appMenu.addItem(.separator())
         add("Quit Kit…", action: #selector(quit(_:)), key: "q", to: appMenu, target: self)
 
@@ -74,7 +76,7 @@ final class ApplicationMenu: NSObject, NSMenuItemValidation {
         editor.deleteBackward(sender)
     }
 
-    @objc private func showSettings(_ sender: Any?) { AppCore.shared.showSettings() }
+    @objc private func about(_ sender: Any?) { AppCore.shared.showSettings(tab: .about) }
 
     @objc private func quit(_ sender: Any?) { AppCore.shared.requestQuit() }
 
