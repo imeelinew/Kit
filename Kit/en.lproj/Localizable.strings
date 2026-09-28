@@ -79,6 +79,13 @@
 "Kit" = "Kit";
 "Palette" = "Palette";
 "Paste" = "Paste";
+"Edit" = "Edit";
+"Undo" = "Undo";
+"Redo" = "Redo";
+"Cut" = "Cut";
+"Copy" = "Copy";
+"Select All" = "Select All";
+"Delete to Beginning of Line" = "Delete to Beginning of Line";
 "Paste & Keep Window Open" = "Paste & Keep Window Open";
 "Kit Settings" = "Kit Settings";
 "Paste to %@" = "Paste to %@";

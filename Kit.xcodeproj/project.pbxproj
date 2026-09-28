@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		ACA000000000000000000003 /* TextFieldPasteTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA000000000000000000004 /* TextFieldPasteTarget.swift */; };
+		ACA000000000000000000001 /* ApplicationMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA000000000000000000002 /* ApplicationMenu.swift */; };
 		02CB1E90666F628DBF9C7C78 /* EdgeDissolve.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6853210949502E0C47D69B9 /* EdgeDissolve.swift */; };
 		068B6C43C18DB6110AED985B /* PopoverMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C234D84C11C94266A6B560D /* PopoverMenu.swift */; };
 		07650D1993A6D4C0D5B7ACD8 /* PalettePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123A20E6FCB60D259A0CC145 /* PalettePanel.swift */; };
@@ -79,6 +81,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		ACA000000000000000000004 /* TextFieldPasteTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFieldPasteTarget.swift; sourceTree = "<group>"; };
+		ACA000000000000000000002 /* ApplicationMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationMenu.swift; sourceTree = "<group>"; };
 		0C1D141FBB730290AF3CA00C /* AppCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCore.swift; sourceTree = "<group>"; };
 		11927303CFC909AE918568B6 /* PaletteViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteViewModel.swift; sourceTree = "<group>"; };
 		123A20E6FCB60D259A0CC145 /* PalettePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PalettePanel.swift; sourceTree = "<group>"; };
@@ -205,6 +209,7 @@
 				CA2000000000000000000002 /* Pinyin.swift */,
 				8738F70AF4AB873CA45EE200 /* PaletteWindowController.swift */,
 				FC678FC84A80AE731726D744 /* Paster.swift */,
+				ACA000000000000000000004 /* TextFieldPasteTarget.swift */,
 				B83EBAE1FB329C0318507DFB /* PasteTransaction.swift */,
 				EA577CC2AE8EBDA99C731955 /* Permissions.swift */,
 				1F3166EA8852EDBCC9A0D3DF /* ScrollIntent.swift */,
@@ -220,6 +225,7 @@
 		4C5F3C861CCDA820438BE9DA /* App */ = {
 			isa = PBXGroup;
 			children = (
+				ACA000000000000000000002 /* ApplicationMenu.swift */,
 				ECEFF1A363FE4929A8295A86 /* KitApp.swift */,
 			);
 			path = App;
@@ -466,6 +472,8 @@
 				CA2000000000000000000001 /* Pinyin.swift in Sources */,
 				765DF848224FB5BC506F2CDC /* PaletteWindowController.swift in Sources */,
 				09B23D64A6A4F5463BC87554 /* KitApp.swift in Sources */,
+				ACA000000000000000000003 /* TextFieldPasteTarget.swift in Sources */,
+				ACA000000000000000000001 /* ApplicationMenu.swift in Sources */,
 				459F1FFE80691847187D0437 /* KitSettingsWindowController.swift in Sources */,
 				73C5E3F78FDD5E8837E47AC0 /* PasteTransaction.swift in Sources */,
 				1C45571908BB38D3FAD1095B /* Paster.swift in Sources */,

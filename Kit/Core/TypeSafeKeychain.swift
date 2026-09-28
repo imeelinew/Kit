@@ -41,7 +41,9 @@ enum TypeSafeKeychain {
         return status == errSecSuccess
     }
 
-    static func delete() {
-        SecItemDelete(query as CFDictionary)
+    @discardableResult
+    static func delete() -> Bool {
+        let status = SecItemDelete(query as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
     }
 }

@@ -78,6 +78,13 @@
 "Kit" = "Kit";
 "Palette" = "面板";
 "Paste" = "粘贴";
+"Edit" = "编辑";
+"Undo" = "撤销";
+"Redo" = "重做";
+"Cut" = "剪切";
+"Copy" = "复制";
+"Select All" = "全选";
+"Delete to Beginning of Line" = "删除至行首";
 "Paste & Keep Window Open" = "粘贴并保持窗口打开";
 "Kit Settings" = "Kit 设置";
 "Paste to %@" = "粘贴到 %@";

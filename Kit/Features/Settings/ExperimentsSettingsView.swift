@@ -4,7 +4,6 @@ import SwiftUI
 /// Experimental features, quarantined in their own sidebar page so the stable settings stay clean.
 struct ExperimentsSettingsView: View {
     @ObservedObject private var settings = AppCore.shared.settings
-    @State private var keyInput = ""
 
     var body: some View {
         PreferencesForm {
@@ -13,29 +12,23 @@ struct ExperimentsSettingsView: View {
 
                 if settings.typesafeAIEnabled {
                     PreferencesRow(label: "API Key") {
-                        HStack(spacing: 8) {
-                            SecureKeyField(text: $keyInput)
-                                .frame(width: 240)
-                            Button("Save", action: saveKey)
-                                .disabled(
-                                    keyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        }
+                        SecureKeyField(text: apiKeyBinding)
+                            .frame(width: 240)
                     }
                 }
             }
         }
     }
 
-    private func saveKey() {
-        let trimmed = keyInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, settings.saveTypeSafeAPIKey(trimmed) else { return }
-        keyInput = ""
+    private var apiKeyBinding: Binding<String> {
+        Binding(
+            get: { settings.typesafeAPIKey ?? "" },
+            set: { settings.saveTypeSafeAPIKey($0) }
+        )
     }
 }
 
-/// SwiftUI text fields misbehave in this menu-less agent app (focus and ⌘V paste), the same
-/// reason the palette search wraps NSTextField. NSSecureTextField keeps masking plus working
-/// field-editor editing, including paste.
+/// Native secure entry uses the application's Edit menu for standard editing commands.
 private struct SecureKeyField: NSViewRepresentable {
     @Binding var text: String
 
@@ -48,19 +41,22 @@ private struct SecureKeyField: NSViewRepresentable {
     }
 
     func updateNSView(_ field: NSSecureTextField, context: Context) {
+        context.coordinator.text = $text
+        field.setAccessibilityLabel(
+            AppLocalization.string("API Key", locale: AppCore.shared.settings.language.locale))
         if field.stringValue != text { field.stringValue = text }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
 
     final class Coordinator: NSObject, NSTextFieldDelegate {
-        @Binding var text: String
+        var text: Binding<String>
 
-        init(text: Binding<String>) { _text = text }
+        init(text: Binding<String>) { self.text = text }
 
         func controlTextDidChange(_ obj: Notification) {
             guard let field = obj.object as? NSSecureTextField else { return }
-            text = field.stringValue
+            text.wrappedValue = field.stringValue
         }
     }
 }

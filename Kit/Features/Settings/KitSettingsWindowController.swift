@@ -245,6 +245,34 @@ private enum SettingsWindowMetrics {
 
 /// Close stays available. Minimize and zoom stay visible but do nothing.
 private final class SettingsWindow: NSWindow {
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if routeSecureKeyShortcut(event) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyDown, routeSecureKeyShortcut(event) { return }
+        super.sendEvent(event)
+    }
+
+    /// If a hotkey reaches the secure editor as a local event, handle it before text input.
+    /// Carbon normally consumes registered hotkeys before they reach the window.
+    private func routeSecureKeyShortcut(_ event: NSEvent) -> Bool {
+        guard let editor = firstResponder as? NSTextView,
+            editor.delegate is NSSecureTextField
+        else { return false }
+
+        if let shortcut = KeyboardShortcuts.getShortcut(for: .toggleClipboard),
+            KeyboardShortcuts.isEnabled(for: .toggleClipboard),
+            shortcut == KeyboardShortcuts.Shortcut(event: event)
+        {
+            if !event.isARepeat { AppCore.shared.togglePalette() }
+            return true
+        }
+
+        return false
+    }
+
     override func miniaturize(_ sender: Any?) {}
 
     override func zoom(_ sender: Any?) {}

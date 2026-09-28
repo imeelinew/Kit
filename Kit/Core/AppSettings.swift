@@ -227,8 +227,10 @@ final class AppSettings: ObservableObject {
     @discardableResult
     func saveTypeSafeAPIKey(_ key: String) -> Bool {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, TypeSafeKeychain.save(trimmed) else { return false }
-        typesafeAPIKey = trimmed
+        guard trimmed != (typesafeAPIKey ?? "") else { return true }
+        let saved = trimmed.isEmpty ? TypeSafeKeychain.delete() : TypeSafeKeychain.save(trimmed)
+        guard saved else { return false }
+        typesafeAPIKey = trimmed.isEmpty ? nil : trimmed
         return true
     }
 

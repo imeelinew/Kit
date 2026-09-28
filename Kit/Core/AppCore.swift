@@ -159,6 +159,12 @@ final class AppCore {
     }
 
     func paste(_ item: ClipboardItem) {
+        if let target = windowController.pasteTargetTextField {
+            startHidingTransfer { [clipboardStore] willDeliver in
+                await Paster.paste(item, store: clipboardStore, into: target, willDeliver: willDeliver)
+            }
+            return
+        }
         guard let previous = windowController.pasteTargetApp else { return }
         startHidingTransfer { [clipboardStore] willDeliver in
             await Paster.paste(
@@ -166,9 +172,19 @@ final class AppCore {
         }
     }
 
-    var hasPasteTarget: Bool { windowController.pasteTargetApp != nil }
+    var hasPasteTarget: Bool {
+        windowController.pasteTargetTextField != nil || windowController.pasteTargetApp != nil
+    }
 
     func pasteKeepingWindowOpen(_ item: ClipboardItem) {
+        if let target = windowController.pasteTargetTextField {
+            startTransfer { [weak self] generation in
+                guard let self else { return }
+                await Paster.paste(item, store: clipboardStore, into: target, keepingPaletteOpen: true)
+                finishTransfer(generation)
+            }
+            return
+        }
         guard let previous = windowController.pasteTargetApp else { return }
         startTransfer { [weak self] generation in
             guard let self else { return }
