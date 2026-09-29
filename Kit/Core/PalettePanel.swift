@@ -61,6 +61,10 @@ final class PalettePanel: NSPanel {
 
     private func route(_ event: NSEvent) -> Bool {
         guard let paletteViewModel else { return false }
+        // Candidate selection and composition keys belong to the active input method.
+        if let editor = firstResponder as? NSTextView, editor.hasMarkedText() {
+            return false
+        }
         let keyCode = Int(event.keyCode)
         let modifiers = event.modifierFlags.intersection(Self.relevantModifiers)
         if let handled = routeStackNaming(

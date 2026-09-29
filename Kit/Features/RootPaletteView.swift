@@ -300,17 +300,6 @@ private struct PaletteSearchField: View {
 
     var body: some View {
         PaletteSearchInput(text: $text)
-            .overlay(alignment: .leading) {
-                if text.isEmpty {
-                    Text("Search")
-                        .font(.system(size: 20))
-                        .foregroundStyle(.primary)
-                        .opacity(0.25)
-                        .padding(.leading, 2)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-            }
     }
 }
 
@@ -336,8 +325,21 @@ private struct PaletteSearchInput: NSViewRepresentable {
 
     func updateNSView(_ field: NSTextField, context: Context) {
         context.coordinator.text = $text
-        if field.stringValue != text { field.stringValue = text }
+        // The field editor owns uncommitted IME text; writing stringValue here discards it.
+        if (field.currentEditor() as? NSTextView)?.hasMarkedText() != true,
+            field.stringValue != text
+        {
+            field.stringValue = text
+        }
         let searchTitle = AppLocalization.string("Search", locale: context.environment.locale)
+        if field.placeholderAttributedString?.string != searchTitle {
+            field.placeholderAttributedString = NSAttributedString(
+                string: searchTitle,
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 20),
+                    .foregroundColor: NSColor.labelColor.withAlphaComponent(0.25),
+                ])
+        }
         field.setAccessibilityLabel(searchTitle)
         (field.window as? PalettePanel)?.registerSearchField(field)
     }
@@ -350,6 +352,7 @@ private struct PaletteSearchInput: NSViewRepresentable {
 
         func controlTextDidChange(_ obj: Notification) {
             guard let field = obj.object as? NSTextField,
+                (field.currentEditor() as? NSTextView)?.hasMarkedText() != true,
                 text.wrappedValue != field.stringValue
             else { return }
             text.wrappedValue = field.stringValue
