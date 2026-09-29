@@ -112,6 +112,7 @@ struct ClipboardListAnimationTests {
         let aiCell = table.view(atColumn: 0, row: 1, makeIfNecessary: true)
             as! ClipboardItemCellView
         fixture.hasMore = false
+        fixture.query = "A" // A simultaneous highlight change disables row animation.
         fixture.update([a.withKind(.link), b, c, d])
         settle()
         precondition(table.view(atColumn: 0, row: 1, makeIfNecessary: true) === aiCell,

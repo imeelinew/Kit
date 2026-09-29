@@ -348,9 +348,9 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 }
                 if difference.isEmpty { return false }
             }
-            // Small edits with unchanged presentation animate; large replacements and page
-            // loads stay immediate so typing and navigation remain responsive.
-            guard animate, !previousRows.isEmpty, !rows.isEmpty,
+            // Preserve retained cells for small edits even when row animation is disabled.
+            // Large replacements and page loads still reload immediately.
+            guard !previousRows.isEmpty, !rows.isEmpty,
                 !difference.isEmpty, difference.count <= 32, retainedContentUnchanged
             else {
                 tableView.reloadData()
@@ -365,11 +365,13 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 }
             }
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = Theme.Motion.contentDuration
+                context.duration = animate ? Theme.Motion.contentDuration : 0
                 context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 tableView.beginUpdates()
-                tableView.removeRows(at: removals, withAnimation: [.effectFade, .slideUp])
-                tableView.insertRows(at: insertions, withAnimation: [.effectFade, .slideDown])
+                tableView.removeRows(
+                    at: removals, withAnimation: animate ? [.effectFade, .slideUp] : [])
+                tableView.insertRows(
+                    at: insertions, withAnimation: animate ? [.effectFade, .slideDown] : [])
                 tableView.endUpdates()
                 // Removing an entire date group promotes the next header to the shorter
                 // first-header layout; update both its height and its text inset.
@@ -378,7 +380,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 }
                 updateVisibleText(in: tableView)
             }
-            return true
+            return animate
         }
 
         private func updateVisibleText(in tableView: ClipboardTableView) {
