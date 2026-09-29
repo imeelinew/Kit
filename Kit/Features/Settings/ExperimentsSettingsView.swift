@@ -8,7 +8,14 @@ struct ExperimentsSettingsView: View {
     var body: some View {
         PreferencesForm {
             Section("TypeSafe AI") {
-                Toggle("Enable TypeSafe AI", isOn: $settings.typesafeAIEnabled)
+                Toggle(isOn: $settings.typesafeAIEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Enable TypeSafe AI")
+                        Text("When enabled, Kit uses the TypeSafe model to classify clipboard text")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
 
                 if settings.typesafeAIEnabled {
                     PreferencesRow(label: "API Key") {

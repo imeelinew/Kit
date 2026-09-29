@@ -21,6 +21,7 @@
 "Check for Updates" = "检查更新…";
 "Clipboard" = "剪贴板";
 "Enable TypeSafe AI" = "开启 TypeSafe AI";
+"When enabled, Kit uses the TypeSafe model to classify clipboard text" = "开启后，Kit 将使用 TypeSafe 模型进行剪贴板文本分类";
 "Experiments" = "实验";
 "Save" = "保存";
 "Show Kit" = "打开 Kit";

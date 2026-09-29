@@ -21,6 +21,7 @@
 "Check for Updates" = "Check for Updates…";
 "Clipboard" = "Clipboard";
 "Enable TypeSafe AI" = "Enable TypeSafe AI";
+"When enabled, Kit uses the TypeSafe model to classify clipboard text" = "When enabled, Kit uses the TypeSafe model to classify clipboard text";
 "Experiments" = "Experiments";
 "Save" = "Save";
 "Show Kit" = "Show Kit";
