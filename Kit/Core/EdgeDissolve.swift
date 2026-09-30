@@ -6,7 +6,7 @@ struct EdgeDissolveScrollState: Equatable {
     var canScroll = false
 }
 
-/// Scroll-driven edge dissolve for a scroll view underlapping the palette's floating bars, a port of Raycast's scroll-area mask (see `docs/ui.md` → The edge dissolve).
+/// Scroll-driven edge dissolve for a scroll view underlapping the palette's floating bars, a port of Raycast's scroll-area mask.
 struct EdgeDissolveMask: ViewModifier {
     var externalState: EdgeDissolveScrollState
 
