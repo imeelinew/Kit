@@ -194,7 +194,7 @@ private struct ClipboardInfoSection: View {
     }
 
     /// Relative day name plus exact time ("Today at 1:22:57 AM"); shared because `DateFormatter` is expensive to build.
-    @MainActor private static let copiedFormatter: DateFormatter = {
+    @MainActor private static let timestampFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .medium
@@ -275,9 +275,13 @@ private struct ClipboardInfoSection: View {
                 Int64($0).formatted(.byteCount(style: .file).locale(settings.language.locale))
             } ?? "—"))
         }
-        Self.copiedFormatter.locale = settings.language.locale
+        Self.timestampFormatter.locale = settings.language.locale
         rows.append(
-            InfoRow(label: "Copied", value: Self.copiedFormatter.string(from: item.createdAt)))
+            InfoRow(label: "Last Captured", value: Self.timestampFormatter.string(from: item.createdAt)))
+        if let lastUsedAt = item.lastUsedAt {
+            rows.append(
+                InfoRow(label: "Last Used", value: Self.timestampFormatter.string(from: lastUsedAt)))
+        }
         return rows
     }
 

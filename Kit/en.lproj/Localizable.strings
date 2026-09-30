@@ -28,7 +28,8 @@
 "Code" = "Code";
 "Content Preview" = "Content Preview";
 "Clipboard history is empty" = "Clipboard history is empty";
-"Copied" = "Copied";
+"Last Captured" = "Last Captured";
+"Last Used" = "Last Used";
 "Copy to Clipboard" = "Copy to Clipboard";
 "Danger Zone" = "Danger Zone";
 "Dark" = "Dark";

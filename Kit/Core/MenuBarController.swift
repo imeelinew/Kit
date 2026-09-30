@@ -4,7 +4,7 @@ import Combine
 import QuartzCore
 
 /// Menu bar status item: `arrow.trianglehead.clockwise` template icon, left-click toggles the palette,
-/// right-click offers About, Settings, clipboard monitoring pause, and Quit. Spins clockwise on new clipboard inserts.
+/// right-click offers About, Settings, clipboard monitoring pause, and Quit. Spins clockwise on successful copies.
 @MainActor
 final class MenuBarController: NSObject {
     private let settings: AppSettings

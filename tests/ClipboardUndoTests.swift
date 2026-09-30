@@ -32,7 +32,7 @@ enum ClipboardUndoTests {
         let named = store.item(id: a.id)!
         let b = store.item(id: secondID)!
         var captured = 0
-        store.onItemInserted = { captured += 1 }
+        store.onItemCaptured = { captured += 1 }
         precondition(store.remove(b) && store.remove(named))
         precondition(store.undoLastDeletion() == named, "Only the latest deletion preserves its metadata")
         precondition(store.undoLastDeletion() == nil && store.item(id: b.id) == nil,

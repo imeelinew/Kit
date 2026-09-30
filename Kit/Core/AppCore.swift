@@ -42,8 +42,8 @@ final class AppCore {
         updateService.start()
         clipboardStore.maxAge = settings.clipboardRetention.maxAge
         clipboardStore.load()
-        clipboardStore.onItemInserted = { [weak self] in
-            self?.handleClipboardItemInserted()
+        clipboardStore.onItemCaptured = { [weak self] in
+            self?.handleCopySucceeded()
         }
         clipboardManager.start()
         let savedPause = settings.savedClipboardPause
@@ -196,8 +196,10 @@ final class AppCore {
     }
 
     func copyToClipboard(_ item: ClipboardItem) {
-        startHidingTransfer { [clipboardStore] willWrite in
-            await Paster.copy(item, store: clipboardStore, willWrite: willWrite)
+        startHidingTransfer { [weak self, clipboardStore] willWrite in
+            let succeeded = await Paster.copy(item, store: clipboardStore, willWrite: willWrite)
+            if succeeded { self?.handleCopySucceeded() }
+            return succeeded
         }
     }
 
@@ -258,7 +260,7 @@ final class AppCore {
         )
     }
 
-    private func handleClipboardItemInserted() {
+    private func handleCopySucceeded() {
         if settings.soundEffectsEnabled {
             copySoundPlayer.play(settings.copySoundEffect)
         }

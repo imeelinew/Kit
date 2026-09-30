@@ -28,7 +28,8 @@
 "Code" = "代码";
 "Content Preview" = "内容预览";
 "Clipboard history is empty" = "剪贴板历史为空";
-"Copied" = "复制时间";
+"Last Captured" = "最近收录";
+"Last Used" = "最近使用";
 "Copy to Clipboard" = "复制到剪贴板";
 "Danger Zone" = "危险操作";
 "Dark" = "深色";

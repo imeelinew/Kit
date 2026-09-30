@@ -14,8 +14,8 @@ final class ClipboardStore: ObservableObject {
     @Published private(set) var stacks: [ClipboardStack] = []
     /// Item id to the single stack that owns it.
     private var stackMembership: [ClipboardItem.ID: ClipboardStack.ID] = [:]
-    /// Fired after a new history row is inserted, not when an existing item is recopied.
-    var onItemInserted: (() -> Void)?
+    /// Fired after a successful external capture, including recopies of existing content.
+    var onItemCaptured: (() -> Void)?
     private(set) var captureGeneration: UInt64 = 0
     var maxAge: TimeInterval = ClipboardRetention.threeMonths.maxAge
 
@@ -32,6 +32,7 @@ final class ClipboardStore: ObservableObject {
           source_app TEXT,
           image_fingerprint TEXT,
           custom_title TEXT,
+          last_used_at REAL,
           pinyin TEXT,
           pinyin_initials TEXT
         );
@@ -102,6 +103,7 @@ final class ClipboardStore: ObservableObject {
     private var textByContentStmt: OpaquePointer?
     private var itemByIDStmt: OpaquePointer?
     private var updateKindStmt: OpaquePointer?
+    private var markUsedStmt: OpaquePointer?
     private var insertStackStmt: OpaquePointer?
     private var upsertMembershipStmt: OpaquePointer?
     private var deleteMembershipStmt: OpaquePointer?
@@ -205,6 +207,21 @@ final class ClipboardStore: ObservableObject {
     func item(id: ClipboardItem.ID) -> ClipboardItem? {
         if let item = items.first(where: { $0.id == id }) { return item }
         return loadItem(id: id)
+    }
+
+    /// Update usage metadata in place without treating reuse as an external capture.
+    @discardableResult
+    func markUsed(id: ClipboardItem.ID, at date: Date = Date()) -> Bool {
+        guard let stmt = markUsedStmt else { return false }
+        sqlite3_bind_double(stmt, 1, date.timeIntervalSince1970)
+        sqlite3_bind_text(stmt, 2, id.uuidString, -1, SQLITE_TRANSIENT)
+        guard stepAndReset(stmt), sqlite3_changes(db) == 1 else { return false }
+        if let index = items.firstIndex(where: { $0.id == id }) {
+            items[index] = items[index].used(at: date)
+        } else {
+            revision &+= 1
+        }
+        return true
     }
 
     /// Re-grade an existing row's kind (async TypeSafe classification). The row id is stable across
@@ -619,6 +636,7 @@ final class ClipboardStore: ObservableObject {
         guard stepAndReset(stmt) else { return false }
         // Publish one complete revision, without briefly removing the selected item.
         items = Array(([updated] + items.filter { $0.id != updated.id }).prefix(Self.memoryWindow))
+        onItemCaptured?()
         return true
     }
 
@@ -635,7 +653,7 @@ final class ClipboardStore: ObservableObject {
         trimWindow()
         pruneIfDue()
         scheduleSearchMetadataUpdate(for: item)
-        onItemInserted?()
+        onItemCaptured?()
         return true
     }
 
@@ -668,6 +686,11 @@ final class ClipboardStore: ObservableObject {
             sqlite3_bind_text(stmt, 8, customTitle, -1, SQLITE_TRANSIENT)
         } else {
             sqlite3_bind_null(stmt, 8)
+        }
+        if let lastUsedAt = item.lastUsedAt {
+            sqlite3_bind_double(stmt, 9, lastUsedAt.timeIntervalSince1970)
+        } else {
+            sqlite3_bind_null(stmt, 9)
         }
         return stepAndReset(stmt)
     }
@@ -770,19 +793,21 @@ final class ClipboardStore: ObservableObject {
                 nil, nil, nil) == SQLITE_OK,
             sqlite3_exec(db, Self.coreSchema, nil, nil, nil) == SQLITE_OK
         else { return false }
-        guard sqlite3_exec(db, Self.searchSchema, nil, nil, nil) == SQLITE_OK else { return false }
+        guard migrateUsageMetadata(),
+            sqlite3_exec(db, Self.searchSchema, nil, nil, nil) == SQLITE_OK
+        else { return false }
         insertStmt = prepare(
             """
             INSERT INTO items(
               id, kind, text, image_path, created_at, source_app, image_fingerprint,
-              custom_title
-            ) VALUES(?,?,?,?,?,?,?,?)
+              custom_title, last_used_at
+            ) VALUES(?,?,?,?,?,?,?,?,?)
             """
         )
         loadStmt = prepare(
             """
             SELECT id, kind, text, image_path, created_at, source_app,
-                   image_fingerprint, custom_title
+                   image_fingerprint, custom_title, last_used_at
             FROM items ORDER BY created_at DESC, rowid DESC LIMIT ?
             """)
         refreshStmt = prepare(
@@ -797,23 +822,24 @@ final class ClipboardStore: ObservableObject {
         imageByFingerprintStmt = prepare(
             """
             SELECT id, kind, text, image_path, created_at, source_app,
-                   image_fingerprint, custom_title
+                   image_fingerprint, custom_title, last_used_at
             FROM items WHERE image_fingerprint = ? LIMIT 1
             """)
         textByContentStmt = prepare(
             """
             SELECT id, kind, text, image_path, created_at, source_app,
-                   image_fingerprint, custom_title
+                   image_fingerprint, custom_title, last_used_at
             FROM items WHERE kind != 'image' AND text = ? COLLATE BINARY
             ORDER BY created_at DESC, rowid DESC LIMIT 1
             """)
         itemByIDStmt = prepare(
             """
             SELECT id, kind, text, image_path, created_at, source_app,
-                   image_fingerprint, custom_title
+                   image_fingerprint, custom_title, last_used_at
             FROM items WHERE id = ? LIMIT 1
             """)
         updateKindStmt = prepare("UPDATE items SET kind = ? WHERE id = ?")
+        markUsedStmt = prepare("UPDATE items SET last_used_at = ? WHERE id = ?")
         insertStackStmt = prepare(
             "INSERT INTO stacks(id, name, position) VALUES(?,?,?)")
         upsertMembershipStmt = prepare(
@@ -826,7 +852,21 @@ final class ClipboardStore: ObservableObject {
             && deleteByIDStmt != nil && staleImagesStmt != nil
             && deleteStaleStmt != nil && imageByFingerprintStmt != nil
             && itemByIDStmt != nil && textByContentStmt != nil
-            && updateKindStmt != nil
+            && updateKindStmt != nil && markUsedStmt != nil
+    }
+
+    /// Existing captures keep their metadata; past usage cannot be reconstructed.
+    private func migrateUsageMetadata() -> Bool {
+        guard let stmt = prepare("PRAGMA table_info(items)") else { return false }
+        defer { sqlite3_finalize(stmt) }
+        var status = sqlite3_step(stmt)
+        while status == SQLITE_ROW {
+            if ClipboardSQLite.columnString(stmt, 1) == "last_used_at" { return true }
+            status = sqlite3_step(stmt)
+        }
+        guard status == SQLITE_DONE else { return false }
+        return sqlite3_exec(db, "ALTER TABLE items ADD COLUMN last_used_at REAL", nil, nil, nil)
+            == SQLITE_OK
     }
 
     private func prepare(_ sql: String) -> OpaquePointer? {
@@ -847,7 +887,7 @@ final class ClipboardStore: ObservableObject {
         [
             insertStmt, loadStmt, refreshStmt, deleteByIDStmt,
             staleImagesStmt, deleteStaleStmt, imageByFingerprintStmt, textByContentStmt, itemByIDStmt,
-            updateKindStmt, insertStackStmt, upsertMembershipStmt, deleteMembershipStmt,
+            updateKindStmt, markUsedStmt, insertStackStmt, upsertMembershipStmt, deleteMembershipStmt,
         ].forEach { sqlite3_finalize($0) }
         insertStmt = nil
         loadStmt = nil
@@ -859,6 +899,7 @@ final class ClipboardStore: ObservableObject {
         textByContentStmt = nil
         itemByIDStmt = nil
         updateKindStmt = nil
+        markUsedStmt = nil
         insertStackStmt = nil
         upsertMembershipStmt = nil
         deleteMembershipStmt = nil

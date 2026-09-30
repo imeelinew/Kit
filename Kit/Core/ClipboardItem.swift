@@ -24,6 +24,8 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     /// SHA-256 of canonical visible pixels. Text rows leave it nil.
     let imageFingerprint: String?
     let createdAt: Date
+    /// Last successful copy or paste initiated from Kit; never used for ordering or retention.
+    let lastUsedAt: Date?
     /// Bundle ID of the app frontmost when the copy was captured (see `ClipboardManager.poll`).
     let sourceBundleID: String?
     /// User-assigned list title. Nil means the visible title is derived from the copied content.
@@ -45,7 +47,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     init(
         id: UUID, kind: Kind, text: String?, imagePath: String?, imageFingerprint: String?,
         createdAt: Date, sourceBundleID: String?,
-        customTitle: String? = nil
+        customTitle: String? = nil, lastUsedAt: Date? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -53,6 +55,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
         self.imagePath = imagePath
         self.imageFingerprint = imageFingerprint
         self.createdAt = createdAt
+        self.lastUsedAt = lastUsedAt
         self.sourceBundleID = sourceBundleID
         self.customTitle = customTitle
     }
@@ -62,7 +65,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
         ClipboardItem(
             id: id, kind: kind, text: text, imagePath: imagePath,
             imageFingerprint: imageFingerprint, createdAt: Date(),
-            sourceBundleID: sourceBundleID, customTitle: customTitle)
+            sourceBundleID: sourceBundleID, customTitle: customTitle, lastUsedAt: lastUsedAt)
     }
 
     /// Same capture re-graded (async TypeSafe classification); identity and every other field stay.
@@ -70,7 +73,14 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
         ClipboardItem(
             id: id, kind: kind, text: text, imagePath: imagePath,
             imageFingerprint: imageFingerprint, createdAt: createdAt,
-            sourceBundleID: sourceBundleID, customTitle: customTitle)
+            sourceBundleID: sourceBundleID, customTitle: customTitle, lastUsedAt: lastUsedAt)
+    }
+
+    func used(at date: Date) -> ClipboardItem {
+        ClipboardItem(
+            id: id, kind: kind, text: text, imagePath: imagePath,
+            imageFingerprint: imageFingerprint, createdAt: createdAt,
+            sourceBundleID: sourceBundleID, customTitle: customTitle, lastUsedAt: date)
     }
 
     /// Visible list/card title: a persisted custom name, otherwise the first line of text or "Image".

@@ -28,8 +28,9 @@ struct PasteTransactionTests {
             deliver: {
                 events.append("deliver")
                 return failedStage != "deliver"
-            })
-        let sequence = ["permission", "prepare", "hide", "target", "write", "deliver"]
+            },
+            didDeliver: { events.append("usage") })
+        let sequence = ["permission", "prepare", "hide", "target", "write", "deliver", "usage"]
         let expected: [String]
         if let failedStage, let index = sequence.firstIndex(of: failedStage) {
             expected = Array(sequence[...index])
@@ -68,7 +69,8 @@ struct PasteTransactionTests {
                 deliver: {
                     events.append("deliver")
                     return true
-                })
+                },
+                didDeliver: { events.append("usage") })
         }
         let succeeded = await task.value
         precondition(!succeeded)
@@ -82,6 +84,6 @@ struct PasteTransactionTests {
         }
         await checkCancellation(at: "prepare")
         await checkCancellation(at: "target")
-        print("PASS: transfer ordering, five failure paths, cancellation before write/delivery")
+        print("PASS: transfer ordering, usage only after successful delivery, five failure paths, cancellation")
     }
 }

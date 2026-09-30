@@ -62,7 +62,7 @@ enum ClipboardSearch {
             """
         let sql = """
             SELECT i.id, i.kind, i.text, i.image_path, i.created_at, i.source_app,
-                   i.image_fingerprint, i.custom_title, i.rowid
+                   i.image_fingerprint, i.custom_title, i.last_used_at, i.rowid
             FROM items i
             \(stackJoin)
             WHERE \(textCondition)\(kindCondition)\(stackCondition)\(cursorCondition)
@@ -116,7 +116,7 @@ enum ClipboardSearch {
                     item: item,
                     cursor: ClipboardSearchCursor(
                         createdAt: item.createdAt,
-                        rowID: sqlite3_column_int64(statement, 8))))
+                        rowID: sqlite3_column_int64(statement, 9))))
             }
             status = sqlite3_step(statement)
         }
