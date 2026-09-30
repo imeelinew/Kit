@@ -144,6 +144,14 @@ struct AboutSettingsView: View {
             "Sparkle",
             URL(string: "https://github.com/sparkle-project/Sparkle")!
         ),
+        (
+            "swift-cmark",
+            URL(string: "https://github.com/apple/swift-cmark")!
+        ),
+        (
+            "swift-markdown",
+            URL(string: "https://github.com/apple/swift-markdown")!
+        ),
     ]
 
     private var appName: String {
