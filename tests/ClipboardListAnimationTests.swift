@@ -60,6 +60,31 @@ struct ClipboardListAnimationTests {
     }
 
     @MainActor
+    static func assertRowGeometry(_ table: NSTableView) {
+        table.layoutSubtreeIfNeeded()
+        table.enumerateAvailableRowViews { view, row in
+            let expected = table.rect(ofRow: row)
+            precondition(abs(view.frame.minY - expected.minY) < 0.5,
+                         "Visible row \(row) must sit at its logical position")
+            precondition(abs(view.frame.height - expected.height) < 0.5,
+                         "Visible row \(row) must use its logical height")
+            if let presentation = view.layer?.presentation() {
+                precondition(abs(presentation.frame.minY - expected.minY) < 0.5,
+                             "Settled presentation row \(row) must match its logical position")
+            }
+            if let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) {
+                let cellFrame = table.convert(cell.bounds, from: cell)
+                precondition(abs(cellFrame.minY - expected.minY) < 0.5,
+                             "Cell content \(row) must sit inside its logical row")
+                if let layer = cell.layer, let presentation = layer.presentation() {
+                    precondition(abs(presentation.frame.minY - layer.frame.minY) < 0.5,
+                                 "Cell content \(row) must not keep an insertion slide offset")
+                }
+            }
+        }
+    }
+
+    @MainActor
     static func main() async throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory
@@ -76,12 +101,10 @@ struct ClipboardListAnimationTests {
         let a = item("A"), b = item("B"), c = item("C", daysAgo: 1)
         let d = item("D", daysAgo: 2)
         fixture.update([a, b, c, d])
-        let hosting = NSHostingView(rootView: FixtureView(fixture: fixture))
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 290, height: 520),
-            styleMask: [.borderless], backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        window.contentView = hosting
+        let window = PalettePanel(
+            rootView: FixtureView(fixture: fixture).frame(width: 290, height: 520),
+            visualStyle: .frosted)
+        let hosting = window.contentView!
         hosting.layoutSubtreeIfNeeded()
         settle()
         let table = table(in: hosting)!
@@ -170,34 +193,31 @@ struct ClipboardListAnimationTests {
                      "Deleting the last entries clears selection")
         precondition(fixture.selectionCallbacks == 0, "Updates never publish transient AppKit selections")
 
-        // A follow scroll paired with an animated insert waits out the row animation —
-        // the production shape of undo: scrolled down the list, a restored entry is
-        // inserted at the top, selected, and followed with a scroll-to-top. Under
-        // Reduce Motion the edit skips animation entirely and scrolls immediately,
-        // so the deferral window is only asserted where animations run at all.
+        // A single restore still animates, and its follow scroll waits for row frames.
         let many = (0..<30).map { item("scroll row \($0)") }
         fixture.update(many)
+        window.orderFront(nil)
         settle(0.3)
         fixture.selectedID = many.last!.id
         fixture.scroll = ScrollIntent(kind: .follow)
         settle(0.1)
-        precondition(!table.visibleRect.intersects(table.rect(ofRow: 0)),
-                     "The setup scrolls away from the top")
-
-        fixture.scroll = ScrollIntent(kind: .follow)
+        precondition(!table.visibleRect.intersects(table.rect(ofRow: 0)))
         fixture.update([item("restored")] + many)
+        fixture.scroll = ScrollIntent(kind: .follow)
         settle()
         if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             precondition(!table.visibleRect.intersects(table.rect(ofRow: 0)),
-                         "The follow scroll defers past the animated insert")
+                         "The single restore retains its insertion animation and deferred scroll")
         }
         settle(0.4)
-        precondition(table.visibleRect.intersects(table.rect(ofRow: 0)),
-                     "The deferred follow scroll completes")
+        precondition(table.visibleRect.intersects(table.rect(ofRow: 0)))
+        assertRowGeometry(table)
 
         window.close()
-        print("PASS: kind refinement, animated deletion, rapid deletion, date headers, async refresh, pagination, empty results")
+        print("PASS: kind refinement, deletion, single animated restore, date headers, async refresh, pagination, empty results")
         try await ClipboardUndoTests.run()
+        try await SingleDeletionUndoTests.run()
         ClipboardTextClassifierTests.run()
+        await ClipboardPreviewTests.run()
     }
 }

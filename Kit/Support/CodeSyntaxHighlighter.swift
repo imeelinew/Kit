@@ -6,6 +6,8 @@ import SwiftUI
 /// lexical forms common across Swift, JavaScript/TypeScript, Python, C-family languages, Rust, Go,
 /// SQL, shell, JSON, and markup; unknown syntax remains the native primary text color.
 enum CodeSyntaxHighlighter {
+    static let maximumHighlightedBytes = 512 * 1024
+
     private enum TokenStyle {
         case orange
         case secondary
@@ -78,6 +80,7 @@ enum CodeSyntaxHighlighter {
     static func highlight(_ source: String) -> AttributedString {
         var output = AttributedString(source)
         output.foregroundColor = .primary
+        guard source.utf8.count <= maximumHighlightedBytes else { return output }
         for token in highlightedTokens(in: source) {
             guard !Task.isCancelled else { return output }
             let tokenRange = token.range
@@ -97,6 +100,7 @@ enum CodeSyntaxHighlighter {
         attributes: [NSAttributedString.Key: Any]
     ) -> NSMutableAttributedString {
         let output = NSMutableAttributedString(string: source, attributes: attributes)
+        guard source.utf8.count <= maximumHighlightedBytes else { return output }
         for token in highlightedTokens(in: source) {
             guard !Task.isCancelled else { return output }
             output.addAttribute(
@@ -135,9 +139,7 @@ struct CodePreview: View {
     let code: String
     var query: String = ""
     var fontSize: CGFloat? = nil
-    var scrollPosition: CGPoint? = nil
-    var onScroll: ((CGPoint) -> Void)? = nil
-    @State private var highlighted: AttributedString?
+    @State private var highlighted: Rendered?
 
     private struct RenderID: Hashable {
         let code: String
@@ -145,21 +147,30 @@ struct CodePreview: View {
     }
 
     private struct Rendered: @unchecked Sendable {
+        let id: RenderID
         let value: AttributedString
     }
 
     var body: some View {
-        AttributedTextPreview(
-            attributed: highlighted ?? AttributedString(code),
-            fontSize: fontSize,
-            scrollPosition: scrollPosition,
-            onScroll: onScroll)
-        .task(id: RenderID(code: code, query: query)) {
+        let id = RenderID(code: code, query: query)
+        let value = highlighted?.id == id ? highlighted?.value : nil
+        Group {
+            if code.utf8.count > CodeSyntaxHighlighter.maximumHighlightedBytes {
+                ClipboardTextPreview(text: code, query: query, fontSize: fontSize).equatable()
+            } else {
+                AttributedTextPreview(
+                    attributed: value ?? AttributedString(code),
+                    contentID: PreviewContentID(source: code, query: query, rendered: value != nil),
+                    fontSize: fontSize)
+            }
+        }
+        .task(id: id) {
             highlighted = nil
+            guard code.utf8.count <= CodeSyntaxHighlighter.maximumHighlightedBytes else { return }
             let task = Task.detached(priority: .userInitiated) {
                 var attributed = CodeSyntaxHighlighter.highlight(code)
                 SearchHighlight.apply(to: &attributed, source: code, query: query)
-                return Rendered(value: attributed)
+                return Rendered(id: id, value: attributed)
             }
             let rendered = await withTaskCancellationHandler {
                 await task.value
@@ -167,7 +178,7 @@ struct CodePreview: View {
                 task.cancel()
             }
             guard !Task.isCancelled else { return }
-            highlighted = rendered.value
+            highlighted = rendered
         }
     }
 }

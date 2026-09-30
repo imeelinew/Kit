@@ -24,6 +24,8 @@ xcrun swiftc -swift-version 6 -parse-as-library \
     "$products/Kit.app/Contents/MacOS/Kit.debug.dylib" \
     "$repo_root/tests/ClipboardListAnimationTests.swift" \
     "$repo_root/tests/ClipboardUndoTests.swift" \
+    "$repo_root/tests/SingleDeletionUndoTests.swift" \
     "$repo_root/tests/ClipboardTextClassifierTests.swift" \
+    "$repo_root/tests/ClipboardPreviewTests.swift" \
     -o "$test_dir/clipboard-list-tests"
 "$test_dir/clipboard-list-tests"

@@ -50,8 +50,6 @@ Press `Option + W` to show or hide the palette. Type to filter history, move wit
 
 The action menu also lets you paste while keeping the palette open, reveal an image in Finder, or delete an item. You can record a different global shortcut in Settings.
 
-Deletion undo keeps the last 20 entries for the current app session, including images and Stack membership. Restored entries retain their original timestamps. Clearing history, deleting a Stack, or expiration removes the corresponding undo records.
-
 ## Privacy and Permissions
 
 Clipboard history and images stay on your Mac; no cloud service is required. Choose how long to keep history and which apps to exclude. Keychain Access and Passwords are excluded by default.

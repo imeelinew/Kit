@@ -33,9 +33,10 @@ enum ClipboardUndoTests {
         let b = store.item(id: secondID)!
         var captured = 0
         store.onItemInserted = { captured += 1 }
-        precondition(store.remove(named) && store.remove(b))
-        precondition(store.undoLastDeletion() == b, "Undo follows reverse deletion order")
-        precondition(store.undoLastDeletion() == named, "Original ID, time, title, source and content survive")
+        precondition(store.remove(b) && store.remove(named))
+        precondition(store.undoLastDeletion() == named, "Only the latest deletion preserves its metadata")
+        precondition(store.undoLastDeletion() == nil && store.item(id: b.id) == nil,
+                     "A second undo cannot restore an earlier deletion")
         precondition(store.stackID(for: a.id) == stack.id)
         precondition(captured == 0 && !store.canUndoDeletion, "Undo is not a new capture")
         await store.waitForSearchMetadata()
@@ -63,13 +64,16 @@ enum ClipboardUndoTests {
         let restoredData = try Data(contentsOf: imageURL)
         precondition(restoredData == data && backups(directory).isEmpty)
 
+        precondition(store.remove(named))
         let revision = store.revision
         execute(directory, "CREATE TRIGGER fail_delete BEFORE DELETE ON items BEGIN SELECT RAISE(ABORT, 'test'); END")
         precondition(!store.remove(image) && !store.remove(named))
-        precondition(store.revision == revision && !store.canUndoDeletion)
-        precondition(store.item(id: image.id) == image && store.stackID(for: named.id) == stack.id)
+        precondition(store.revision == revision && store.canUndoDeletion)
+        precondition(store.item(id: image.id) == image && store.item(id: named.id) == nil)
         precondition(FileManager.default.fileExists(atPath: imageURL.path) && backups(directory).isEmpty)
         execute(directory, "DROP TRIGGER fail_delete")
+        precondition(store.undoLastDeletion() == named && store.stackID(for: named.id) == stack.id,
+                     "Failed deletion keeps the previous single undo intact")
 
         precondition(store.remove(image))
         await store.addImage(data, sourceBundleID: "recopy")
@@ -79,7 +83,8 @@ enum ClipboardUndoTests {
         precondition(recopiedImage.id != image.id && store.undoLastDeletion()?.id == recopiedImage.id)
         precondition(store.items.filter { $0.imageFingerprint == image.imageFingerprint }.count == 1)
         precondition(backups(directory).isEmpty)
-        precondition(store.remove(b))
+        let second = store.addText("second", kind: .code, sourceBundleID: nil)!
+        precondition(store.remove(second))
         let recopiedText = store.addText("second", kind: .code, sourceBundleID: "new")!
         precondition(store.undoLastDeletion()?.id == recopiedText.id, "Undo preserves a more recent copy")
 
@@ -88,24 +93,18 @@ enum ClipboardUndoTests {
         precondition(!store.canUndoDeletion && store.undoLastDeletion() == nil && backups(directory).isEmpty)
         await store.addImage(data, sourceBundleID: nil)
         precondition(store.remove(store.items.first!))
-        for index in 0..<21 {
-            let entry = store.addText("entry \(index)", kind: .text, sourceBundleID: nil)!
-            precondition(store.remove(entry))
-        }
-        precondition(backups(directory).isEmpty, "Evicting an old undo releases its image")
-        for index in (1..<21).reversed() {
-            precondition(store.undoLastDeletion()?.text == "entry \(index)")
-        }
-        precondition(store.undoLastDeletion() == nil, "Only 20 deletions are retained")
+        let replacement = store.addText("replacement", kind: .text, sourceBundleID: nil)!
+        precondition(store.remove(replacement))
+        precondition(backups(directory).isEmpty, "Replacing the single undo releases the previous image")
+        precondition(store.undoLastDeletion() == replacement)
+        precondition(store.undoLastDeletion() == nil)
 
-        let unstacked = store.items.first!
-        precondition(store.remove(unstacked))
         let member = store.addText("member", kind: .text, sourceBundleID: nil)!
         store.assign(member.id, to: stack.id)
         precondition(store.remove(member) && store.deleteStack(stack.id))
-        precondition(store.undoLastDeletion() == unstacked, "Deleting a Stack discards only its undo entries")
-        precondition(!store.canUndoDeletion)
-        precondition(store.remove(unstacked))
+        precondition(!store.canUndoDeletion && store.undoLastDeletion() == nil,
+                     "Deleting a Stack discards its pending deletion")
+        precondition(store.remove(replacement))
         store.maxAge = 0
         store.enforceLimits()
         precondition(!store.canUndoDeletion && store.undoLastDeletion() == nil, "Retention also expires undo")
@@ -119,7 +118,7 @@ enum ClipboardUndoTests {
         let reopened = ClipboardStore(directory: sessionDirectory)
         reopened.load()
         precondition(reopened.items.isEmpty && !reopened.canUndoDeletion)
-        print("PASS: undo metadata, images, Stack membership, FTS, rollback, recopy, limit, clear, expiration, session cleanup")
+        print("PASS: single deletion undo, second-undo no-op, metadata, images, Stack membership, FTS, rollback, recopy, clear, expiration, session cleanup")
     }
 
     static func ready(_ vm: PaletteViewModel) async {
@@ -179,6 +178,11 @@ enum ClipboardUndoTests {
         await ready(vm)
         precondition(vm.selectedID == target.id && vm.query == "undo target" && !probe.invoked,
                      "A deletion from filtered results takes precedence over earlier search edits")
+        let generation = vm.resultsGeneration
+        let scroll = vm.scrollIntent
+        commandZ(panel)
+        precondition(!probe.invoked && vm.resultsGeneration == generation && vm.scrollIntent == scroll,
+                     "A second Command-Z does nothing, including older search-editor undo")
 
         vm.openActions(for: target.id)
         vm.activateMenuItem(at: deleteIndex)

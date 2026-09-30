@@ -221,7 +221,9 @@ final class PaletteViewModel {
 
     var menuOpen: Bool { overlay.isMenu }
 
-    var prefersDeletionUndo: Bool { deletionWasLastEdit && core.clipboardStore.canUndoDeletion }
+    // Keep routing to deletion undo after it is consumed. A second Command-Z must
+    // not fall through to an older text edit; typing/naming still owns text undo.
+    var prefersDeletionUndo: Bool { deletionWasLastEdit }
 
     /// At an empty query, Space is reserved for Quick Look instead of starting blank search text.
     var canToggleQuickLook: Bool {

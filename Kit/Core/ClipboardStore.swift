@@ -84,11 +84,12 @@ final class ClipboardStore: ObservableObject {
         let stackID: ClipboardStack.ID?
         let imageBackup: URL?
     }
-    private var deletedEntries: [DeletedEntry] = []
-    private static let deletionUndoLimit = 20
+    // A successful deletion replaces this slot; a successful restore consumes it.
+    private var deletedEntry: DeletedEntry?
 
     var canUndoDeletion: Bool {
-        deletedEntries.contains { $0.item.createdAt >= Date().addingTimeInterval(-maxAge) }
+        guard let deletedEntry else { return false }
+        return deletedEntry.item.createdAt >= Date().addingTimeInterval(-maxAge)
     }
     private var db: OpaquePointer?
     private var insertStmt: OpaquePointer?
@@ -246,10 +247,8 @@ final class ClipboardStore: ObservableObject {
             if let backup { try? FileManager.default.removeItem(at: backup) }
             return false
         }
-        deletedEntries.append(entry)
-        while deletedEntries.count > Self.deletionUndoLimit {
-            discardBackup(deletedEntries.removeFirst())
-        }
+        discardDeletion()
+        deletedEntry = entry
         stackMembership.removeValue(forKey: item.id)
         deleteBlob(item)
         items.removeAll { $0.id == item.id }
@@ -260,8 +259,11 @@ final class ClipboardStore: ObservableObject {
     /// A newer copy of the same content wins; undo never creates a duplicate or overwrites it.
     @discardableResult
     func undoLastDeletion() -> ClipboardItem? {
-        discardDeletedEntries { $0.item.createdAt < Date().addingTimeInterval(-maxAge) }
-        guard let entry = deletedEntries.last, let stmt = insertStmt else { return nil }
+        guard canUndoDeletion else {
+            discardDeletion()
+            return nil
+        }
+        guard let entry = deletedEntry, let stmt = insertStmt else { return nil }
         let existing = item(id: entry.item.id)
             ?? entry.item.text.flatMap { textItem(matching: $0) }
             ?? entry.item.imageFingerprint.flatMap { image(matching: $0) }
@@ -289,7 +291,7 @@ final class ClipboardStore: ObservableObject {
             if let copiedImage { try? FileManager.default.removeItem(at: copiedImage) }
             return nil
         }
-        discardBackup(deletedEntries.removeLast())
+        discardDeletion()
         if let stackID { stackMembership[restored.id] = stackID }
         items = Array(Self.displayOrder(
             [restored] + items.filter { $0.id != restored.id }).prefix(Self.memoryWindow))
@@ -304,16 +306,10 @@ final class ClipboardStore: ObservableObject {
         return false
     }
 
-    private func discardBackup(_ entry: DeletedEntry) {
-        if let url = entry.imageBackup { try? FileManager.default.removeItem(at: url) }
-    }
-
-    private func discardDeletedEntries(where shouldDiscard: (DeletedEntry) -> Bool) {
-        deletedEntries.removeAll { entry in
-            guard shouldDiscard(entry) else { return false }
-            discardBackup(entry)
-            return true
-        }
+    private func discardDeletion() {
+        guard let entry = deletedEntry else { return }
+        if let backup = entry.imageBackup { try? FileManager.default.removeItem(at: backup) }
+        deletedEntry = nil
     }
 
     func clearAll() {
@@ -321,7 +317,7 @@ final class ClipboardStore: ObservableObject {
         searchMetadataTask?.cancel()
         pendingSearchMetadata.removeAll()
         guard sqlite3_exec(db, "DELETE FROM items", nil, nil, nil) == SQLITE_OK else { return }
-        discardDeletedEntries { _ in true }
+        discardDeletion()
         items = []
         sqlite3_exec(db, "DELETE FROM stack_items", nil, nil, nil)
         stackMembership.removeAll()
@@ -402,7 +398,7 @@ final class ClipboardStore: ObservableObject {
         else { return false }
         committed = true
 
-        discardDeletedEntries { $0.stackID == id }
+        if deletedEntry?.stackID == id { discardDeletion() }
         stacks.removeAll { $0.id == id }
         stackMembership = stackMembership.filter { $0.value != id }
         let remaining = items.filter { !contents.itemIDs.contains($0.id) }
@@ -714,7 +710,7 @@ final class ClipboardStore: ObservableObject {
     private func prune() {
         lastPrunedAt = Date()
         let cutoff = Date().addingTimeInterval(-maxAge)
-        discardDeletedEntries { $0.item.createdAt < cutoff }
+        if let deletedEntry, deletedEntry.item.createdAt < cutoff { discardDeletion() }
         guard let imagesStmt = staleImagesStmt, let deleteStmt = deleteStaleStmt else { return }
         sqlite3_bind_double(imagesStmt, 1, cutoff.timeIntervalSince1970)
         var stalePaths: [String] = []

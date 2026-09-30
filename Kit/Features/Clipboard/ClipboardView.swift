@@ -623,7 +623,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             let visible = tableView.rows(in: tableView.visibleRect)
             guard visible.location != NSNotFound else { return }
             defer { hapticRow = visible.location }
-            guard !suppressScrollHaptics, hapticRow >= 0, hapticRow != visible.location,
+            guard !suppressScrollHaptics, !applyingSelection, hapticRow >= 0, hapticRow != visible.location,
                 !tableView.pointerDrivesSelection
             else { return }
             PaletteHaptics.tick()

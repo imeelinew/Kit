@@ -165,12 +165,15 @@ struct ClipboardPreview: View {
 }
 
 /// Selection, footer and metadata changes must not reformat unchanged preview text.
-private struct ClipboardTextPreview: View, Equatable {
+struct ClipboardTextPreview: View, Equatable {
     let text: String
     let query: String
+    var fontSize: CGFloat? = nil
 
     var body: some View {
-        AttributedTextPreview(attributed: SearchHighlight.attributed(text, query: query))
+        AttributedTextPreview(
+            attributed: SearchHighlight.attributed(text, query: query),
+            contentID: PreviewContentID(source: text, query: query), fontSize: fontSize)
     }
 }
 

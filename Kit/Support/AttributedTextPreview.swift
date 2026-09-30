@@ -1,6 +1,13 @@
 import AppKit
 import SwiftUI
 
+/// Identifies the logical input and whether its asynchronous rendering has completed.
+struct PreviewContentID: Hashable {
+    let source: String
+    let query: String
+    var rendered = true
+}
+
 /// Read-only attributed preview text. The scroll view and text system are
 /// entirely AppKit so large previews do not need a SwiftUI `ScrollView` around `NSTextView`.
 struct AttributedTextPreview: NSViewRepresentable {
@@ -11,39 +18,62 @@ struct AttributedTextPreview: NSViewRepresentable {
 
     private let storage: Storage
     private let fontSize: CGFloat?
-    private let scrollPosition: CGPoint?
-    private let onScroll: ((CGPoint) -> Void)?
+    private let contentID: PreviewContentID
 
     init(
         attributed: AttributedString,
-        fontSize: CGFloat? = nil,
-        scrollPosition: CGPoint? = nil,
-        onScroll: ((CGPoint) -> Void)? = nil
+        contentID: PreviewContentID,
+        fontSize: CGFloat? = nil
     ) {
         storage = .swiftUI(attributed)
         self.fontSize = fontSize
-        self.scrollPosition = scrollPosition
-        self.onScroll = onScroll
+        self.contentID = contentID
     }
 
     init(
         nsAttributed: NSAttributedString,
-        fontSize: CGFloat? = nil,
-        scrollPosition: CGPoint? = nil,
-        onScroll: ((CGPoint) -> Void)? = nil
+        contentID: PreviewContentID,
+        fontSize: CGFloat? = nil
     ) {
         storage = .appKit(nsAttributed)
         self.fontSize = fontSize
-        self.scrollPosition = scrollPosition
-        self.onScroll = onScroll
+        self.contentID = contentID
     }
+
+    final class Coordinator {
+        fileprivate var lastInput: Input?
+    }
+
+    fileprivate struct Input: Equatable {
+        let contentID: PreviewContentID
+        let fontSize: CGFloat
+        let colorScheme: ColorScheme
+        let contrast: ColorSchemeContrast
+        let accent: NSColor
+        let appKit: Bool
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> PreviewTextScrollView {
         PreviewTextScrollView()
     }
 
     func updateNSView(_ scrollView: PreviewTextScrollView, context: Context) {
-        scrollView.onScroll = onScroll
+        let environment = context.environment
+        let appKit: Bool
+        switch storage {
+        case .swiftUI: appKit = false
+        case .appKit: appKit = true
+        }
+        let input = Input(
+            contentID: contentID,
+            fontSize: fontSize ?? NSFont.preferredFont(forTextStyle: .subheadline).pointSize,
+            colorScheme: environment.colorScheme, contrast: environment.colorSchemeContrast,
+            accent: NSColor.controlAccentColor, appKit: appKit)
+        // The text storage already owns the converted result. Skip conversion and full-string
+        // comparison for unrelated SwiftUI updates; layout changes are handled by the scroll view.
+        guard context.coordinator.lastInput != input else { return }
         let textView = scrollView.textView
         let ns: NSAttributedString
         switch storage {
@@ -55,13 +85,10 @@ struct AttributedTextPreview: NSViewRepresentable {
         case .appKit(let attributed):
             ns = Self.nsAttributed(from: attributed, fontSize: fontSize)
         }
-        let plain = ns.string
-        if textView.string != plain || textView.currentAttributedString() != ns {
-            textView.textStorage?.setAttributedString(ns)
-            textView.invalidateIntrinsicContentSize()
-        }
+        textView.textStorage?.setAttributedString(ns)
+        textView.invalidateIntrinsicContentSize()
+        context.coordinator.lastInput = input
         scrollView.updateDocumentGeometry()
-        scrollView.setScrollPosition(scrollPosition)
     }
 
     /// `AttributedString` stores the highlighters' colors in SwiftUI's attribute scope. The
@@ -148,11 +175,7 @@ struct AttributedTextPreview: NSViewRepresentable {
 
 final class PreviewTextScrollView: NSScrollView {
     let textView = PreviewTextView()
-    var onScroll: ((CGPoint) -> Void)?
     private var styleObserver: NotificationToken?
-    private var restoringScrollPosition = false
-    private var desiredScrollPosition: CGPoint?
-    private var lastReportedScrollPosition: CGPoint?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -198,28 +221,6 @@ final class PreviewTextScrollView: NSScrollView {
     override func layout() {
         super.layout()
         updateDocumentGeometry()
-        if let desiredScrollPosition {
-            restoreScrollPosition(desiredScrollPosition)
-        }
-    }
-
-    override func reflectScrolledClipView(_ clipView: NSClipView) {
-        super.reflectScrolledClipView(clipView)
-        guard clipView === contentView, !restoringScrollPosition else { return }
-
-        // A trackpad can temporarily move the clip view beyond either edge for rubber-banding.
-        // Never persist those transient coordinates, and stop treating the last restored value as
-        // authoritative as soon as a native scroll begins. Otherwise SwiftUI echoes the transient
-        // value back through `setScrollPosition`, which fights AppKit's bounce on every frame.
-        desiredScrollPosition = nil
-        guard let position = clampedScrollPosition(clipView.bounds.origin) else { return }
-        if let lastReportedScrollPosition,
-            lastReportedScrollPosition.nearlyEquals(position)
-        {
-            return
-        }
-        lastReportedScrollPosition = position
-        onScroll?(position)
     }
 
     func updateDocumentGeometry() {
@@ -235,43 +236,6 @@ final class PreviewTextScrollView: NSScrollView {
         if textView.frame.size != size {
             textView.setFrameSize(size)
         }
-    }
-
-    func setScrollPosition(_ requested: CGPoint?) {
-        guard let requested, let position = clampedScrollPosition(requested) else {
-            desiredScrollPosition = nil
-            return
-        }
-
-        // Values reported above return through the SwiftUI binding during the same gesture. They
-        // acknowledge state; they are not a request to reposition the native scroll view.
-        if let lastReportedScrollPosition,
-            lastReportedScrollPosition.nearlyEquals(position)
-        {
-            return
-        }
-        desiredScrollPosition = requested
-        restoreScrollPosition(requested)
-    }
-
-    private func restoreScrollPosition(_ requested: CGPoint) {
-        guard let position = clampedScrollPosition(requested) else { return }
-        let current = contentView.bounds.origin
-        guard abs(current.x - position.x) > 0.5 || abs(current.y - position.y) > 0.5 else {
-            lastReportedScrollPosition = position
-            return
-        }
-        restoringScrollPosition = true
-        contentView.scroll(to: position)
-        reflectScrolledClipView(contentView)
-        restoringScrollPosition = false
-        lastReportedScrollPosition = position
-    }
-
-    private func clampedScrollPosition(_ requested: CGPoint) -> CGPoint? {
-        guard requested.x.isFinite, requested.y.isFinite else { return nil }
-        let maximumY = max(textView.frame.height - contentView.bounds.height, 0)
-        return CGPoint(x: 0, y: min(max(requested.y, 0), maximumY))
     }
 
     private func observeScrollerStyleChanges() {
@@ -296,12 +260,6 @@ final class PreviewTextScrollView: NSScrollView {
     }
 }
 
-private extension CGPoint {
-    func nearlyEquals(_ other: CGPoint, tolerance: CGFloat = 0.5) -> Bool {
-        abs(x - other.x) <= tolerance && abs(y - other.y) <= tolerance
-    }
-}
-
 final class PreviewTextView: NSTextView {
     override var intrinsicContentSize: NSSize {
         guard let layoutManager, let textContainer else {
@@ -318,9 +276,5 @@ final class PreviewTextView: NSTextView {
             textContainer.size = NSSize(width: bounds.width, height: CGFloat.greatestFiniteMagnitude)
             invalidateIntrinsicContentSize()
         }
-    }
-
-    func currentAttributedString() -> NSAttributedString {
-        textStorage.map { NSAttributedString(attributedString: $0) } ?? NSAttributedString()
     }
 }

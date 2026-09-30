@@ -46,10 +46,13 @@ struct MarkdownPreview: View {
     let source: String
     var query: String = ""
     var fontSize: CGFloat? = nil
-    var scrollPosition: CGPoint? = nil
-    var onScroll: ((CGPoint) -> Void)? = nil
 
     @State private var rendered: Rendered?
+    @State private var renderedID: RenderID?
+
+    private var currentRendered: Rendered? {
+        renderedID == RenderID(source: source, query: query, fontSize: fontSize) ? rendered : nil
+    }
 
     private enum Rendered: @unchecked Sendable {
         case swiftUI(AttributedString)
@@ -85,7 +88,7 @@ struct MarkdownPreview: View {
 
     var body: some View {
         Group {
-            switch rendered {
+            switch currentRendered {
             case .appKit(let value):
                 previewText(nsAttributed: value)
             case .swiftUI(let value):
@@ -106,22 +109,21 @@ struct MarkdownPreview: View {
             }
             guard !Task.isCancelled else { return }
             rendered = result
+            renderedID = RenderID(source: source, query: query, fontSize: fontSize)
         }
     }
 
     private func previewText(attributed: AttributedString) -> AttributedTextPreview {
         AttributedTextPreview(
             attributed: attributed,
-            fontSize: fontSize,
-            scrollPosition: scrollPosition,
-            onScroll: onScroll)
+            contentID: PreviewContentID(source: source, query: query, rendered: currentRendered != nil),
+            fontSize: fontSize)
     }
 
     private func previewText(nsAttributed: NSAttributedString) -> AttributedTextPreview {
         AttributedTextPreview(
             nsAttributed: nsAttributed,
-            fontSize: fontSize,
-            scrollPosition: scrollPosition,
-            onScroll: onScroll)
+            contentID: PreviewContentID(source: source, query: query, rendered: currentRendered != nil),
+            fontSize: fontSize)
     }
 }

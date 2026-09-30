@@ -32,19 +32,35 @@ enum NerdSymbolsFont {
         return NSFont(name: postScriptName, size: size)
     }
 
-    /// Assigns the symbols font to any composed character the run / base font cannot render.
+    /// Only Nerd Font private-use icons need an explicit cascade. Ordinary text stays on
+    /// the system fallback path, without allocating glyph buffers for every character.
+    static func privateUseRanges(in plain: String) -> [NSRange] {
+        var ranges: [NSRange] = []
+        var offset = 0
+        let string = plain as NSString
+        for scalar in plain.unicodeScalars {
+            switch scalar.value {
+            case 0xE000...0xF8FF, 0xF0000...0xFFFFD, 0x100000...0x10FFFD:
+                let range = string.rangeOfComposedCharacterSequence(at: offset)
+                if ranges.last != range { ranges.append(range) }
+            default: break
+            }
+            offset += scalar.value > 0xFFFF ? 2 : 1
+        }
+        return ranges
+    }
+
+    /// Assigns the symbols font to private-use characters the run / base font cannot render.
     static func applyFallback(to mutable: NSMutableAttributedString, baseFont: NSFont) {
+        let ranges = privateUseRanges(in: mutable.string)
+        guard !ranges.isEmpty else { return }
         guard let symbols = nsFont(ofSize: baseFont.pointSize) else { return }
         let string = mutable.string as NSString
-        let length = string.length
-        guard length > 0 else { return }
 
         let symbolsCT = symbols as CTFont
-        var location = 0
-        while location < length {
-            let range = string.rangeOfComposedCharacterSequence(at: location)
+        for range in ranges {
             let runFont =
-                (mutable.attribute(.font, at: location, effectiveRange: nil) as? NSFont)
+                (mutable.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont)
                 ?? baseFont
             var characters = [UniChar](repeating: 0, count: range.length)
             string.getCharacters(&characters, range: range)
@@ -59,23 +75,21 @@ enum NerdSymbolsFont {
                     mutable.addAttribute(.font, value: symbols, range: range)
                 }
             }
-            location = NSMaxRange(range)
         }
     }
 
     /// Applies symbols-font runs only where needed, leaving other characters unstyled so
     /// SwiftUI's view-level `.font` still controls normal text.
     static func applyFallback(to attributed: inout AttributedString, size: CGFloat) {
+        let plain = String(attributed.characters)
+        let ranges = privateUseRanges(in: plain)
+        guard !ranges.isEmpty else { return }
         guard nsFont(ofSize: size) != nil else { return }
         let probe = NSFont.systemFont(ofSize: size)
-        let plain = String(attributed.characters)
-        guard !plain.isEmpty else { return }
 
         let nsString = plain as NSString
-        var location = 0
         let probeCT = probe as CTFont
-        while location < nsString.length {
-            let nsRange = nsString.rangeOfComposedCharacterSequence(at: location)
+        for nsRange in ranges {
             var characters = [UniChar](repeating: 0, count: nsRange.length)
             nsString.getCharacters(&characters, range: nsRange)
             var glyphs = [CGGlyph](repeating: 0, count: nsRange.length)
@@ -91,7 +105,6 @@ enum NerdSymbolsFont {
             {
                 attributed[lower..<upper].font = Font.custom(familyName, size: size)
             }
-            location = NSMaxRange(nsRange)
         }
     }
 }
