@@ -201,6 +201,9 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             scrollView.borderType = .noBorder
             scrollView.hasVerticalScroller = false
             scrollView.hasHorizontalScroller = false
+            // Hiding the scroller does not disable horizontal rubber-banding.
+            scrollView.horizontalScrollElasticity = .none
+            scrollView.verticalScrollElasticity = .allowed
             scrollView.automaticallyAdjustsContentInsets = false
             scrollView.contentInsets = NSEdgeInsets(
                 top: Theme.Spacing.xs,
