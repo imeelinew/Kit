@@ -51,23 +51,27 @@ struct MarkdownPreview: View {
     @State private var renderedID: RenderID?
 
     private var currentRendered: Rendered? {
-        renderedID == RenderID(source: source, query: query, fontSize: fontSize) ? rendered : nil
+        if renderedID == RenderID(source: source, fontSize: fontSize) {
+            return rendered
+        }
+        // Reopening a cached preview should never briefly show the raw Markdown.
+        return MarkdownPreviewCache.shared.object(
+            forKey: MarkdownPreviewCache.Key(source: source, fontSize: fontSize)
+        ).map { Self.renderedContent(markdown: $0.markdown) }
     }
 
     private enum Rendered: @unchecked Sendable {
-        case swiftUI(AttributedString)
+        case plainText
         case appKit(NSAttributedString)
     }
 
     private struct RenderID: Hashable {
         let source: String
-        let query: String
         let fontSize: CGFloat?
     }
 
     private nonisolated static func render(
         _ source: String,
-        query: String,
         fontSize: CGFloat?
     ) -> Rendered {
         let key = MarkdownPreviewCache.Key(source: source, fontSize: fontSize)
@@ -80,27 +84,31 @@ struct MarkdownPreview: View {
                 MarkdownPreviewCache.Entry(markdown: markdown), forKey: key,
                 cost: max(source.utf8.count, markdown?.length ?? 0))
         }
-        if let markdown {
-            return .appKit(SearchHighlight.applying(to: markdown, query: query))
-        }
-        return .swiftUI(SearchHighlight.attributed(source, query: query))
+        return renderedContent(markdown: markdown)
+    }
+
+    private nonisolated static func renderedContent(
+        markdown: NSAttributedString?
+    ) -> Rendered {
+        if let markdown { return .appKit(markdown) }
+        return .plainText
     }
 
     var body: some View {
         Group {
             switch currentRendered {
             case .appKit(let value):
-                previewText(nsAttributed: value)
-            case .swiftUI(let value):
-                previewText(attributed: value)
+                previewText(nsAttributed: SearchHighlight.applying(to: value, query: query))
+            case .plainText:
+                previewText(attributed: SearchHighlight.attributed(source, query: query))
             case nil:
                 previewText(attributed: AttributedString(source))
             }
         }
-        .task(id: RenderID(source: source, query: query, fontSize: fontSize)) {
-            rendered = nil
+        .task(id: RenderID(source: source, fontSize: fontSize)) {
+            // Search changes only update highlighting; keep the parsed document intact.
             let task = Task.detached(priority: .userInitiated) {
-                Self.render(source, query: query, fontSize: fontSize)
+                Self.render(source, fontSize: fontSize)
             }
             let result = await withTaskCancellationHandler {
                 await task.value
@@ -109,7 +117,7 @@ struct MarkdownPreview: View {
             }
             guard !Task.isCancelled else { return }
             rendered = result
-            renderedID = RenderID(source: source, query: query, fontSize: fontSize)
+            renderedID = RenderID(source: source, fontSize: fontSize)
         }
     }
 

@@ -181,6 +181,26 @@ struct ClipboardPreviewTests {
         precondition(!markdownText.string.contains("#") && !markdownText.string.contains("**"),
                      "Markdown still renders its structure through the cached bridge")
         precondition(markdownText.textStorage?.attribute(.backgroundColor, at: 0, effectiveRange: nil) != nil)
+        let markdownUpdates = NotificationCenter.default.addObserver(
+            forName: NSTextStorage.didProcessEditingNotification, object: nil, queue: .main
+        ) { notification in
+            guard let storage = notification.object as? NSTextStorage else { return }
+            precondition(!storage.string.contains("# Replacement"),
+                         "Search edits must never replace rendered Markdown with its raw source")
+        }
+        for query in ["final", "fina", "fin", "missing", ""] {
+            renderFixture.query = query
+            await settle()
+            let text = textView(in: renderHosting)!
+            precondition(!text.string.contains("#") && !text.string.contains("**"))
+            let range = (text.string as NSString).range(of: "final")
+            precondition(range.location != NSNotFound)
+            let highlighted = text.textStorage?.attribute(
+                .backgroundColor, at: range.location, effectiveRange: nil) != nil
+            precondition(highlighted == (!query.isEmpty && query != "missing"),
+                         "Search highlights update and clear without reparsing Markdown")
+        }
+        NotificationCenter.default.removeObserver(markdownUpdates)
         window.close()
 
         let ordinary = "ASCII 中文 👩🏽‍💻 café e\u{301}"
