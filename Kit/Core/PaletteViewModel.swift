@@ -53,6 +53,7 @@ enum StackNameEdit: Equatable {
 enum PaletteCommand: Equatable {
     case move(Int)
     case activate
+    case pasteKeepingOpen
     case copy
     case delete
     case undoDelete
@@ -461,6 +462,10 @@ final class PaletteViewModel {
             } else if searchReady, canPaste, let item = selectedItem {
                 core.paste(item)
             }
+        case .pasteKeepingOpen:
+            guard searchReady, canPaste, !isNamingStack, let item = actionTarget else { return true }
+            closeMenu()
+            core.pasteKeepingWindowOpen(item)
         case .copy:
             guard searchReady, let item = actionTarget else { return true }
             overlay = .none

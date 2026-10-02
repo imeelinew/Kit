@@ -57,6 +57,7 @@ struct PopoverMenuItem {
         case .pasteKeepingOpen:
             title = "Paste & Keep Window Open"
             icon = PopoverMenuIcon.paste(target)
+            shortcut = "⇧↵"
             isEnabled = target != nil && AppCore.shared.hasPasteTarget
         case .copy:
             title = "Copy to Clipboard"

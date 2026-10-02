@@ -81,7 +81,8 @@ struct RootPaletteView: View {
                         onActivate: { item in
                             guard !vm.menuOpen, vm.searchReady else { return }
                             vm.select(item.id)
-                            vm.handle(.activate)
+                            let keepingOpen = NSApp.currentEvent?.modifierFlags.contains(.shift) == true
+                            vm.handle(keepingOpen ? .pasteKeepingOpen : .activate)
                         },
                         onActions: { item in vm.openActions(for: item.id) },
                         onLoadMore: { vm.loadMoreResults() }

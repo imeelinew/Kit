@@ -74,6 +74,10 @@ final class PalettePanel: NSPanel {
         }
         let shortcut = KeyboardShortcuts.Shortcut(event: event)
 
+        if modifiers == .shift, keyCode == kVK_Return || keyCode == kVK_ANSI_KeypadEnter {
+            return handleOnce(.pasteKeepingOpen, event: event)
+        }
+
         if modifiers == .command, keyCode == kVK_ANSI_Z {
             if event.isARepeat { return true }
             if !paletteViewModel.menuOpen {
