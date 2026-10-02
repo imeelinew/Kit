@@ -40,8 +40,8 @@ private enum MarkdownPreviewCache {
 }
 
 /// GitHub-flavored Markdown preview for stored Markdown items. Parsing and deterministic AppKit
-/// layout run off the main actor; the raw source remains visible until the result is ready and
-/// remains the payload used by clipboard actions.
+/// layout run off the main actor. Keep the pane empty until the result is ready instead of
+/// flashing raw Markdown; the original source remains the payload used by clipboard actions.
 struct MarkdownPreview: View {
     let source: String
     var query: String = ""
@@ -102,7 +102,8 @@ struct MarkdownPreview: View {
             case .plainText:
                 previewText(attributed: SearchHighlight.attributed(source, query: query))
             case nil:
-                previewText(attributed: AttributedString(source))
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .task(id: RenderID(source: source, fontSize: fontSize)) {

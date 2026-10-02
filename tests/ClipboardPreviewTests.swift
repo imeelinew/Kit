@@ -201,6 +201,24 @@ struct ClipboardPreviewTests {
                          "Search highlights update and clear without reparsing Markdown")
         }
         NotificationCenter.default.removeObserver(markdownUpdates)
+
+        // A unique source guarantees a cold cache. This host has no transition animation
+        // that could conceal a frame containing the raw Markdown.
+        let coldSource = "# Cold \(UUID())\n\n**ready**"
+        let coldUpdates = NotificationCenter.default.addObserver(
+            forName: NSTextStorage.didProcessEditingNotification, object: nil, queue: .main
+        ) { notification in
+            guard let storage = notification.object as? NSTextStorage else { return }
+            precondition(storage.string != coldSource,
+                         "A cold Markdown preview must never display its raw source while loading")
+        }
+        renderFixture.source = coldSource
+        renderFixture.query = "ready"
+        await settle()
+        let coldText = textView(in: renderHosting)!
+        precondition(coldText.string.contains("ready") && !coldText.string.contains("**"),
+                     "A cold preview displays the finished Markdown without needing animation")
+        NotificationCenter.default.removeObserver(coldUpdates)
         window.close()
 
         let ordinary = "ASCII 中文 👩🏽‍💻 café e\u{301}"
