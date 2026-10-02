@@ -332,13 +332,9 @@ private struct PaletteSearchInput: NSViewRepresentable {
             field.stringValue = text
         }
         let searchTitle = AppLocalization.string("Search", locale: context.environment.locale)
-        if field.placeholderAttributedString?.string != searchTitle {
-            field.placeholderAttributedString = NSAttributedString(
-                string: searchTitle,
-                attributes: [
-                    .font: NSFont.systemFont(ofSize: 20),
-                    .foregroundColor: NSColor.labelColor.withAlphaComponent(0.25),
-                ])
+        if field.placeholderString != searchTitle {
+            // Let AppKit adapt the placeholder to the glass material and effective appearance.
+            field.placeholderString = searchTitle
         }
         field.setAccessibilityLabel(searchTitle)
         (field.window as? PalettePanel)?.registerSearchField(field)
