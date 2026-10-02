@@ -1,0 +1,19 @@
+{
+  "app": "DerivedData/Build/Products/Release/Kit.app",
+  "bundle_id": "com.eli.Kit",
+  "build": [
+    "xcodebuild",
+    "-project",
+    "Kit.xcodeproj",
+    "-scheme",
+    "Kit",
+    "-configuration",
+    "Release",
+    "-destination",
+    "generic/platform=macOS",
+    "-derivedDataPath",
+    "DerivedData",
+    "build"
+  ],
+  "output": "/Applications/Kit.app"
+}
