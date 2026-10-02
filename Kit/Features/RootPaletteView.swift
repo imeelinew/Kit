@@ -71,6 +71,7 @@ struct RootPaletteView: View {
                     ClipboardList(
                         results: clips,
                         resultsGeneration: vm.resultsGeneration,
+                        resultsKindFilter: vm.resultsKindFilter,
                         hasMoreResults: vm.hasMoreResults,
                         selectedID: vm.selectedID,
                         query: vm.query,

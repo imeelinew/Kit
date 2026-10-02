@@ -5,6 +5,7 @@ import SwiftUI
 struct ClipboardList: View {
     let results: [ClipboardItem]
     let resultsGeneration: UInt64
+    var resultsKindFilter: ClipboardKindFilter = .all
     let hasMoreResults: Bool
     let selectedID: ClipboardItem.ID?
     let query: String
@@ -23,6 +24,7 @@ struct ClipboardList: View {
         ClipboardTableRepresentable(
             results: results,
             resultsGeneration: resultsGeneration,
+            resultsKindFilter: resultsKindFilter,
             hasMoreResults: hasMoreResults,
             selectedID: selectedID,
             query: query,
@@ -98,6 +100,7 @@ private enum ClipboardTableRow: Equatable {
 private struct ClipboardTableRepresentable: NSViewRepresentable {
     let results: [ClipboardItem]
     let resultsGeneration: UInt64
+    var resultsKindFilter: ClipboardKindFilter = .all
     let hasMoreResults: Bool
     let selectedID: ClipboardItem.ID?
     let query: String
@@ -121,6 +124,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         context.coordinator.update(
             results: results,
             resultsGeneration: resultsGeneration,
+            resultsKindFilter: resultsKindFilter,
             hasMoreResults: hasMoreResults,
             selectedID: selectedID,
             query: query,
@@ -146,6 +150,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private var locale = Locale.current
         private weak var store: ClipboardStore?
         private var onSelect: ((ClipboardItem) -> Void)?
+        private var lastResultsKindFilter: ClipboardKindFilter?
         private var onActivate: ((ClipboardItem) -> Void)?
         private var onActions: ((ClipboardItem) -> Void)?
         private var onLoadMore: (() -> Void)?
@@ -232,7 +237,8 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         }
 
         func update(
-            results: [ClipboardItem], resultsGeneration: UInt64, hasMoreResults: Bool,
+            results: [ClipboardItem], resultsGeneration: UInt64,
+            resultsKindFilter: ClipboardKindFilter, hasMoreResults: Bool,
             selectedID: ClipboardItem.ID?, query: String,
             scroll: ScrollIntent, hoverEnabled: Bool, locale: Locale, store: ClipboardStore,
             onSelect: @escaping (ClipboardItem) -> Void,
@@ -257,6 +263,8 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             let contentChanged = lastResultsGeneration != resultsGeneration
                 || lastHasMoreResults != hasMoreResults
             let appearanceChanged = self.query != query || self.locale != locale
+            let typeChanged = lastResultsKindFilter.map { $0 != resultsKindFilter } ?? false
+            lastResultsKindFilter = resultsKindFilter
             let previousRows = rows
             if contentChanged {
                 rows = Self.makeRows(results, hasMoreResults: hasMoreResults)
@@ -278,10 +286,24 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 // Suppress AppKit's intermediate selections until the model is restored.
                 tableView.clearHover()
                 applyingSelection = true
-                animatedRows = updateRows(
-                    from: previousRows, in: tableView,
-                    animate: !appearanceChanged && (lastScroll == scroll || scroll.kind == .follow)
-                        && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+                if typeChanged {
+                    // Fade the entire viewport, including large replacements and empty results.
+                    if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+                        let container = hostedContainerView
+                    {
+                        let transition = CATransition()
+                        transition.type = .fade
+                        transition.duration = Theme.Motion.contentDuration
+                        transition.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                        container.layer?.add(transition, forKey: "transition")
+                    }
+                    tableView.reloadData()
+                } else {
+                    animatedRows = updateRows(
+                        from: previousRows, in: tableView,
+                        animate: !appearanceChanged && (lastScroll == scroll || scroll.kind == .follow)
+                            && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+                }
                 if appearanceChanged { updateVisibleText(in: tableView) }
             } else if appearanceChanged {
                 updateVisibleText(in: tableView)
@@ -664,6 +686,7 @@ private final class ClipboardTableContainerView: NSView {
     init(scrollView: ClipboardTableScrollView) {
         self.scrollView = scrollView
         super.init(frame: .zero)
+        wantsLayer = true
 
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(scrollView)

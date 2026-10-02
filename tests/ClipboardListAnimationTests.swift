@@ -7,6 +7,7 @@ import SwiftUI
 private final class ListFixture {
     var items: [ClipboardItem] = []
     var generation: UInt64 = 0
+    var resultsKindFilter: ClipboardKindFilter = .all
     var selectedID: ClipboardItem.ID?
     var hasMore = false
     var scroll = ScrollIntent(kind: .top)
@@ -32,6 +33,7 @@ private struct FixtureView: View {
     var body: some View {
         ClipboardList(
             results: fixture.items, resultsGeneration: fixture.generation,
+            resultsKindFilter: fixture.resultsKindFilter,
             hasMoreResults: fixture.hasMore, selectedID: fixture.selectedID,
             query: fixture.query, scroll: fixture.scroll, hoverEnabled: false,
             store: fixture.store,
@@ -213,6 +215,32 @@ struct ClipboardListAnimationTests {
         precondition(table.visibleRect.intersects(table.rect(ofRow: 0)))
         assertRowGeometry(table)
 
+        // Type switches fade the viewport even when row diffs are too large to animate.
+        let container = table.enclosingScrollView!.superview!
+        container.layer?.speed = 0
+        let replacement = (0..<40).map { item("filtered \($0)") }
+        fixture.resultsKindFilter = .text
+        fixture.update(replacement)
+        fixture.scroll = ScrollIntent(kind: .top)
+        settle()
+        if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            precondition(container.layer?.animation(forKey: "transition") != nil,
+                         "Large type-filter replacements have a viewport transition")
+        }
+        container.layer?.speed = 1
+        settle(0.3)
+        assertRowGeometry(table)
+        container.layer?.speed = 0
+        fixture.resultsKindFilter = .all
+        fixture.update([])
+        settle()
+        if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            precondition(container.layer?.animation(forKey: "transition") != nil,
+                         "Switching to empty results also transitions")
+        }
+        container.layer?.speed = 1
+        precondition(table.numberOfRows == 0)
+        settle(0.3)
         window.close()
         print("PASS: kind refinement, deletion, single animated restore, date headers, async refresh, pagination, empty results")
         try await ClipboardUndoTests.run()

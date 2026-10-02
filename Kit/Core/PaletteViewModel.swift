@@ -166,6 +166,7 @@ final class PaletteViewModel {
         return AppLocalization.string("Clipboard", locale: core.settings.language.locale)
     }
     private(set) var results: [ClipboardItem] = []
+    private(set) var resultsKindFilter: ClipboardKindFilter = .all
     private(set) var resultsGeneration: UInt64 = 0
     private(set) var hasMoreResults = false
     private(set) var selectedID: ClipboardItem.ID? {
@@ -861,6 +862,7 @@ final class PaletteViewModel {
         // background query was running, rather than restoring its request-time snapshot.
         let priorID = selectedID
         let priorIndex = selectionIndex
+        resultsKindFilter = kindFilter
         results = newResults
         resultsGeneration &+= 1
         searchReady = true
