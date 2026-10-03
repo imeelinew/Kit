@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="${0:A:h:h}"
-test_dir=$(mktemp -d "${TMPDIR:-/tmp}/kit-dedup-tests.XXXXXX")
+test_dir=$(mktemp -d "${TMPDIR:-/tmp}/kit-ocr-tests.XXXXXX")
 trap 'rm -rf "$test_dir"' EXIT
 
 xcrun swiftc -swift-version 6 -parse-as-library \
@@ -13,6 +13,6 @@ xcrun swiftc -swift-version 6 -parse-as-library \
     "$repo_root/Kit/Core/ClipboardSearch.swift" \
     "$repo_root/Kit/Core/Pinyin.swift" \
     "$repo_root/Kit/Core/ImageThumbnail.swift" \
-    "$repo_root/tests/ClipboardDeduplicationTests.swift" \
-    -o "$test_dir/clipboard-deduplication-tests"
-"$test_dir/clipboard-deduplication-tests"
+    "$repo_root/tests/ClipboardImageOCRTests.swift" \
+    -o "$test_dir/clipboard-ocr-tests"
+"$test_dir/clipboard-ocr-tests"

@@ -34,7 +34,11 @@ final class ClipboardStore: ObservableObject {
           custom_title TEXT,
           last_used_at REAL,
           pinyin TEXT,
-          pinyin_initials TEXT
+          pinyin_initials TEXT,
+          ocr_text TEXT,
+          ocr_status TEXT,
+          ocr_version INTEGER,
+          ocr_attempts INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS items_created_at ON items(created_at);
         CREATE INDEX IF NOT EXISTS items_kind ON items(kind);
@@ -77,6 +81,29 @@ final class ClipboardStore: ObservableObject {
         END;
         """
 
+    /// Separate OCR index preserves the existing text index during the one-time schema upgrade.
+    private static let imageSearchSchema = """
+        CREATE VIRTUAL TABLE IF NOT EXISTS image_ocr_fts USING fts5(
+          ocr_text, tokenize='trigram'
+        );
+        CREATE TRIGGER IF NOT EXISTS image_ocr_ai AFTER INSERT ON items
+        WHEN new.ocr_text IS NOT NULL BEGIN
+          INSERT INTO image_ocr_fts(rowid, ocr_text) VALUES(new.rowid, new.ocr_text);
+        END;
+        CREATE TRIGGER IF NOT EXISTS image_ocr_ad AFTER DELETE ON items
+        WHEN old.ocr_text IS NOT NULL BEGIN
+          DELETE FROM image_ocr_fts WHERE rowid = old.rowid;
+        END;
+        CREATE TRIGGER IF NOT EXISTS image_ocr_au AFTER UPDATE OF ocr_text ON items BEGIN
+          DELETE FROM image_ocr_fts WHERE rowid = old.rowid;
+          INSERT INTO image_ocr_fts(rowid, ocr_text)
+          SELECT new.rowid, new.ocr_text WHERE new.ocr_text IS NOT NULL;
+        END;
+        CREATE INDEX IF NOT EXISTS items_pending_ocr ON items(created_at)
+          WHERE kind = 'image' AND
+            (ocr_status IS NULL OR (ocr_status = 'failed' AND ocr_attempts < \(ClipboardImageTextRecognition.maxAttempts)));
+        """
+
     private let imagesDir: URL
     private let deletedImagesDir: URL
     private let dbURL: URL
@@ -109,12 +136,19 @@ final class ClipboardStore: ObservableObject {
     private var deleteMembershipStmt: OpaquePointer?
     private var pendingSearchMetadata: [SearchMetadataUpdate] = []
     private var searchMetadataTask: Task<Void, Never>?
+    private var imageOCRTask: Task<Void, Never>?
+    private let recognizeImage: @Sendable (URL) async -> ClipboardImageOCRResult
 
-    init(directory: URL? = nil) {
+    init(
+        directory: URL? = nil,
+        recognizeImage: @escaping @Sendable (URL) async -> ClipboardImageOCRResult =
+            ClipboardImageTextRecognition.recognize
+    ) {
         let base = directory ?? Self.defaultDirectory
         imagesDir = base.appendingPathComponent("images", isDirectory: true)
         deletedImagesDir = base.appendingPathComponent("deleted-images", isDirectory: true)
         dbURL = base.appendingPathComponent("clipboard.sqlite3")
+        self.recognizeImage = recognizeImage
         // Undo is session-local. Also remove backups left by an interrupted previous run.
         try? FileManager.default.removeItem(at: deletedImagesDir)
         try? FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
@@ -132,6 +166,7 @@ final class ClipboardStore: ObservableObject {
 
     // Isolated so teardown may touch the main-actor statement/db pointers; AppCore only ever releases the store on the main actor, so no hop.
     isolated deinit {
+        imageOCRTask?.cancel()
         closeDatabase()
         try? FileManager.default.removeItem(at: deletedImagesDir)
     }
@@ -152,6 +187,7 @@ final class ClipboardStore: ObservableObject {
         items = loaded
         // Age passes while the app isn't running; insert-time pruning alone can't catch that.
         enforceLimits()
+        startImageOCRWorkerIfNeeded()
     }
 
     /// Called on load and when the retention setting changes.
@@ -184,6 +220,7 @@ final class ClipboardStore: ObservableObject {
         guard !Task.isCancelled, generation == captureGeneration else { return }
         if let existing = image(matching: fingerprint) {
             refresh(existing.refreshed(sourceBundleID: sourceBundleID))
+            startImageOCRWorkerIfNeeded()
             return
         }
         let url = imagesDir.appendingPathComponent(UUID().uuidString + ".png")
@@ -312,7 +349,10 @@ final class ClipboardStore: ObservableObject {
         if let stackID { stackMembership[restored.id] = stackID }
         items = Array(Self.displayOrder(
             [restored] + items.filter { $0.id != restored.id }).prefix(Self.memoryWindow))
-        if existing == nil { scheduleSearchMetadataUpdate(for: restored) }
+        if existing == nil {
+            scheduleSearchMetadataUpdate(for: restored)
+            startImageOCRWorkerIfNeeded()
+        }
         return restored
     }
 
@@ -332,6 +372,7 @@ final class ClipboardStore: ObservableObject {
     func clearAll() {
         captureGeneration &+= 1
         searchMetadataTask?.cancel()
+        imageOCRTask?.cancel()
         pendingSearchMetadata.removeAll()
         guard sqlite3_exec(db, "DELETE FROM items", nil, nil, nil) == SQLITE_OK else { return }
         discardDeletion()
@@ -566,6 +607,113 @@ final class ClipboardStore: ObservableObject {
         await searchMetadataTask?.value
     }
 
+    func waitForImageOCR() async {
+        await imageOCRTask?.value
+    }
+
+    /// Query the entire history through a partial index, independent of the resident 1,000 rows.
+    private func nextImageOCRItem() -> ClipboardItem? {
+        guard let stmt = prepare("""
+            SELECT id, kind, text, image_path, created_at, source_app,
+                   image_fingerprint, custom_title, last_used_at,
+                   ocr_text, ocr_status, ocr_version, ocr_attempts
+            FROM items WHERE kind = 'image' AND
+              (ocr_status IS NULL OR (ocr_status = 'failed' AND ocr_attempts < \(ClipboardImageTextRecognition.maxAttempts)))
+            ORDER BY created_at DESC, rowid DESC LIMIT 1
+            """)
+        else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        return sqlite3_step(stmt) == SQLITE_ROW ? ClipboardSQLite.row(stmt) : nil
+    }
+
+    private func startImageOCRWorkerIfNeeded() {
+        guard imageOCRTask == nil, nextImageOCRItem() != nil else { return }
+        let recognize = recognizeImage
+        imageOCRTask = Task(priority: .utility) { [weak self] in
+            defer {
+                self?.imageOCRTask = nil
+                if Task.isCancelled { self?.startImageOCRWorkerIfNeeded() }
+            }
+            while !Task.isCancelled, let item = self?.nextImageOCRItem() {
+                guard let generation = self?.captureGeneration else { return }
+                let result: ClipboardImageOCRResult
+                if let url = self?.imageURL(for: item) {
+                    result = await recognize(url)
+                } else {
+                    result = .failed
+                }
+                guard !Task.isCancelled else { return }
+                let metadata = await Task.detached(priority: .utility) {
+                    let text: String?
+                    let status: ClipboardImageOCR.Status
+                    switch result {
+                    case .recognized(let recognized):
+                        let normalized = ClipboardImageTextRecognition.normalizedText(recognized)
+                        text = normalized.isEmpty ? nil : normalized
+                        status = normalized.isEmpty ? .empty : .complete
+                    case .failed:
+                        text = nil
+                        status = .failed
+                    }
+                    return (
+                        ClipboardImageOCR(
+                            text: text, status: status,
+                            version: ClipboardImageTextRecognition.version,
+                            attempts: (item.imageOCR?.attempts ?? 0) + 1),
+                        Pinyin.searchForms(for: text ?? ""))
+                }.value
+                guard !Task.isCancelled else { return }
+                if self?.saveImageOCR(metadata.0, forms: metadata.1, for: item,
+                                      generation: generation) != true,
+                    self?.item(id: item.id) != nil
+                {
+                    // Retry a transient database lock once, without running recognition again.
+                    try? await Task.sleep(for: .seconds(1))
+                    guard !Task.isCancelled else { return }
+                    guard self?.saveImageOCR(metadata.0, forms: metadata.1, for: item,
+                                            generation: generation) == true else { return }
+                }
+                // Yield between images so a large backfill cannot monopolize the app.
+                try? await Task.sleep(for: .milliseconds(25))
+            }
+        }
+    }
+
+    private func saveImageOCR(
+        _ metadata: ClipboardImageOCR, forms: Pinyin.SearchForms,
+        for item: ClipboardItem, generation: UInt64
+    ) -> Bool {
+        guard generation == captureGeneration, let stmt = prepare("""
+            UPDATE items SET ocr_text = ?, ocr_status = ?, ocr_version = ?, ocr_attempts = ?,
+                             pinyin = ?, pinyin_initials = ?
+            WHERE id = ? AND kind = 'image' AND image_path IS ? AND image_fingerprint IS ?
+            """)
+        else { return false }
+        defer { sqlite3_finalize(stmt) }
+        if let text = metadata.text {
+            sqlite3_bind_text(stmt, 1, text, Int32(text.utf8.count), SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(stmt, 1)
+        }
+        sqlite3_bind_text(stmt, 2, metadata.status.rawValue, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_int(stmt, 3, Int32(metadata.version))
+        sqlite3_bind_int(stmt, 4, Int32(metadata.attempts))
+        sqlite3_bind_text(stmt, 5, forms.full, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 6, forms.initials, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 7, item.id.uuidString, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 8, item.imagePath, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 9, item.imageFingerprint, -1, SQLITE_TRANSIENT)
+        guard sqlite3_step(stmt) == SQLITE_DONE, sqlite3_changes(db) == 1 else { return false }
+        if let index = items.firstIndex(where: { $0.id == item.id }),
+            let updated = loadItem(id: item.id)
+        {
+            items[index] = updated
+        } else {
+            revision &+= 1
+        }
+        return true
+    }
+
     private func scheduleSearchMetadataUpdate(for item: ClipboardItem) {
         guard let text = item.text, Pinyin.containsHan(text) else { return }
         pendingSearchMetadata.append(
@@ -653,6 +801,7 @@ final class ClipboardStore: ObservableObject {
         trimWindow()
         pruneIfDue()
         scheduleSearchMetadataUpdate(for: item)
+        if item.kind == .image { startImageOCRWorkerIfNeeded() }
         onItemCaptured?()
         return true
     }
@@ -692,6 +841,22 @@ final class ClipboardStore: ObservableObject {
         } else {
             sqlite3_bind_null(stmt, 9)
         }
+        if let metadata = item.imageOCR {
+            if let text = metadata.text {
+                sqlite3_bind_text(stmt, 10, text, Int32(text.utf8.count), SQLITE_TRANSIENT)
+            } else {
+                sqlite3_bind_null(stmt, 10)
+            }
+            sqlite3_bind_text(stmt, 11, metadata.status.rawValue, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_int(stmt, 12, Int32(metadata.version))
+            sqlite3_bind_int(stmt, 13, Int32(metadata.attempts))
+        } else {
+            for column: Int32 in 10...12 { sqlite3_bind_null(stmt, column) }
+            sqlite3_bind_int(stmt, 13, 0)
+        }
+        let forms = Pinyin.searchForms(for: item.imageOCR?.text ?? "")
+        sqlite3_bind_text(stmt, 14, forms.full, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 15, forms.initials, -1, SQLITE_TRANSIENT)
         return stepAndReset(stmt)
     }
 
@@ -794,20 +959,23 @@ final class ClipboardStore: ObservableObject {
             sqlite3_exec(db, Self.coreSchema, nil, nil, nil) == SQLITE_OK
         else { return false }
         guard migrateUsageMetadata(),
-            sqlite3_exec(db, Self.searchSchema, nil, nil, nil) == SQLITE_OK
+            sqlite3_exec(db, Self.searchSchema, nil, nil, nil) == SQLITE_OK,
+            migrateImageSearch()
         else { return false }
         insertStmt = prepare(
             """
             INSERT INTO items(
               id, kind, text, image_path, created_at, source_app, image_fingerprint,
-              custom_title, last_used_at
-            ) VALUES(?,?,?,?,?,?,?,?,?)
+              custom_title, last_used_at, ocr_text, ocr_status, ocr_version, ocr_attempts,
+              pinyin, pinyin_initials
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """
         )
         loadStmt = prepare(
             """
             SELECT id, kind, text, image_path, created_at, source_app,
-                   image_fingerprint, custom_title, last_used_at
+                   image_fingerprint, custom_title, last_used_at,
+                   ocr_text, ocr_status, ocr_version, ocr_attempts
             FROM items ORDER BY created_at DESC, rowid DESC LIMIT ?
             """)
         refreshStmt = prepare(
@@ -822,20 +990,23 @@ final class ClipboardStore: ObservableObject {
         imageByFingerprintStmt = prepare(
             """
             SELECT id, kind, text, image_path, created_at, source_app,
-                   image_fingerprint, custom_title, last_used_at
+                   image_fingerprint, custom_title, last_used_at,
+                   ocr_text, ocr_status, ocr_version, ocr_attempts
             FROM items WHERE image_fingerprint = ? LIMIT 1
             """)
         textByContentStmt = prepare(
             """
             SELECT id, kind, text, image_path, created_at, source_app,
-                   image_fingerprint, custom_title, last_used_at
+                   image_fingerprint, custom_title, last_used_at,
+                   ocr_text, ocr_status, ocr_version, ocr_attempts
             FROM items WHERE kind != 'image' AND text = ? COLLATE BINARY
             ORDER BY created_at DESC, rowid DESC LIMIT 1
             """)
         itemByIDStmt = prepare(
             """
             SELECT id, kind, text, image_path, created_at, source_app,
-                   image_fingerprint, custom_title, last_used_at
+                   image_fingerprint, custom_title, last_used_at,
+                   ocr_text, ocr_status, ocr_version, ocr_attempts
             FROM items WHERE id = ? LIMIT 1
             """)
         updateKindStmt = prepare("UPDATE items SET kind = ? WHERE id = ?")
@@ -867,6 +1038,36 @@ final class ClipboardStore: ObservableObject {
         guard status == SQLITE_DONE else { return false }
         return sqlite3_exec(db, "ALTER TABLE items ADD COLUMN last_used_at REAL", nil, nil, nil)
             == SQLITE_OK
+    }
+
+    private func migrateImageSearch() -> Bool {
+        guard let stmt = prepare("PRAGMA table_info(items)") else { return false }
+        var columns = Set<String>()
+        var status = sqlite3_step(stmt)
+        while status == SQLITE_ROW {
+            if let name = ClipboardSQLite.columnString(stmt, 1) { columns.insert(name) }
+            status = sqlite3_step(stmt)
+        }
+        sqlite3_finalize(stmt)
+        guard status == SQLITE_DONE else { return false }
+        return transaction {
+            for (name, type) in [
+                ("ocr_text", "TEXT"), ("ocr_status", "TEXT"), ("ocr_version", "INTEGER"),
+                ("ocr_attempts", "INTEGER NOT NULL DEFAULT 0"),
+            ] where !columns.contains(name) {
+                guard sqlite3_exec(db, "ALTER TABLE items ADD COLUMN \(name) \(type)",
+                                   nil, nil, nil) == SQLITE_OK else { return false }
+            }
+            guard sqlite3_exec(db, Self.imageSearchSchema, nil, nil, nil) == SQLITE_OK else {
+                return false
+            }
+            // Keep prior searchable text until the newer recognizer replaces it in the background.
+            return sqlite3_exec(db, """
+                UPDATE items SET ocr_status = NULL, ocr_version = NULL, ocr_attempts = 0
+                WHERE kind = 'image' AND ocr_version IS NOT NULL
+                  AND ocr_version != \(ClipboardImageTextRecognition.version)
+                """, nil, nil, nil) == SQLITE_OK
+        }
     }
 
     private func prepare(_ sql: String) -> OpaquePointer? {

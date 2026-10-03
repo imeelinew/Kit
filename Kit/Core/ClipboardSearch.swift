@@ -38,19 +38,29 @@ enum ClipboardSearch {
             .replacingOccurrences(of: "%", with: "\\%")
             .replacingOccurrences(of: "_", with: "\\_")
         let pattern = "%\(escaped)%"
+        let imageQuery = ClipboardImageTextRecognition.normalizedText(query)
+        let imagePattern = "%" + imageQuery
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "%", with: "\\%")
+            .replacingOccurrences(of: "_", with: "\\_") + "%"
         let usesFTS = query.count >= 3
         let textCondition: String
         if query.isEmpty {
             textCondition = "1 = 1"
         } else if usesFTS {
+            let imageCondition = imageQuery.count >= 3
+                ? "i.rowid IN (SELECT rowid FROM image_ocr_fts WHERE image_ocr_fts MATCH ?)"
+                : "i.ocr_text LIKE ? ESCAPE '\\'"
             textCondition = """
                 (i.rowid IN (SELECT rowid FROM items_fts WHERE items_fts MATCH ?)
+                 OR \(imageCondition)
                  OR i.custom_title LIKE ? ESCAPE '\\')
                 """
         } else {
             textCondition = """
                 (i.text LIKE ? ESCAPE '\\' OR i.pinyin LIKE ? ESCAPE '\\'
                  OR i.pinyin_initials LIKE ? ESCAPE '\\'
+                 OR i.ocr_text LIKE ? ESCAPE '\\'
                  OR i.custom_title LIKE ? ESCAPE '\\')
                 """
         }
@@ -62,7 +72,8 @@ enum ClipboardSearch {
             """
         let sql = """
             SELECT i.id, i.kind, i.text, i.image_path, i.created_at, i.source_app,
-                   i.image_fingerprint, i.custom_title, i.last_used_at, i.rowid
+                   i.image_fingerprint, i.custom_title, i.last_used_at,
+                   i.ocr_text, i.ocr_status, i.ocr_version, i.ocr_attempts, i.rowid
             FROM items i
             \(stackJoin)
             WHERE \(textCondition)\(kindCondition)\(stackCondition)\(cursorCondition)
@@ -83,11 +94,15 @@ enum ClipboardSearch {
             let match = "\"" + query.replacingOccurrences(of: "\"", with: "\"\"") + "\""
             sqlite3_bind_text(statement, parameter, match, -1, SQLITE_TRANSIENT)
             parameter += 1
+            let imageMatch = "\"" + imageQuery.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+            sqlite3_bind_text(statement, parameter,
+                              imageQuery.count >= 3 ? imageMatch : imagePattern, -1, SQLITE_TRANSIENT)
+            parameter += 1
             sqlite3_bind_text(statement, parameter, pattern, -1, SQLITE_TRANSIENT)
             parameter += 1
         } else if !query.isEmpty {
-            for _ in 0..<4 {
-                sqlite3_bind_text(statement, parameter, pattern, -1, SQLITE_TRANSIENT)
+            for value in [pattern, pattern, pattern, imagePattern, pattern] {
+                sqlite3_bind_text(statement, parameter, value, -1, SQLITE_TRANSIENT)
                 parameter += 1
             }
         }
@@ -116,7 +131,7 @@ enum ClipboardSearch {
                     item: item,
                     cursor: ClipboardSearchCursor(
                         createdAt: item.createdAt,
-                        rowID: sqlite3_column_int64(statement, 9))))
+                        rowID: sqlite3_column_int64(statement, 13))))
             }
             status = sqlite3_step(statement)
         }

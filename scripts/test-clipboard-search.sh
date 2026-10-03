@@ -8,6 +8,7 @@ trap 'rm -rf "$test_dir"' EXIT
 xcrun swiftc -swift-version 6 -parse-as-library \
     "$repo_root/Kit/Core/ClipboardStore.swift" \
     "$repo_root/Kit/Core/ClipboardItem.swift" \
+    "$repo_root/Kit/Core/ClipboardImageOCR.swift" \
     "$repo_root/Kit/Core/ClipboardSQLite.swift" \
     "$repo_root/Kit/Core/ClipboardSearch.swift" \
     "$repo_root/Kit/Core/Pinyin.swift" \

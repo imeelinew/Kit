@@ -30,6 +30,8 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     let sourceBundleID: String?
     /// User-assigned list title. Nil means the visible title is derived from the copied content.
     let customTitle: String?
+    /// Persistent OCR metadata. Image rows keep `text` nil and remain image clipboard entries.
+    let imageOCR: ClipboardImageOCR?
 
     init(text: String, kind: Kind, sourceBundleID: String?) {
         self.init(
@@ -47,7 +49,8 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     init(
         id: UUID, kind: Kind, text: String?, imagePath: String?, imageFingerprint: String?,
         createdAt: Date, sourceBundleID: String?,
-        customTitle: String? = nil, lastUsedAt: Date? = nil
+        customTitle: String? = nil, lastUsedAt: Date? = nil,
+        imageOCR: ClipboardImageOCR? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -56,6 +59,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
         self.imageFingerprint = imageFingerprint
         self.createdAt = createdAt
         self.lastUsedAt = lastUsedAt
+        self.imageOCR = imageOCR
         self.sourceBundleID = sourceBundleID
         self.customTitle = customTitle
     }
@@ -65,7 +69,8 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
         ClipboardItem(
             id: id, kind: kind, text: text, imagePath: imagePath,
             imageFingerprint: imageFingerprint, createdAt: Date(),
-            sourceBundleID: sourceBundleID, customTitle: customTitle, lastUsedAt: lastUsedAt)
+            sourceBundleID: sourceBundleID, customTitle: customTitle, lastUsedAt: lastUsedAt,
+            imageOCR: imageOCR)
     }
 
     /// Same capture re-graded (async TypeSafe classification); identity and every other field stay.
@@ -73,14 +78,16 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
         ClipboardItem(
             id: id, kind: kind, text: text, imagePath: imagePath,
             imageFingerprint: imageFingerprint, createdAt: createdAt,
-            sourceBundleID: sourceBundleID, customTitle: customTitle, lastUsedAt: lastUsedAt)
+            sourceBundleID: sourceBundleID, customTitle: customTitle, lastUsedAt: lastUsedAt,
+            imageOCR: imageOCR)
     }
 
     func used(at date: Date) -> ClipboardItem {
         ClipboardItem(
             id: id, kind: kind, text: text, imagePath: imagePath,
             imageFingerprint: imageFingerprint, createdAt: createdAt,
-            sourceBundleID: sourceBundleID, customTitle: customTitle, lastUsedAt: date)
+            sourceBundleID: sourceBundleID, customTitle: customTitle, lastUsedAt: date,
+            imageOCR: imageOCR)
     }
 
     /// Visible list/card title: a persisted custom name, otherwise the first line of text or "Image".
@@ -108,6 +115,9 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     /// Latin-letter queries also match Mandarin pinyin (full spelling or initials) so `nihao` / `nh` can find `你好`.
     func matches(_ query: String) -> Bool {
         if matches(query, in: customTitle) { return true }
+        if kind == .image,
+            matches(ClipboardImageTextRecognition.normalizedText(query), in: imageOCR?.text)
+        { return true }
         guard let text else { return false }
         return matches(query, in: text)
     }
