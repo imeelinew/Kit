@@ -86,6 +86,92 @@ struct ClipboardListAnimationTests {
         }
     }
 
+    /// Typing publishes highlights before SQLite results arrive; both frames must stay motionless.
+    @MainActor
+    static func searchTypingTests(in directory: URL) {
+        let fixture = ListFixture(directory: directory)
+        let today = Calendar.current.startOfDay(for: Date()).addingTimeInterval(60)
+        let kinds: [ClipboardItem.Kind] = [.image, .text, .markdown, .code, .link, .path]
+        let matching = kinds.map { kind in
+            ClipboardItem(
+                id: UUID(), kind: kind, text: kind == .image ? nil : "你好世界",
+                imagePath: nil, imageFingerprint: nil, createdAt: today,
+                sourceBundleID: nil, imageOCR: kind == .image ? ClipboardImageOCR(
+                    text: "你好世界", status: .complete, version: 1, attempts: 1) : nil)
+        }
+        let distractors = (0..<6).map { index in
+            ClipboardItem(text: "其他内容 \(index)", kind: .text, sourceBundleID: nil)
+        }
+        let original = zip(distractors, matching).flatMap { [$0.0, $0.1] }
+        fixture.update(original)
+        fixture.hasMore = true
+        let window = PalettePanel(
+            rootView: FixtureView(fixture: fixture).frame(width: 290, height: 520),
+            visualStyle: .frosted)
+        defer { window.close() }
+        let hosting = window.contentView!
+        window.orderFront(nil)
+        hosting.layoutSubtreeIfNeeded()
+        settle()
+        let table = table(in: hosting)!
+
+        // Capture surviving cells so a highlight refresh cannot replace their thumbnails or labels.
+        var retained: [UUID: NSView] = [:]
+        for row in 0..<table.numberOfRows {
+            guard let cell = table.view(atColumn: 0, row: row, makeIfNecessary: true)
+                as? ClipboardItemCellView
+            else { continue }
+            let itemIndex = row - 1
+            if original.indices.contains(itemIndex) {
+                retained[original[itemIndex].id] = cell
+            }
+        }
+
+        // First frame: input/highlight changes and the old pagination footer disappears.
+        fixture.query = "n"
+        fixture.hasMore = false
+        fixture.scroll = ScrollIntent(kind: .top)
+        settle()
+        assertRowGeometry(table)
+        // Second frame: results narrow after the query value has already reached the table.
+        fixture.update(matching)
+        settle()
+        assertRowGeometry(table)
+        for (index, item) in matching.enumerated() {
+            let cell = table.view(atColumn: 0, row: index + 1, makeIfNecessary: true)!
+            precondition(cell === retained[item.id], "Search refinement preserves retained \(item.kind) cells")
+        }
+
+        // Subsequent pinyin characters remove more rows; each async result must settle immediately.
+        var remaining = matching
+        for query in ["ni", "nih", "niha", "nihao", "nh"] {
+            fixture.query = query
+            fixture.scroll = ScrollIntent(kind: .top)
+            settle()
+            if remaining.count > 1 { remaining.removeLast() }
+            fixture.update(remaining)
+            settle()
+            assertRowGeometry(table)
+            precondition(table.view(atColumn: 0, row: 1, makeIfNecessary: true) === retained[matching[0].id],
+                         "OCR image cell remains stable across pinyin characters")
+        }
+
+        // Literal queries use the same asynchronous update path for every content kind.
+        fixture.query = "你好"
+        fixture.scroll = ScrollIntent(kind: .top)
+        settle()
+        fixture.update(matching)
+        settle()
+        assertRowGeometry(table)
+        fixture.query = "你好世界"
+        fixture.scroll = ScrollIntent(kind: .top)
+        settle()
+        fixture.update([matching[1], matching[3], matching[5]])
+        settle()
+        assertRowGeometry(table)
+        print("PASS: asynchronous pinyin/literal typing, OCR and every text kind, stable retained cells, no row slide")
+    }
+
     @MainActor
     static func main() async throws {
         _ = NSApplication.shared
@@ -243,6 +329,7 @@ struct ClipboardListAnimationTests {
         settle(0.3)
         window.close()
         print("PASS: kind refinement, deletion, single animated restore, date headers, async refresh, pagination, empty results")
+        searchTypingTests(in: directory.appendingPathComponent("typing"))
         try await ClipboardUndoTests.run()
         try await SingleDeletionUndoTests.run()
         ClipboardTextClassifierTests.run()

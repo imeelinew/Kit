@@ -8,10 +8,10 @@ enum ImageQuickLook {
     }
 }
 
-/// Space-toggled image Quick Look via `NSPopover`, sized to the room left of or below the thumbnail so
+/// Hover-triggered image Quick Look via `NSPopover`, sized to the room left of or below the preview so
 /// AppKit does not flip the popover on top of the anchor.
 ///
-/// The representable sits on the rendered thumbnail so the popover arrow targets the image.
+/// The representable sits on the right-hand preview image so the popover arrow targets the image.
 struct ImageQuickLookAnchor: NSViewRepresentable {
     var url: URL?
     @Binding var isPresented: Bool
@@ -133,8 +133,7 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
         }
 
         if let popover, popover.isShown {
-            // Same image still showing — leave it alone. URL changes while open are ignored
-            // because ↑↓ are blocked during Quick Look.
+            // Selection changes close the session. Keep an already showing image stable during hover.
             guard shownURL == url, shownSize == placement.size, shownAnchorView === anchorView
             else { return }
             return
@@ -209,7 +208,7 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
         var size: CGSize
     }
 
-    /// Fit the image left of or below the thumbnail, then use whichever placement shows it larger.
+    /// Fit the image left of or below the preview, then use whichever placement shows it larger.
     /// Leave room for popover chrome so AppKit does not flip it over the anchor.
     private static func placement(url: URL, anchorView: NSView) -> Placement? {
         guard let window = anchorView.window else { return nil }

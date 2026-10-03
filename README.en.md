@@ -33,7 +33,7 @@ Kit turns clipboard history into a command palette you can summon whenever you n
 - **Capture everyday content**: Save text, code, links, and images with their source app
 - **Find items quickly**: Search the full history with SQLite full-text search, including Chinese Pinyin and initials
 - **Stay on the keyboard**: Open the palette, search, select, and paste without leaving your workflow
-- **Preview images**: Browse thumbnails and press Space for a larger preview
+- **Preview images**: Browse thumbnails and hover over the image in the right-hand preview for a larger view
 - **Manage history**: Browse items by date, set a retention period, and exclude apps from capture
 
 ## Workflow
@@ -44,8 +44,6 @@ Press `Option + W` to show or hide the palette. Type to filter history, move wit
 | --- | --- |
 | `Return` | Paste and close the palette |
 | `⌘ Return` | Copy the selected item |
-| `Space` | Preview an image |
-| `Backspace` | Delete the selected item when the search is empty (or from its action menu) |
 | `⌘ Z` | Undo the last deletion; after typing, undo the text edit first |
 
 The action menu also lets you paste while keeping the palette open, reveal an image in Finder, or delete an item. You can record a different global shortcut in Settings.

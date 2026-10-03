@@ -23,6 +23,78 @@ struct PaletteFocusTests {
         panel.sendEvent(event)
     }
 
+    static func quickLookHover(in directory: URL) async throws {
+        let store = ClipboardStore(directory: directory, recognizeImage: { _ in .recognized("hover preview") })
+        let text = store.addText("ordinary text", kind: .text, sourceBundleID: nil)!
+        for component: UInt8 in [80, 160] {
+            let bitmap = NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: 8, pixelsHigh: 8, bitsPerSample: 8,
+                samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                bytesPerRow: 0, bitsPerPixel: 0)!
+            for y in 0..<8 { for x in 0..<8 {
+                let offset = y * bitmap.bytesPerRow + x * 4
+                for channel in 0..<3 { bitmap.bitmapData![offset + channel] = component }
+                bitmap.bitmapData![offset + 3] = 255
+            } }
+            await store.addImage(bitmap.representation(using: .png, properties: [:])!, sourceBundleID: nil)
+        }
+        await store.waitForImageOCR()
+        let images = store.items.filter { $0.kind == .image }
+        let core = AppCore(clipboardStore: store)
+        let vm = core.palette
+        await vm.prepare()
+        precondition(vm.selectedID == images[0].id)
+
+        vm.setImageQuickLookHovered(true, itemID: images[0].id)
+        precondition(vm.imageQuickLookOpen, "Entering the selected preview opens Quick Look")
+        vm.setImageQuickLookHovered(false, itemID: images[0].id)
+        precondition(!vm.imageQuickLookOpen, "Leaving the selected preview closes Quick Look")
+        vm.query = "hover"
+        try await settle()
+        vm.setImageQuickLookHovered(true, itemID: images[0].id)
+        precondition(vm.imageQuickLookOpen, "Hover works while searching image text")
+        vm.handle(.cancel)
+        precondition(!vm.imageQuickLookOpen && vm.query == "hover", "Escape dismisses Quick Look before clearing search")
+        vm.setImageQuickLookHovered(true, itemID: images[0].id)
+        vm.select(images[1].id)
+        precondition(!vm.imageQuickLookOpen, "Selection changes close the previous image")
+        vm.setImageQuickLookHovered(true, itemID: images[1].id)
+        vm.setImageQuickLookHovered(false, itemID: images[0].id)
+        precondition(vm.imageQuickLookOpen, "A stale hover exit cannot close the newly selected image")
+        vm.openActions(for: images[1].id)
+        vm.setImageQuickLookHovered(true, itemID: images[1].id)
+        precondition(!vm.imageQuickLookOpen, "Menus suppress preview hover")
+        vm.closeMenu()
+        vm.query = ""
+        try await settle()
+        vm.select(text.id)
+        vm.setImageQuickLookHovered(true, itemID: text.id)
+        precondition(!vm.imageQuickLookOpen, "Text previews never open image Quick Look")
+
+        vm.select(images[0].id)
+        // Host the real search input without loading the preview's application singleton.
+        // Keyboard routing still uses the image-selected view model.
+        let searchStore = ClipboardStore(directory: directory.appendingPathComponent("keyboard"))
+        let searchCore = AppCore(clipboardStore: searchStore)
+        let searchVM = searchCore.palette
+        let panel = PalettePanel(
+            rootView: RootPaletteView(vm: searchVM, store: searchStore, settings: searchCore.settings),
+            visualStyle: .frosted)
+        panel.paletteViewModel = vm
+        panel.makeKeyAndOrderFront(nil)
+        defer { panel.close() }
+        try await settle()
+        panel.requestSearchFocus()
+        try await settle()
+        precondition(vm.selectedID == images[0].id, "An image is selected for the keyboard regression")
+        key(kVK_Space, characters: " ", in: panel)
+        precondition(searchVM.query == " " && !vm.imageQuickLookOpen,
+                     "Space types into an empty search even when an image is selected")
+        key(kVK_Space, characters: " ", in: panel)
+        precondition(searchVM.query == "  " && !vm.imageQuickLookOpen, "Repeated spaces stay ordinary search input")
+        print("PASS: preview hover enter/exit, search, selection, stale exits, menus, Escape, image-selected Space input")
+    }
+
     static func main() async throws {
         _ = NSApplication.shared
         let directory = FileManager.default.temporaryDirectory
@@ -50,7 +122,10 @@ struct PaletteFocusTests {
                 precondition(
                     search.currentEditor() === panel.firstResponder, "Opening focuses search")
                 key(kVK_Space, characters: " ", in: panel)
-                precondition(vm.query.isEmpty, "Space with an empty query stays a palette command")
+                precondition(vm.query == " " && !vm.imageQuickLookOpen,
+                             "Space with an empty query reaches search instead of Quick Look")
+                vm.query = ""
+                try await settle()
 
                 vm.toggleStackFilter()
                 try await settle()
@@ -138,5 +213,6 @@ struct PaletteFocusTests {
                 )
             }
         }
+        try await quickLookHover(in: directory.appendingPathComponent("hover"))
     }
 }

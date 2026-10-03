@@ -143,12 +143,15 @@ struct ClipboardPreview: View {
                             RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                                 .strokeBorder(Theme.Colors.cardStroke, lineWidth: 1)
                         )
+                        .onHover { hovered in
+                            vm.setImageQuickLookHovered(hovered, itemID: item.id)
+                        }
                 } else {
                     Image(systemName: "photo").font(.system(.largeTitle))
                         .symbolRenderingMode(.hierarchical).foregroundStyle(.tertiary)
                 }
             }
-            // Anchor to the thumbnail's fitted bounds, not the full preview pane, so the
+            // Anchor to the preview image's fitted bounds, not the full preview pane, so the
             // NSPopover arrow points at the image and placement can avoid covering it.
             .overlay {
                 ImageQuickLookAnchor(

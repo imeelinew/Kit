@@ -1,5 +1,4 @@
 import AppKit
-import Carbon.HIToolbox
 import SwiftUI
 @testable import Kit
 
@@ -21,12 +20,13 @@ private struct UndoListView: View {
 
 @MainActor
 enum SingleDeletionUndoTests {
-    private static func delete(in panel: PalettePanel) {
-        let event = NSEvent.keyEvent(
-            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
-            windowNumber: panel.windowNumber, context: nil, characters: "\u{7f}",
-            charactersIgnoringModifiers: "\u{7f}", isARepeat: false, keyCode: UInt16(kVK_Delete))!
-        panel.sendEvent(event)
+    private static func delete(_ item: ClipboardItem, using vm: PaletteViewModel) {
+        vm.openActions(for: item.id)
+        let index = vm.menuActions.firstIndex {
+            if case .delete = $0 { return true }
+            return false
+        }!
+        vm.activateMenuItem(at: index)
     }
 
     static func run() async throws {
@@ -57,7 +57,7 @@ enum SingleDeletionUndoTests {
                     let target = vm.results.first!
                     removed.append(target)
                     vm.select(target.id)
-                    delete(in: panel)
+                    delete(target, using: vm)
                     await ClipboardUndoTests.ready(vm)
                     try await Task.sleep(for: .milliseconds(16))
                 }

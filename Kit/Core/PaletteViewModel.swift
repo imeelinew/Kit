@@ -55,7 +55,6 @@ enum PaletteCommand: Equatable {
     case activate
     case pasteKeepingOpen
     case copy
-    case delete
     case undoDelete
     case cancel
     case toggleActions
@@ -63,7 +62,6 @@ enum PaletteCommand: Equatable {
     case revealInFinder
     case cycleStack(Int)
     case cycleType(Int)
-    case toggleQuickLook
     case clearQuery
     case settings
     case quit
@@ -171,6 +169,10 @@ final class PaletteViewModel {
     private(set) var hasMoreResults = false
     private(set) var selectedID: ClipboardItem.ID? {
         didSet {
+            if oldValue != selectedID {
+                imageQuickLookOpen = false
+                ImageQuickLook.close()
+            }
             if preparedPreview?.itemID != selectedID { preparedPreview = nil }
         }
     }
@@ -226,11 +228,6 @@ final class PaletteViewModel {
     // Keep routing to deletion undo after it is consumed. A second Command-Z must
     // not fall through to an older text edit; typing/naming still owns text undo.
     var prefersDeletionUndo: Bool { deletionWasLastEdit }
-
-    /// At an empty query, Space is reserved for Quick Look instead of starting blank search text.
-    var canToggleQuickLook: Bool {
-        !menuOpen && queryIsEmpty && selectedItem?.kind == .image
-    }
 
     var selectionIndex: Int {
         guard let selectedID,
@@ -356,6 +353,15 @@ final class PaletteViewModel {
         if follow { scrollIntent = ScrollIntent(kind: .follow) }
     }
 
+    /// Only the selected image's right-hand preview reports hover; stale view exits cannot close a new preview.
+    func setImageQuickLookHovered(_ hovered: Bool, itemID: ClipboardItem.ID) {
+        guard selectedID == itemID else { return }
+        let presented = hovered && searchReady && !menuOpen && selectedItem?.kind == .image
+        guard imageQuickLookOpen != presented else { return }
+        imageQuickLookOpen = presented
+        if !presented { ImageQuickLook.close() }
+    }
+
     func openActions(for id: ClipboardItem.ID) {
         guard searchReady, item(withID: id) != nil else { return }
         select(id)
@@ -471,11 +477,6 @@ final class PaletteViewModel {
             guard searchReady, let item = actionTarget else { return true }
             overlay = .none
             core.copyToClipboard(item)
-        case .delete:
-            guard searchReady, !isNamingStack, let item = actionTarget,
-                menuOpen || query.isEmpty else { return true }
-            overlay = .none
-            perform(.delete(item))
         case .undoDelete:
             guard !isNamingStack else { return true }
             undoDeletion()
@@ -508,9 +509,6 @@ final class PaletteViewModel {
             cycleStack(by: delta)
         case .cycleType(let delta):
             cycleType(by: delta)
-        case .toggleQuickLook:
-            guard canToggleQuickLook else { return menuOpen }
-            imageQuickLookOpen.toggle()
         case .clearQuery:
             guard !menuOpen else { return true }
             if !queryIsEmpty { query = "" }

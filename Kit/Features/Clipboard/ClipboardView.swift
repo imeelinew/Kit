@@ -165,6 +165,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private var lastBoundsOrigin: NSPoint?
         private var hoverRefreshQueued = false
         private var lastResultsGeneration: UInt64?
+        private var queryChangedSinceResults = false
         private var lastHasMoreResults = false
         private var hapticRow = -1
         private var suppressScrollHaptics = false
@@ -260,9 +261,11 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             self.onGeometryChange = onGeometryChange
             self.onScrollActivity = onScrollActivity
 
-            let contentChanged = lastResultsGeneration != resultsGeneration
+            let resultsChanged = lastResultsGeneration != resultsGeneration
+            let contentChanged = resultsChanged
                 || lastHasMoreResults != hasMoreResults
             let appearanceChanged = self.query != query || self.locale != locale
+            if self.query != query { queryChangedSinceResults = true }
             let typeChanged = lastResultsKindFilter.map { $0 != resultsKindFilter } ?? false
             lastResultsKindFilter = resultsKindFilter
             let previousRows = rows
@@ -301,13 +304,17 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 } else {
                     animatedRows = updateRows(
                         from: previousRows, in: tableView,
-                        animate: !appearanceChanged && (lastScroll == scroll || scroll.kind == .follow)
+                        animate: !appearanceChanged && !queryChangedSinceResults
+                            && (lastScroll == scroll || scroll.kind == .follow)
                             && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
                 }
                 if appearanceChanged { updateVisibleText(in: tableView) }
             } else if appearanceChanged {
                 updateVisibleText(in: tableView)
             }
+            // Input/highlights arrive before asynchronous search results. Pagination-only
+            // updates must not consume this flag and let the later results slide the rows.
+            if resultsChanged { queryChangedSinceResults = false }
             applySelection(selectedID, to: tableView)
             applyingSelection = wasApplyingSelection
 

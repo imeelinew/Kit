@@ -165,6 +165,31 @@ enum ClipboardUndoTests {
             manager.endUndoGrouping()
         }
 
+        let selected = vm.selectedItem!
+        let revisionBeforeBackspace = store.revision
+        let resultsBeforeBackspace = vm.results.map(\.id)
+        func backspace(repeating: Bool = false) {
+            let event = NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: panel.windowNumber, context: nil, characters: "\u{7f}",
+                charactersIgnoringModifiers: "\u{7f}", isARepeat: repeating,
+                keyCode: UInt16(kVK_Delete))!
+            panel.sendEvent(event)
+        }
+        backspace()
+        backspace(repeating: true)
+        precondition(store.revision == revisionBeforeBackspace && vm.results.map(\.id) == resultsBeforeBackspace
+                     && store.item(id: selected.id) != nil && !store.canUndoDeletion,
+                     "Backspace at an empty search never deletes the selected item")
+        vm.openActions(for: selected.id)
+        let menuDelete = vm.menuActions.first { if case .delete = $0 { return true }; return false }!
+        precondition(PopoverMenuItem(action: menuDelete, target: nil).shortcut == nil,
+                     "The delete menu entry has no keyboard shortcut hint")
+        backspace()
+        precondition(vm.menuOpen && store.revision == revisionBeforeBackspace,
+                     "Backspace in the action menu cannot delete an item")
+        vm.closeMenu()
+
         vm.query = "undo target"
         await ready(vm)
         vm.openActions(for: target.id)
@@ -214,7 +239,7 @@ enum ClipboardUndoTests {
         await ready(vm)
         precondition(vm.selectedID == target.id, "Undo works after deleting the last search result")
         panel.close()
-        print("PASS: Command-Z, repeated keys, text/naming priority, filtered deletion, older-page reveal, empty results")
+        print("PASS: Backspace never deletes, menu-only deletion, Command-Z, repeated keys, text/naming priority, filtered deletion, older-page reveal, empty results")
     }
 
     static func run() async throws {
