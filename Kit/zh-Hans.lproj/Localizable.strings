@@ -44,7 +44,7 @@
 "Haptic Feedback" = "触感反馈";
 "Haptics" = "触感";
 "Sound Effects" = "音效";
-"Earlier" = "更早";
+"Day Before Yesterday" = "前天";
 "English" = "English";
 "Follow System" = "跟随系统";
 "Forever" = "永久";
@@ -93,8 +93,6 @@
 "Plain Text" = "纯文本";
 "Path" = "路径";
 "Kit will stop monitoring the clipboard until you open it again." = "退出后，Kit 将停止监控剪贴板";
-"Past 30 Days" = "过去 30 天";
-"Past 7 Days" = "过去 7 天";
 "Pin to Screen" = "钉到屏幕上";
 "Pinned Cards" = "钉选卡片";
 "Pinned Image" = "钉选图片";

@@ -14,6 +14,8 @@ xcodebuild -quiet -project "$repo_root/Kit.xcodeproj" -scheme Kit \
 
 products="$build_dir/Build/Products/Debug"
 packages="$build_dir/SourcePackages/checkouts"
+ditto "$repo_root/Kit/en.lproj" "$test_dir/en.lproj"
+ditto "$repo_root/Kit/zh-Hans.lproj" "$test_dir/zh-Hans.lproj"
 # Hover feedback initializes the app singleton. Give the CLI harness its own
 # bundle identity so its default store cannot point at the user's Kit history.
 python3 - "$test_dir/bundle-info.plist" "$bundle_id" <<'PYCODE'
@@ -34,6 +36,7 @@ xcrun swiftc -swift-version 6 -parse-as-library \
     -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker "$test_dir/bundle-info.plist" \
     "$products/Kit.app/Contents/MacOS/Kit.debug.dylib" \
     "$repo_root/tests/ClipboardListAnimationTests.swift" \
+    "$repo_root/tests/ClipboardDateGroupingTests.swift" \
     "$repo_root/tests/ClipboardSearchGeometryTests.swift" \
     "$repo_root/tests/ClipboardHoverSelectionTests.swift" \
     "$repo_root/tests/ClipboardUndoTests.swift" \
@@ -44,4 +47,4 @@ xcrun swiftc -swift-version 6 -parse-as-library \
     "$repo_root/tests/ClipboardPreviewLifecycleTests.swift" \
     "$repo_root/tests/ImageDecodeCoordinatorTests.swift" \
     -o "$test_dir/clipboard-list-tests"
-"$test_dir/clipboard-list-tests"
+"$test_dir/clipboard-list-tests" "$@"

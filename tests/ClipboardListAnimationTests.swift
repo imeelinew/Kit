@@ -178,6 +178,10 @@ struct ClipboardListAnimationTests {
         let bundleID = Bundle.main.bundleIdentifier!
         precondition(bundleID.hasPrefix("com.eli.Kit.tests.clipboard-list."),
                      "The list harness requires an isolated bundle identity")
+        if CommandLine.arguments.contains("--date-groups-only") {
+            try await ClipboardDateGroupingTests.run()
+            return
+        }
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("kit-list-tests-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -333,6 +337,7 @@ struct ClipboardListAnimationTests {
         window.close()
         print("PASS: kind refinement, deletion, single animated restore, date headers, async refresh, pagination, empty results")
         searchTypingTests(in: directory.appendingPathComponent("typing"))
+        try await ClipboardDateGroupingTests.run()
         try await ClipboardSearchGeometryTests.run()
         try await ClipboardHoverSelectionTests.run()
         try await ClipboardUndoTests.run()

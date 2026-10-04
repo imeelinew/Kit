@@ -6,6 +6,7 @@ struct ClipboardList: View {
     let results: [ClipboardItem]
     let resultsGeneration: UInt64
     var resultsKindFilter: ClipboardKindFilter = .all
+    var dateGrouping: ClipboardDateGrouping? = nil
     let hasMoreResults: Bool
     let selectedID: ClipboardItem.ID?
     let query: String
@@ -25,6 +26,7 @@ struct ClipboardList: View {
             results: results,
             resultsGeneration: resultsGeneration,
             resultsKindFilter: resultsKindFilter,
+            dateGrouping: dateGrouping,
             hasMoreResults: hasMoreResults,
             selectedID: selectedID,
             query: query,
@@ -48,42 +50,13 @@ private struct ClipboardTableGeometry: Equatable {
     var dissolve = EdgeDissolveScrollState()
 }
 
-private enum ClipboardTableSection: Int, CaseIterable {
-    case today, yesterday, pastSevenDays, pastThirtyDays, earlier
-
-    var title: String {
-        switch self {
-        case .today: return "Today"
-        case .yesterday: return "Yesterday"
-        case .pastSevenDays: return "Past 7 Days"
-        case .pastThirtyDays: return "Past 30 Days"
-        case .earlier: return "Earlier"
-        }
-    }
-
-    static func section(
-        for item: ClipboardItem, today: Date, calendar: Calendar
-    ) -> ClipboardTableSection {
-        let itemDay = calendar.startOfDay(for: item.createdAt)
-        let elapsedDays = max(
-            0, calendar.dateComponents([.day], from: itemDay, to: today).day ?? .max)
-        switch elapsedDays {
-        case 0: return .today
-        case 1: return .yesterday
-        case 2...7: return .pastSevenDays
-        case 8...30: return .pastThirtyDays
-        default: return .earlier
-        }
-    }
-}
-
 private enum ClipboardTableRow: Equatable {
-    case header(ClipboardTableSection)
+    case header(ClipboardDateSection)
     case item(ClipboardItem)
     case more
 
     enum ID: Hashable {
-        case header(ClipboardTableSection)
+        case header(ClipboardDateSection)
         case item(ClipboardItem.ID)
         case more
     }
@@ -101,6 +74,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
     let results: [ClipboardItem]
     let resultsGeneration: UInt64
     var resultsKindFilter: ClipboardKindFilter = .all
+    var dateGrouping: ClipboardDateGrouping?
     let hasMoreResults: Bool
     let selectedID: ClipboardItem.ID?
     let query: String
@@ -125,6 +99,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             results: results,
             resultsGeneration: resultsGeneration,
             resultsKindFilter: resultsKindFilter,
+            dateGrouping: dateGrouping,
             hasMoreResults: hasMoreResults,
             selectedID: selectedID,
             query: query,
@@ -164,11 +139,18 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private var lastGeometry = ClipboardTableGeometry()
         private var lastBoundsOrigin: NSPoint?
         private var hoverRefreshQueued = false
+        private var hoverRefreshGeneration: UInt64 = 0
+        private var regroupingDates = false
         private var lastResultsGeneration: UInt64?
         private var queryChangedSinceResults = false
         private var lastHasMoreResults = false
         private var hapticRow = -1
         private var suppressScrollHaptics = false
+        private var dateGrouping = ClipboardDateGrouping.current
+        private var dateGroupingIsOverridden = false
+        private lazy var dateRefresh = ClipboardDateRefresh { [weak self] grouping in
+            self?.refreshDateGrouping(grouping)
+        }
 
         private let itemIdentifier = NSUserInterfaceItemIdentifier("ClipboardItemCell")
         private let headerIdentifier = NSUserInterfaceItemIdentifier("ClipboardHeaderCell")
@@ -234,12 +216,14 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
 
             let containerView = ClipboardTableContainerView(scrollView: scrollView)
             hostedContainerView = containerView
+            dateRefresh.start()
             return containerView
         }
 
         func update(
             results: [ClipboardItem], resultsGeneration: UInt64,
-            resultsKindFilter: ClipboardKindFilter, hasMoreResults: Bool,
+            resultsKindFilter: ClipboardKindFilter, dateGrouping: ClipboardDateGrouping?,
+            hasMoreResults: Bool,
             selectedID: ClipboardItem.ID?, query: String,
             scroll: ScrollIntent, hoverEnabled: Bool, locale: Locale, store: ClipboardStore,
             onSelect: @escaping (ClipboardItem) -> Void,
@@ -262,20 +246,23 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             self.onScrollActivity = onScrollActivity
 
             let resultsChanged = lastResultsGeneration != resultsGeneration
+            let grouping = dateGrouping ?? .current
+            let dateChanged = self.dateGrouping != grouping
+            regroupingDates = dateChanged
+            defer { regroupingDates = false }
+            if dateChanged { cancelQueuedHoverRefresh() }
+            dateGroupingIsOverridden = dateGrouping != nil
+            let viewport = dateChanged && lastScroll == scroll ? captureViewport(in: tableView) : nil
+            self.dateGrouping = grouping
             let contentChanged = resultsChanged
-                || lastHasMoreResults != hasMoreResults
-            let appearanceChanged = self.query != query || self.locale != locale
+                || lastHasMoreResults != hasMoreResults || dateChanged
+            let appearanceChanged = self.query != query || self.locale != locale || dateChanged
             if self.query != query { queryChangedSinceResults = true }
             let typeChanged = lastResultsKindFilter.map { $0 != resultsKindFilter } ?? false
             lastResultsKindFilter = resultsKindFilter
             let previousRows = rows
             if contentChanged {
-                rows = Self.makeRows(results, hasMoreResults: hasMoreResults)
-                itemRowIndex = Dictionary(uniqueKeysWithValues: rows.enumerated().compactMap {
-                    index, row in
-                    guard case .item(let item) = row else { return nil }
-                    return (item.id, index)
-                })
+                rebuildRows(results, hasMoreResults: hasMoreResults)
                 lastResultsGeneration = resultsGeneration
                 lastHasMoreResults = hasMoreResults
             }
@@ -301,6 +288,10 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                         container.layer?.add(transition, forKey: "transition")
                     }
                     tableView.reloadData()
+                } else if dateChanged {
+                    // Day-to-month regrouping moves headers across rows of a different height.
+                    // Commit that layout together before restoring the viewport anchor.
+                    if previousRows != rows { tableView.reloadData() }
                 } else {
                     animatedRows = updateRows(
                         from: previousRows, in: tableView,
@@ -317,6 +308,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             if resultsChanged { queryChangedSinceResults = false }
             applySelection(selectedID, to: tableView)
             applyingSelection = wasApplyingSelection
+            if let viewport { restoreViewport(viewport, in: tableView) }
 
             if lastScroll != scroll {
                 lastScroll = scroll
@@ -337,12 +329,76 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 }
             }
             tableView.hoverEnabled = hoverEnabled
-            queueHoverRefresh()
+            if !dateChanged { queueHoverRefresh() }
             reportGeometry(scrolling: false)
         }
 
         private var tableView: ClipboardTableView? {
             hostedContainerView?.tableView
+        }
+
+        private func rebuildRows(_ results: [ClipboardItem], hasMoreResults: Bool) {
+            rows = Self.makeRows(results, hasMoreResults: hasMoreResults, grouping: dateGrouping)
+            itemRowIndex = Dictionary(uniqueKeysWithValues: rows.enumerated().compactMap { index, row in
+                guard case .item(let item) = row else { return nil }
+                return (item.id, index)
+            })
+        }
+
+        private struct ViewportAnchor {
+            let itemID: ClipboardItem.ID
+            let offset: CGFloat
+        }
+
+        private func captureViewport(in tableView: NSTableView) -> ViewportAnchor? {
+            let visible = tableView.rows(in: tableView.visibleRect)
+            guard visible.location != NSNotFound else { return nil }
+            for row in visible.location..<NSMaxRange(visible) {
+                guard rows.indices.contains(row), case .item(let item) = rows[row] else { continue }
+                return ViewportAnchor(itemID: item.id,
+                    offset: tableView.rect(ofRow: row).minY - tableView.visibleRect.minY)
+            }
+            return nil
+        }
+
+        private func restoreViewport(_ anchor: ViewportAnchor, in tableView: NSTableView) {
+            guard let row = itemRowIndex[anchor.itemID], let scrollView = tableView.enclosingScrollView else { return }
+            let wasSuppressing = suppressScrollHaptics
+            suppressScrollHaptics = true
+            defer { suppressScrollHaptics = wasSuppressing }
+            let clip = scrollView.contentView
+            // AppKit may expose intermediate row rects while it retiles after edits. Derive
+            // the final offset from the same heights supplied to its delegate instead.
+            let itemTop = (0..<row).reduce(CGFloat.zero) { $0 + rowHeight(at: $1) }
+            let contentHeight = (0..<rows.count).reduce(CGFloat.zero) { $0 + rowHeight(at: $1) }
+            let top = -scrollView.contentInsets.top
+            let bottom = max(top, contentHeight + scrollView.contentInsets.bottom - clip.bounds.height)
+            let offset = min(bottom, max(top, itemTop - anchor.offset))
+            clip.scroll(to: NSPoint(x: clip.bounds.minX, y: offset))
+            scrollView.reflectScrolledClipView(clip)
+        }
+
+        private func refreshDateGrouping(_ grouping: ClipboardDateGrouping) {
+            guard !dateGroupingIsOverridden, grouping != dateGrouping, let tableView else { return }
+            let viewport = captureViewport(in: tableView)
+            let results = rows.compactMap { row -> ClipboardItem? in
+                guard case .item(let item) = row else { return nil }
+                return item
+            }
+            let previousRows = rows
+            let wasApplying = applyingSelection
+            applyingSelection = true
+            regroupingDates = true
+            defer { applyingSelection = wasApplying; regroupingDates = false }
+            cancelQueuedHoverRefresh()
+            tableView.clearHover()
+            dateGrouping = grouping
+            rebuildRows(results, hasMoreResults: lastHasMoreResults)
+            if previousRows != rows { tableView.reloadData() }
+            updateVisibleText(in: tableView)
+            applySelection(selectedID, to: tableView)
+            if let viewport { restoreViewport(viewport, in: tableView) }
+            reportGeometry(scrolling: false)
         }
 
         /// Returns whether the update ran as an animated row edit (callers must not scroll
@@ -425,7 +481,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 switch rows[row] {
                 case .header(let section):
                     (view as? ClipboardSectionCellView)?.configure(
-                        title: Self.localized(section.title, locale: locale), isFirst: row == 0)
+                        title: dateGrouping.title(for: section, locale: locale), isFirst: row == 0)
                 case .item(let item):
                     (view as? ClipboardItemCellView)?.updateTitle(
                         item: item, query: query, locale: locale)
@@ -438,19 +494,16 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         }
 
         private static func makeRows(
-            _ results: [ClipboardItem], hasMoreResults: Bool
+            _ results: [ClipboardItem], hasMoreResults: Bool, grouping: ClipboardDateGrouping
         ) -> [ClipboardTableRow] {
-            let calendar = Calendar.current
-            let today = calendar.startOfDay(for: Date())
-            var grouped: [ClipboardTableSection: [ClipboardItem]] = [:]
+            var grouped: [ClipboardDateSection: [ClipboardItem]] = [:]
             for item in results {
-                let section = ClipboardTableSection.section(
-                    for: item, today: today, calendar: calendar)
+                let section = grouping.section(for: item.createdAt)
                 grouped[section, default: []].append(item)
             }
 
             var rows: [ClipboardTableRow] = []
-            for section in ClipboardTableSection.allCases {
+            for section in grouped.keys.sorted(by: { $0.start > $1.start }) {
                 guard let items = grouped[section], !items.isEmpty else { continue }
                 rows.append(.header(section))
                 rows.append(contentsOf: items.map(ClipboardTableRow.item))
@@ -479,6 +532,10 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         }
 
         func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+            rowHeight(at: row)
+        }
+
+        private func rowHeight(at row: Int) -> CGFloat {
             guard rows.indices.contains(row) else { return 0 }
             switch rows[row] {
             case .item(let item): return ClipboardItemCellView.rowHeight(for: item)
@@ -498,7 +555,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                         as? ClipboardSectionCellView ?? ClipboardSectionCellView()
                 view.identifier = headerIdentifier
                 view.configure(
-                    title: Self.localized(section.title, locale: locale), isFirst: row == 0)
+                    title: dateGrouping.title(for: section, locale: locale), isFirst: row == 0)
                 return view
             case .item(let item):
                 let view =
@@ -662,23 +719,21 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         }
 
         private func queueHoverRefresh() {
-            guard !hoverRefreshQueued else { return }
+            guard !regroupingDates, !hoverRefreshQueued else { return }
             hoverRefreshQueued = true
+            let generation = hoverRefreshGeneration
             DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
+                guard let self, generation == self.hoverRefreshGeneration else { return }
                 self.hoverRefreshQueued = false
                 self.tableView?.refreshHover()
             }
         }
 
-        private static func localized(_ title: String, locale: Locale) -> String {
-            switch title {
-            case "Today": return AppLocalization.string("Today", locale: locale)
-            case "Yesterday": return AppLocalization.string("Yesterday", locale: locale)
-            case "Past 7 Days": return AppLocalization.string("Past 7 Days", locale: locale)
-            case "Past 30 Days": return AppLocalization.string("Past 30 Days", locale: locale)
-            default: return AppLocalization.string("Earlier", locale: locale)
-            }
+        private func cancelQueuedHoverRefresh() {
+            hoverRefreshGeneration &+= 1
+            hoverRefreshQueued = false
+            // A date regroup can move another row under a stationary pointer.
+            (tableView?.window as? PalettePanel)?.beginKeyboardSelection()
         }
     }
 }

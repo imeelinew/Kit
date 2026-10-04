@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CAE000000000000000000001 /* ClipboardDateSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAE000000000000000000002 /* ClipboardDateSection.swift */; };
 		CAD000000000000000000001 /* ImageSearchHighlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD000000000000000000002 /* ImageSearchHighlight.swift */; };
 		CAC000000000000000000001 /* ClipboardImageOCR.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC000000000000000000002 /* ClipboardImageOCR.swift */; };
 		ACA000000000000000000003 /* TextFieldPasteTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA000000000000000000004 /* TextFieldPasteTarget.swift */; };
@@ -81,6 +82,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		CAE000000000000000000002 /* ClipboardDateSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardDateSection.swift; sourceTree = "<group>"; };
 		CAD000000000000000000002 /* ImageSearchHighlight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSearchHighlight.swift; sourceTree = "<group>"; };
 		CAC000000000000000000002 /* ClipboardImageOCR.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardImageOCR.swift; sourceTree = "<group>"; };
 		ACA000000000000000000004 /* TextFieldPasteTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFieldPasteTarget.swift; sourceTree = "<group>"; };
@@ -173,6 +175,7 @@
 			isa = PBXGroup;
 			children = (
 				657D8CF150E57314AE8665E3 /* ClipboardView.swift */,
+				CAE000000000000000000002 /* ClipboardDateSection.swift */,
 				CA4000000000000000000002 /* ClipboardTableCells.swift */,
 				CA5000000000000000000002 /* ClipboardPreview.swift */,
 				19FB08D4568B366C9339712C /* ImageQuickLook.swift */,
@@ -433,6 +436,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				CAD000000000000000000001 /* ImageSearchHighlight.swift in Sources */,
+				CAE000000000000000000001 /* ClipboardDateSection.swift in Sources */,
 				3967DE16A769A2E33CCD9692 /* AboutView.swift in Sources */,
 				316668E91BB14E5E55142438 /* AppCore.swift in Sources */,
 				39845C7BA7BF8871C80EE1BE /* AppSettings.swift in Sources */,
