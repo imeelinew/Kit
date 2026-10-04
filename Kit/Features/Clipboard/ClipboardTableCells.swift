@@ -386,6 +386,8 @@ private final class ClipboardThumbnailView: NSView {
     private var displayedImage: NSImage?
     private var placeholderKind: ClipboardItem.Kind = .image
 
+    deinit { loadTask?.cancel() }
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true

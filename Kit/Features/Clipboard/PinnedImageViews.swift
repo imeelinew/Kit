@@ -48,7 +48,9 @@ struct PinnedImageContent: View {
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.panel, style: .continuous))
         .ignoresSafeArea()
         .task(id: url) {
-            image = await ImageThumbnail.loadAsync(url, maxPixel: decodeMaxPixel)
+            let loaded = await ImageThumbnail.loadAsync(url, maxPixel: decodeMaxPixel)
+            guard !Task.isCancelled else { return }
+            image = loaded
             loadFailed = image == nil
         }
     }

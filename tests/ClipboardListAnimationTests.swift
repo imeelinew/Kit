@@ -335,5 +335,6 @@ struct ClipboardListAnimationTests {
         ClipboardTextClassifierTests.run()
         await ClipboardPreviewTests.run()
         try await ClipboardPreviewLifecycleTests.run()
+        try await ImageDecodeCoordinatorTests.run()
     }
 }

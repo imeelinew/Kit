@@ -277,7 +277,9 @@ private struct ImageQuickLookContent: View {
         .task(id: "\(url.absoluteString)#\(Int(size.width))x\(Int(size.height))") {
             let maxPixel =
                 max(size.width, size.height) * (NSScreen.main?.backingScaleFactor ?? 2)
-            image = await ImageThumbnail.loadAsync(url, maxPixel: maxPixel)
+            let loaded = await ImageThumbnail.loadAsync(url, maxPixel: maxPixel)
+            guard !Task.isCancelled else { return }
+            image = loaded
         }
     }
 }
