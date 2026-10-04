@@ -12,7 +12,28 @@ enum ImageFingerprint {
 /// Downsampled, memory-capped image loading for the clipboard UI: ImageIO decodes each on-disk image to exactly the pixel size needed and caches it in a system-evicted `NSCache`.
 enum ImageThumbnail {
     /// `NSCache` is thread-safe but not annotated `Sendable`, so cross-thread use (a detached decode populating what the main actor reads) needs the guarantee asserted once here.
-    private final class ImageCache: NSCache<NSString, NSImage>, @unchecked Sendable {}
+    private final class ImageCache: NSCache<NSString, NSImage>, @unchecked Sendable {
+        private let mutationLock = NSLock()
+        private var generation: UInt64 = 0
+
+        func currentGeneration() -> UInt64 {
+            mutationLock.withLock { generation }
+        }
+
+        func insert(_ image: NSImage, forKey key: NSString, cost: Int, generation: UInt64) {
+            mutationLock.withLock {
+                guard generation == self.generation else { return }
+                setObject(image, forKey: key, cost: cost)
+            }
+        }
+
+        func purge() {
+            mutationLock.withLock {
+                generation &+= 1
+                removeAllObjects()
+            }
+        }
+    }
 
     /// Small row thumbnails (≤ `rowThreshold` px), byte-bounded and kept warm across palette dismissals so re-opening draws instantly.
     private static let rowCache: ImageCache = {
@@ -31,7 +52,7 @@ enum ImageThumbnail {
     /// Longest-edge size at or below which a decode is a "row" thumbnail; larger is a "preview".
     private static let rowThreshold: CGFloat = 512
 
-    private static func pick(_ maxPixel: CGFloat) -> NSCache<NSString, NSImage> {
+    private static func pick(_ maxPixel: CGFloat) -> ImageCache {
         maxPixel <= rowThreshold ? rowCache : previewCache
     }
 
@@ -42,11 +63,11 @@ enum ImageThumbnail {
     private actor DecodeCoordinator {
         private var inFlight: [String: Task<Decoded, Never>] = [:]
 
-        func decode(_ url: URL, maxPixel: CGFloat) async -> Decoded {
-            let key = "\(url.path)#\(Int(maxPixel))"
+        func decode(_ url: URL, maxPixel: CGFloat, generation: UInt64) async -> Decoded {
+            let key = "\(url.path)#\(Int(maxPixel))#\(generation)"
             if let task = inFlight[key] { return await task.value }
             let task = Task.detached(priority: .userInitiated) {
-                Decoded(image: ImageThumbnail.load(url, maxPixel: maxPixel))
+                Decoded(image: ImageThumbnail.load(url, maxPixel: maxPixel, generation: generation))
             }
             inFlight[key] = task
             let result = await task.value
@@ -59,7 +80,7 @@ enum ImageThumbnail {
 
     /// Frees the large preview bitmaps on palette dismiss; row thumbnails stay warm for an instant re-open.
     static func purgePreviews() {
-        previewCache.removeAllObjects()
+        previewCache.purge()
     }
 
     /// Cache-only lookup (never touches disk) so views render an already-decoded thumbnail on the same frame.
@@ -74,13 +95,14 @@ enum ImageThumbnail {
     static func loadAsync(_ url: URL, maxPixel: CGFloat) async -> NSImage? {
         if let cached = cached(url, maxPixel: maxPixel) { return cached }
         guard !Task.isCancelled else { return nil }
-        let decoded = await decodeCoordinator.decode(url, maxPixel: maxPixel)
+        let generation = pick(maxPixel).currentGeneration()
+        let decoded = await decodeCoordinator.decode(url, maxPixel: maxPixel, generation: generation)
         guard !Task.isCancelled else { return nil }
         return decoded.image
     }
 
     /// A thumbnail no larger than `maxPixel` on its longest edge, cached per (path, size); decodes synchronously, so call off the main thread for anything user-facing.
-    static func load(_ url: URL, maxPixel: CGFloat) -> NSImage? {
+    private static func load(_ url: URL, maxPixel: CGFloat, generation: UInt64) -> NSImage? {
         let cache = pick(maxPixel)
         let key = cacheKey(url, maxPixel)
         if let cached = cache.object(forKey: key) { return cached }
@@ -97,8 +119,9 @@ enum ImageThumbnail {
 
         let image = NSImage(
             cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
-        // Cost = the decoded bitmap's real byte footprint, so `totalCostLimit` bounds actual RAM.
-        cache.setObject(image, forKey: key, cost: cgImage.bytesPerRow * cgImage.height)
+        // Count bitmap bytes; a purge invalidates cache writes from earlier decode requests.
+        cache.insert(image, forKey: key, cost: cgImage.bytesPerRow * cgImage.height,
+                     generation: generation)
         return image
     }
 

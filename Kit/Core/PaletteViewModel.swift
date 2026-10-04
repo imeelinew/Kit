@@ -177,6 +177,7 @@ final class PaletteViewModel {
         }
     }
     private(set) var preparedPreview: ClipboardPreviewPayload?
+    private(set) var isPreviewActive = false
     private(set) var searchReady = true
     private(set) var scrollIntent = ScrollIntent(kind: .top)
     var pasteTarget: PasteTarget?
@@ -313,9 +314,13 @@ final class PaletteViewModel {
 
     /// Reset while hidden so clearing a previous search does not delay the next shortcut.
     func prepareForNextPresentation() {
+        isPreviewActive = false
+        previewWarmTask?.cancel()
+        previewWarmTask = nil
+        preparedPreview = nil
         resetPresentationState()
         scrollIntent = ScrollIntent(kind: .top)
-        if searchReady { selectFirstResult() }
+        if searchReady { selectedID = results.first?.id }
     }
 
     private func resetPresentationState() {
@@ -345,6 +350,7 @@ final class PaletteViewModel {
             selectFirstResult()
             guard let item = selectedItem else {
                 preparedPreview = nil
+                isPreviewActive = true
                 return
             }
             let payload = await ClipboardPreviewPayload.load(
@@ -352,6 +358,7 @@ final class PaletteViewModel {
             guard !Task.isCancelled else { return }
             guard searchTask == nil, results.first?.id == item.id else { continue }
             if preparedPreview !== payload { preparedPreview = payload }
+            isPreviewActive = true
             return
         }
     }
@@ -890,7 +897,8 @@ final class PaletteViewModel {
         resultsGeneration &+= 1
         searchReady = true
         previewWarmTask?.cancel()
-        if let first = newResults.first {
+        previewWarmTask = nil
+        if isPreviewActive, let first = newResults.first {
             let url = core.clipboardStore.imageURL(for: first)
             previewWarmTask = Task {
                 _ = await ClipboardPreviewPayload.load(for: first, imageURL: url)

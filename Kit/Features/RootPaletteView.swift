@@ -92,7 +92,13 @@ struct RootPaletteView: View {
                     Rectangle()
                         .fill(Theme.Colors.separator)
                         .frame(width: 1)
-                    ClipboardPreview(item: selected, query: vm.query, vm: vm, store: store)
+                    if vm.isPreviewActive {
+                        ClipboardPreview(
+                            item: selected, query: vm.query, vm: vm, store: store,
+                            settings: settings)
+                    } else {
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
                 .transition(contentTransition)
             }

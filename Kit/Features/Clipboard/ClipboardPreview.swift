@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// A complete preview is published together, so image decoding and metadata cannot resize
-/// the pane in separate frames. Keep a small, evictable working set across palette dismissals.
+/// the pane in separate frames. Cached payloads live only for the current palette session.
 @MainActor
 final class ClipboardPreviewPayload {
     let itemID: ClipboardItem.ID
@@ -22,6 +22,12 @@ final class ClipboardPreviewPayload {
         cache.totalCostLimit = 16 * 1024 * 1024
         return cache
     }()
+    private static var cacheGeneration: UInt64 = 0
+
+    static func purge() {
+        cacheGeneration &+= 1
+        cache.removeAllObjects()
+    }
 
     private init(itemID: ClipboardItem.ID, image: NSImage?, details: Details) {
         self.itemID = itemID
@@ -35,13 +41,16 @@ final class ClipboardPreviewPayload {
 
     static func load(for item: ClipboardItem, imageURL: URL?) async -> ClipboardPreviewPayload {
         if let hit = cached(for: item) { return hit }
+        let generation = cacheGeneration
         let detailsTask = Task.detached(priority: .userInitiated) {
             var details = Details()
+            guard !Task.isCancelled else { return details }
             if let text = item.text {
                 details.characters = text.count
                 var count = 0
                 var inWord = false
                 for scalar in text.unicodeScalars {
+                    guard !Task.isCancelled else { return details }
                     let separator = CharacterSet.whitespacesAndNewlines.contains(scalar)
                     if !separator && !inWord { count += 1 }
                     inWord = !separator
@@ -54,16 +63,20 @@ final class ClipboardPreviewPayload {
             }
             return details
         }
-        let image: NSImage?
-        if let imageURL {
-            image = await ImageThumbnail.loadAsync(imageURL, maxPixel: 900)
-        } else {
-            image = nil
+        let payload = await withTaskCancellationHandler {
+            let image: NSImage?
+            if let imageURL {
+                image = await ImageThumbnail.loadAsync(imageURL, maxPixel: 900)
+            } else {
+                image = nil
+            }
+            return ClipboardPreviewPayload(
+                itemID: item.id, image: image, details: await detailsTask.value)
+        } onCancel: {
+            detailsTask.cancel()
         }
-        let payload = ClipboardPreviewPayload(
-            itemID: item.id, image: image, details: await detailsTask.value)
-        if !Task.isCancelled {
-            let cost = image.map { Int($0.size.width * $0.size.height) * 4 } ?? 1
+        if !Task.isCancelled, generation == cacheGeneration {
+            let cost = payload.image.map { Int($0.size.width * $0.size.height) * 4 } ?? 1
             cache.setObject(payload, forKey: item.id as NSUUID, cost: cost)
         }
         return payload
@@ -75,7 +88,7 @@ struct ClipboardPreview: View {
     var query: String = ""
     @Bindable var vm: PaletteViewModel
     let store: ClipboardStore
-    @ObservedObject private var settings = AppCore.shared.settings
+    @ObservedObject var settings: AppSettings
 
     @State private var loadedPayload: ClipboardPreviewPayload?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -93,7 +106,8 @@ struct ClipboardPreview: View {
                         .transition(.opacity)
                         .animation(reduceMotion ? nil : Theme.Motion.content, value: item.kind)
                     ClipboardInfoSection(
-                        item: item, details: payload?.details ?? .init(), store: store)
+                        item: item, details: payload?.details ?? .init(), store: store,
+                        settings: settings)
                 }
                 .padding(.horizontal, 12)
                 .id(item.id)
@@ -186,7 +200,7 @@ private struct ClipboardInfoSection: View {
     let details: ClipboardPreviewPayload.Details
 
     @ObservedObject var store: ClipboardStore
-    @ObservedObject private var settings = AppCore.shared.settings
+    @ObservedObject var settings: AppSettings
 
     private struct InfoRow: Identifiable {
         let label: String

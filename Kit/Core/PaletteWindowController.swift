@@ -70,8 +70,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
             await core.palette.prepare()
             guard !Task.isCancelled, presentationID == request else { return }
             guard let finalFrame = positionedFrame() else {
-                isPresenting = false
-                presentationTask = nil
+                hide(restoreFocus: false)
                 return
             }
             panel.beginPresentation()
@@ -103,21 +102,20 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         presentationTask?.cancel()
         presentationTask = nil
         isPresenting = false
-        guard let panel else { return }
-        if !panel.isVisible {
-            ImageThumbnail.purgePreviews()
-            if restoreFocus { restorePreviousFocus() }
-            return
-        }
         if hiding { return }
         hiding = true
-        if core.settings.switchToEnglishInputOnOpen {
-            InputSourceSwitcher.restore()
+        defer { hiding = false }
+        if let panel, panel.isVisible {
+            if core.settings.switchToEnglishInputOnOpen {
+                InputSourceSwitcher.restore()
+            }
+            panel.orderOut(nil)
         }
-        panel.orderOut(nil)
-        hiding = false
-        ImageThumbnail.purgePreviews()
         core.palette.prepareForNextPresentation()
+        // Reconcile the hidden hosting tree so the preview's view state and text storage release.
+        panel?.contentView?.layoutSubtreeIfNeeded()
+        ClipboardPreviewPayload.purge()
+        ImageThumbnail.purgePreviews()
         if restoreFocus { restorePreviousFocus() }
     }
 

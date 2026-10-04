@@ -59,6 +59,12 @@ struct AttributedTextPreview: NSViewRepresentable {
         PreviewTextScrollView()
     }
 
+    static func dismantleNSView(_ scrollView: PreviewTextScrollView, coordinator: Coordinator) {
+        // SwiftUI can retain detached AppKit views for reuse; release their heavy text immediately.
+        scrollView.textView.textStorage?.setAttributedString(NSAttributedString(string: ""))
+        coordinator.lastInput = nil
+    }
+
     func updateNSView(_ scrollView: PreviewTextScrollView, context: Context) {
         let environment = context.environment
         let appKit: Bool
