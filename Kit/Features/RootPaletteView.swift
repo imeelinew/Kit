@@ -295,7 +295,9 @@ struct RootPaletteView: View {
     private static let menuInset: CGFloat = 8
 
     private var contentTransition: AnyTransition {
-        reduceMotion ? .opacity : Theme.Motion.transition()
+        // Scaling the native scroll view leaves fractional geometry that AppKit rounds
+        // differently on search resets and row updates, shifting the viewport by a pixel.
+        .opacity
     }
 
     private func menuTransition(_ anchor: UnitPoint) -> AnyTransition {
