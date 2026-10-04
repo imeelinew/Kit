@@ -330,6 +330,7 @@ struct ClipboardListAnimationTests {
         window.close()
         print("PASS: kind refinement, deletion, single animated restore, date headers, async refresh, pagination, empty results")
         searchTypingTests(in: directory.appendingPathComponent("typing"))
+        try await ClipboardSearchGeometryTests.run()
         try await ClipboardUndoTests.run()
         try await SingleDeletionUndoTests.run()
         ClipboardTextClassifierTests.run()

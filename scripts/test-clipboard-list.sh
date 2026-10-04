@@ -23,6 +23,7 @@ xcrun swiftc -swift-version 6 -parse-as-library \
     -Xlinker -rpath -Xlinker "$products" \
     "$products/Kit.app/Contents/MacOS/Kit.debug.dylib" \
     "$repo_root/tests/ClipboardListAnimationTests.swift" \
+    "$repo_root/tests/ClipboardSearchGeometryTests.swift" \
     "$repo_root/tests/ClipboardUndoTests.swift" \
     "$repo_root/tests/SingleDeletionUndoTests.swift" \
     "$repo_root/tests/ClipboardTextClassifierTests.swift" \
