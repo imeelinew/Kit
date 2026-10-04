@@ -175,6 +175,9 @@ struct ClipboardListAnimationTests {
     @MainActor
     static func main() async throws {
         _ = NSApplication.shared
+        let bundleID = Bundle.main.bundleIdentifier!
+        precondition(bundleID.hasPrefix("com.eli.Kit.tests.clipboard-list."),
+                     "The list harness requires an isolated bundle identity")
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("kit-list-tests-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -331,6 +334,7 @@ struct ClipboardListAnimationTests {
         print("PASS: kind refinement, deletion, single animated restore, date headers, async refresh, pagination, empty results")
         searchTypingTests(in: directory.appendingPathComponent("typing"))
         try await ClipboardSearchGeometryTests.run()
+        try await ClipboardHoverSelectionTests.run()
         try await ClipboardUndoTests.run()
         try await SingleDeletionUndoTests.run()
         ClipboardTextClassifierTests.run()

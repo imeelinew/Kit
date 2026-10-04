@@ -3,6 +3,11 @@ import Carbon.HIToolbox
 import KeyboardShortcuts
 import SwiftUI
 
+@MainActor
+protocol PaletteHoverSelectionResetting: AnyObject {
+    func clearHover()
+}
+
 /// The sole keyboard gateway for the palette window. It receives key events before the current
 /// first responder, so embedded AppKit views and SwiftUI focus changes cannot disable commands.
 final class PalettePanel: NSPanel {
@@ -18,25 +23,43 @@ final class PalettePanel: NSPanel {
             paletteViewModel?.onSearchFocusRequested = { [weak self] in
                 self?.requestSearchFocus()
             }
+            paletteViewModel?.onSearchQueryChanged = { [weak self] in
+                self?.beginKeyboardSelection()
+            }
         }
     }
 
-    private var presentationMouseLocation = NSEvent.mouseLocation
+    private let mouseLocation: () -> NSPoint
+    private var hoverActivationMouseLocation: NSPoint
     private var pointerHasMoved = false
+    private weak var hoverSelectionResetter: (any PaletteHoverSelectionResetting)?
+
+    var hoverMouseLocation: NSPoint { mouseLocation() }
 
     func beginPresentation() {
-        presentationMouseLocation = NSEvent.mouseLocation
-        pointerHasMoved = false
+        beginKeyboardSelection()
     }
 
-    /// Ordering a window under a stationary pointer is not a selection gesture.
+    func registerHoverSelectionResetter(_ resetter: any PaletteHoverSelectionResetting) {
+        hoverSelectionResetter = resetter
+    }
+
+    /// Keyboard input owns selection until the physical pointer moves again. Keep this
+    /// in the panel so asynchronous results and an empty list cannot reset ownership.
+    func beginKeyboardSelection() {
+        hoverActivationMouseLocation = hoverMouseLocation
+        pointerHasMoved = false
+        hoverSelectionResetter?.clearHover()
+    }
+
+    /// A stationary pointer cannot override a presentation or keyboard selection.
     var allowsHoverSelection: Bool {
         guard isVisible else { return false }
         if !pointerHasMoved {
-            let location = NSEvent.mouseLocation
+            let location = hoverMouseLocation
             pointerHasMoved = hypot(
-                location.x - presentationMouseLocation.x,
-                location.y - presentationMouseLocation.y) >= 1
+                location.x - hoverActivationMouseLocation.x,
+                location.y - hoverActivationMouseLocation.y) >= 1
         }
         return pointerHasMoved
     }
@@ -49,12 +72,14 @@ final class PalettePanel: NSPanel {
     ]
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.type == .keyDown { beginKeyboardSelection() }
         // Palette commands (including deletion undo) take priority over the application's Edit menu.
         if event.type == .keyDown, route(event) { return true }
         return super.performKeyEquivalent(with: event)
     }
 
     override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyDown { beginKeyboardSelection() }
         if event.type == .keyDown, route(event) { return }
         super.sendEvent(event)
     }
@@ -282,7 +307,12 @@ final class PalettePanel: NSPanel {
         }
     }
 
-    init<Content: View>(rootView: Content, visualStyle: PaletteVisualStyle) {
+    init<Content: View>(
+        rootView: Content, visualStyle: PaletteVisualStyle,
+        mouseLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation }
+    ) {
+        self.mouseLocation = mouseLocation
+        hoverActivationMouseLocation = mouseLocation()
         let panelSize = CGSize(width: Theme.Size.panelWidth, height: Theme.Size.panelHeight)
         super.init(
             contentRect: NSRect(

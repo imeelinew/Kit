@@ -718,7 +718,7 @@ private final class ClipboardTableScrollView: NSScrollView {
     }
 }
 
-private final class ClipboardTableView: NSTableView {
+private final class ClipboardTableView: NSTableView, PaletteHoverSelectionResetting {
     private static let hoverIntentDelay: Duration = .milliseconds(200)
 
     var onRightClick: ((Int) -> Void)?
@@ -743,12 +743,20 @@ private final class ClipboardTableView: NSTableView {
 
     override var acceptsFirstResponder: Bool { false }
 
+    private var screenMouseLocation: NSPoint {
+        (window as? PalettePanel)?.hoverMouseLocation ?? NSEvent.mouseLocation
+    }
+
+    private func pointerLocation(in window: NSWindow) -> NSPoint {
+        convert(window.convertPoint(fromScreen: screenMouseLocation), from: nil)
+    }
+
     /// Hover selection is armed over rows: scrolling feedback defers to its selection ticks.
     var pointerDrivesSelection: Bool {
         guard let panel = window as? PalettePanel, panel.allowsHoverSelection,
             let isItemRow
         else { return false }
-        let point = convert(panel.mouseLocationOutsideOfEventStream, from: nil)
+        let point = pointerLocation(in: panel)
         guard visibleRect.contains(point) else { return false }
         let row = row(at: point)
         return row >= 0 && isItemRow(row)
@@ -771,13 +779,13 @@ private final class ClipboardTableView: NSTableView {
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
-        lastScreenMouseLocation = NSEvent.mouseLocation
+        lastScreenMouseLocation = screenMouseLocation
         updateHover(at: convert(event.locationInWindow, from: nil), pointerMoved: false)
     }
 
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
-        let mouseLocation = NSEvent.mouseLocation
+        let mouseLocation = screenMouseLocation
         let pointerMoved = lastScreenMouseLocation.map {
             hypot(mouseLocation.x - $0.x, mouseLocation.y - $0.y) >= 0.5
         } ?? true
@@ -792,6 +800,7 @@ private final class ClipboardTableView: NSTableView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        (window as? PalettePanel)?.registerHoverSelectionResetter(self)
         if window == nil {
             clearHover()
         }
@@ -816,12 +825,12 @@ private final class ClipboardTableView: NSTableView {
             clearHover()
             return
         }
-        let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        let point = pointerLocation(in: window)
         guard visibleRect.contains(point) else {
             clearHover()
             return
         }
-        lastScreenMouseLocation = NSEvent.mouseLocation
+        lastScreenMouseLocation = screenMouseLocation
         updateHover(at: point, pointerMoved: false)
     }
 
@@ -916,9 +925,11 @@ private final class ClipboardTableView: NSTableView {
         guard pendingHoverRow == row else { return }
         pendingHoverRow = nil
         pendingHoverTask = nil
-        guard hoverEnabled, let window else { return }
+        guard hoverEnabled, let window,
+            (window as? PalettePanel)?.allowsHoverSelection != false
+        else { return }
 
-        let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        let point = pointerLocation(in: window)
         guard visibleRect.contains(point), pointerHitsTable(at: point), self.row(at: point) == row,
             isItemRow?(row) == true
         else { return }

@@ -209,6 +209,7 @@ final class PaletteViewModel {
 
     @ObservationIgnored var onMenuOpenChanged: ((Bool) -> Void)?
     @ObservationIgnored var onSearchFocusRequested: (() -> Void)?
+    @ObservationIgnored var onSearchQueryChanged: (() -> Void)?
 
     @ObservationIgnored private unowned let core: AppCore
     private static let pageSize = 160
@@ -786,6 +787,7 @@ final class PaletteViewModel {
     }
 
     private func queryChanged() {
+        onSearchQueryChanged?()
         deletionWasLastEdit = false
         pendingRestoredItemID = nil
         overlay = .none
