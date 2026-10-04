@@ -115,6 +115,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         // Reconcile the hidden hosting tree so the preview's view state and text storage release.
         panel?.contentView?.layoutSubtreeIfNeeded()
         ClipboardPreviewPayload.purge()
+        ImageSearchHighlightPayload.purge()
         ImageThumbnail.purgePreviews()
         if restoreFocus { restorePreviousFocus() }
     }

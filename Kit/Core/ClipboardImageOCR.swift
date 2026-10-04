@@ -23,14 +23,20 @@ enum ClipboardImageTextRecognition {
     static let version = 1
     static let maxAttempts = 2
 
+    /// Use the same recognition settings for indexing and preview text geometry.
+    static func makeRequest() -> VNRecognizeTextRequest {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]
+        request.usesLanguageCorrection = true
+        return request
+    }
+
     static func recognize(_ url: URL) async -> ClipboardImageOCRResult {
         let task = Task.detached(priority: .utility) {
             autoreleasepool {
                 guard !Task.isCancelled else { return ClipboardImageOCRResult.failed }
-                let request = VNRecognizeTextRequest()
-                request.recognitionLevel = .accurate
-                request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]
-                request.usesLanguageCorrection = true
+                let request = makeRequest()
                 do {
                     let supported = try request.supportedRecognitionLanguages()
                     guard request.recognitionLanguages.allSatisfy(supported.contains) else {

@@ -58,7 +58,7 @@ enum SearchHighlight {
         return output
     }
 
-    private static func matchingRanges(
+    static func matchingRanges(
         source: String, query: String
     ) -> [Range<String.Index>] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)

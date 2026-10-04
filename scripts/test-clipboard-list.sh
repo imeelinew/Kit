@@ -40,6 +40,7 @@ xcrun swiftc -swift-version 6 -parse-as-library \
     "$repo_root/tests/SingleDeletionUndoTests.swift" \
     "$repo_root/tests/ClipboardTextClassifierTests.swift" \
     "$repo_root/tests/ClipboardPreviewTests.swift" \
+    "$repo_root/tests/ImageSearchHighlightTests.swift" \
     "$repo_root/tests/ClipboardPreviewLifecycleTests.swift" \
     "$repo_root/tests/ImageDecodeCoordinatorTests.swift" \
     -o "$test_dir/clipboard-list-tests"

@@ -91,6 +91,7 @@ struct ClipboardPreview: View {
     @ObservedObject var settings: AppSettings
 
     @State private var loadedPayload: ClipboardPreviewPayload?
+    @State private var imageHighlights: ImageSearchHighlightPayload?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -128,6 +129,22 @@ struct ClipboardPreview: View {
             guard !Task.isCancelled else { return }
             loadedPayload = payload
         }
+        .task(id: imageHighlightURL) {
+            guard let url = imageHighlightURL else {
+                imageHighlights = nil
+                return
+            }
+            let payload = await ImageSearchHighlightPayload.load(url)
+            guard !Task.isCancelled else { return }
+            imageHighlights = payload
+        }
+    }
+
+    private var imageHighlightURL: URL? {
+        guard let item, item.kind == .image,
+            !ClipboardImageTextRecognition.normalizedText(query).isEmpty
+        else { return nil }
+        return store.imageURL(for: item)
     }
 
     @ViewBuilder
@@ -145,11 +162,18 @@ struct ClipboardPreview: View {
             CodePreview(code: item.text ?? "", query: query)
         case .image:
             let imageURL = store.imageURL(for: item)
+            let highlights = imageURL.flatMap { url in
+                ImageSearchHighlightPayload.cached(for: url)
+                    ?? (imageHighlights?.url == url ? imageHighlights : nil)
+            }?.layout.matchingBounds(query: query) ?? []
             Group {
                 if let image = payload?.image {
                     Image(nsImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
+                        .overlay {
+                            ImageSearchHighlightOverlay(imageSize: image.size, regions: highlights)
+                        }
                         .clipShape(
                             RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                         )
@@ -170,6 +194,7 @@ struct ClipboardPreview: View {
             .overlay {
                 ImageQuickLookAnchor(
                     url: imageURL,
+                    highlights: highlights,
                     isPresented: Binding(
                         get: { vm.imageQuickLookOpen },
                         set: { vm.imageQuickLookOpen = $0 }

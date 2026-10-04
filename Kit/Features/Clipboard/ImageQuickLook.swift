@@ -14,6 +14,7 @@ enum ImageQuickLook {
 /// The representable sits on the right-hand preview image so the popover arrow targets the image.
 struct ImageQuickLookAnchor: NSViewRepresentable {
     var url: URL?
+    var highlights: [CGRect] = []
     @Binding var isPresented: Bool
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -28,7 +29,7 @@ struct ImageQuickLookAnchor: NSViewRepresentable {
         context.coordinator.anchorView = nsView
         let presented = _isPresented
         ImageQuickLookSession.shared.sync(
-            presented: isPresented, url: url, anchor: nsView
+            presented: isPresented, url: url, highlights: highlights, anchor: nsView
         ) {
             if presented.wrappedValue {
                 presented.wrappedValue = false
@@ -56,10 +57,12 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
     private weak var anchorView: NSView?
     private weak var shownAnchorView: NSView?
     private var requestedURL: URL?
+    private var requestedHighlights: [CGRect] = []
     private var requestedPresented = false
     private var onDismiss: (() -> Void)?
     private var shownURL: URL?
     private var shownSize: CGSize = .zero
+    private var shownHighlights: [CGRect] = []
     private var isClosing = false
     private var notifyWhenClosed = false
     private var reconcileScheduled = false
@@ -69,11 +72,15 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
     private static let screenPad: CGFloat = 10
     private static let minSide: CGFloat = 180
 
-    func sync(presented: Bool, url: URL?, anchor: NSView, onDismiss: @escaping () -> Void) {
+    func sync(
+        presented: Bool, url: URL?, highlights: [CGRect], anchor: NSView,
+        onDismiss: @escaping () -> Void
+    ) {
         self.onDismiss = onDismiss
         self.anchorView = anchor
         requestedPresented = presented && url != nil
         requestedURL = url
+        requestedHighlights = highlights
         if presented, url != nil {
             // A newly mounted/updated anchor supersedes any deferred failure notification from
             // the previous SwiftUI view identity.
@@ -136,6 +143,13 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
             // Selection changes close the session. Keep an already showing image stable during hover.
             guard shownURL == url, shownSize == placement.size, shownAnchorView === anchorView
             else { return }
+            if shownHighlights != requestedHighlights,
+                let hosting = popover.contentViewController as? NSHostingController<ImageQuickLookContent>
+            {
+                hosting.rootView = ImageQuickLookContent(
+                    url: url, size: shownSize, highlights: requestedHighlights)
+                shownHighlights = requestedHighlights
+            }
             return
         }
 
@@ -148,12 +162,14 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
         popover.delegate = self
         popover.contentSize = placement.size
         popover.contentViewController = NSHostingController(
-            rootView: ImageQuickLookContent(url: url, size: placement.size)
+            rootView: ImageQuickLookContent(
+                url: url, size: placement.size, highlights: requestedHighlights)
         )
         self.popover = popover
         shownAnchorView = anchorView
         shownURL = url
         shownSize = placement.size
+        shownHighlights = requestedHighlights
         popover.show(
             relativeTo: anchorView.bounds, of: anchorView, preferredEdge: placement.edge)
     }
@@ -178,6 +194,7 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
         shownAnchorView = nil
         shownURL = nil
         shownSize = .zero
+        shownHighlights = []
         isClosing = false
 
         // A transient outside-click close originates in AppKit, so reflect it into SwiftUI.
@@ -255,11 +272,13 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
 }
 
 /// Large Quick Look body: decodes a screen-sized bitmap and letterboxes it into `size`.
-private struct ImageQuickLookContent: View {
+struct ImageQuickLookContent: View {
     let url: URL
     let size: CGSize
+    var highlights: [CGRect] = []
 
     @State private var image: NSImage?
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         ZStack {
@@ -268,6 +287,9 @@ private struct ImageQuickLookContent: View {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
+                    .overlay {
+                        ImageSearchHighlightOverlay(imageSize: image.size, regions: highlights)
+                    }
             } else {
                 ProgressView()
                     .controlSize(.small)
@@ -276,7 +298,7 @@ private struct ImageQuickLookContent: View {
         .frame(width: size.width, height: size.height)
         .task(id: "\(url.absoluteString)#\(Int(size.width))x\(Int(size.height))") {
             let maxPixel =
-                max(size.width, size.height) * (NSScreen.main?.backingScaleFactor ?? 2)
+                max(size.width, size.height) * displayScale
             let loaded = await ImageThumbnail.loadAsync(url, maxPixel: maxPixel)
             guard !Task.isCancelled else { return }
             image = loaded
