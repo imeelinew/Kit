@@ -21,7 +21,8 @@ struct SearchMetadataUpdate: Sendable {
 enum ClipboardSearch {
     static func queryDatabase(
         path: String, query: String, kind: ClipboardItem.Kind?,
-        stackID: ClipboardStack.ID?, after cursor: ClipboardSearchCursor?, limit: Int
+        stackID: ClipboardStack.ID?, after cursor: ClipboardSearchCursor?, limit: Int,
+        includesImageText: Bool = true
     ) -> ClipboardSearchPage? {
         guard !Task.isCancelled else { return nil }
         var connection: OpaquePointer?
@@ -48,24 +49,38 @@ enum ClipboardSearch {
             .replacingOccurrences(of: "_", with: "\\_") + "%"
         let usesFTS = query.count >= 3
         let textCondition: String
+        var textBindings: [String] = []
         if query.isEmpty {
             textCondition = "1 = 1"
-        } else if usesFTS {
-            let imageCondition = imageQuery.count >= 3
-                ? "i.rowid IN (SELECT rowid FROM image_ocr_fts WHERE image_ocr_fts MATCH ?)"
-                : "i.ocr_text LIKE ? ESCAPE '\\'"
-            textCondition = """
-                (i.rowid IN (SELECT rowid FROM items_fts WHERE items_fts MATCH ?)
-                 OR \(imageCondition)
-                 OR i.custom_title LIKE ? ESCAPE '\\')
-                """
         } else {
-            textCondition = """
-                (i.text LIKE ? ESCAPE '\\' OR i.pinyin LIKE ? ESCAPE '\\'
-                 OR i.pinyin_initials LIKE ? ESCAPE '\\'
-                 OR i.ocr_text LIKE ? ESCAPE '\\'
-                 OR i.custom_title LIKE ? ESCAPE '\\')
-                """
+            var contentCondition: String
+            if usesFTS {
+                contentCondition = "i.rowid IN (SELECT rowid FROM items_fts WHERE items_fts MATCH ?)"
+                textBindings.append("\"" + query.replacingOccurrences(of: "\"", with: "\"\"") + "\"")
+            } else {
+                contentCondition = """
+                    (i.text LIKE ? ESCAPE '\\' OR i.pinyin LIKE ? ESCAPE '\\'
+                     OR i.pinyin_initials LIKE ? ESCAPE '\\')
+                    """
+                textBindings.append(contentsOf: [pattern, pattern, pattern])
+            }
+            // OCR pinyin also lives in the common text index. Custom titles remain searchable.
+            if !includesImageText {
+                contentCondition = "(i.kind != 'image' AND \(contentCondition))"
+            }
+            var conditions = [contentCondition]
+            if includesImageText {
+                if usesFTS && imageQuery.count >= 3 {
+                    conditions.append("i.rowid IN (SELECT rowid FROM image_ocr_fts WHERE image_ocr_fts MATCH ?)")
+                    textBindings.append("\"" + imageQuery.replacingOccurrences(of: "\"", with: "\"\"") + "\"")
+                } else {
+                    conditions.append("i.ocr_text LIKE ? ESCAPE '\\'")
+                    textBindings.append(imagePattern)
+                }
+            }
+            conditions.append("i.custom_title LIKE ? ESCAPE '\\'")
+            textBindings.append(pattern)
+            textCondition = "(" + conditions.joined(separator: " OR ") + ")"
         }
         let kindCondition = kind == nil ? "" : " AND i.kind = ?"
         let stackJoin = stackID == nil ? "" : "JOIN stack_items si ON si.item_id = i.id"
@@ -93,21 +108,9 @@ enum ClipboardSearch {
         defer { sqlite3_finalize(statement) }
 
         var parameter: Int32 = 1
-        if usesFTS {
-            let match = "\"" + query.replacingOccurrences(of: "\"", with: "\"\"") + "\""
-            sqlite3_bind_text(statement, parameter, match, -1, SQLITE_TRANSIENT)
+        for value in textBindings {
+            sqlite3_bind_text(statement, parameter, value, -1, SQLITE_TRANSIENT)
             parameter += 1
-            let imageMatch = "\"" + imageQuery.replacingOccurrences(of: "\"", with: "\"\"") + "\""
-            sqlite3_bind_text(statement, parameter,
-                              imageQuery.count >= 3 ? imageMatch : imagePattern, -1, SQLITE_TRANSIENT)
-            parameter += 1
-            sqlite3_bind_text(statement, parameter, pattern, -1, SQLITE_TRANSIENT)
-            parameter += 1
-        } else if !query.isEmpty {
-            for value in [pattern, pattern, pattern, imagePattern, pattern] {
-                sqlite3_bind_text(statement, parameter, value, -1, SQLITE_TRANSIENT)
-                parameter += 1
-            }
         }
         if let kind {
             sqlite3_bind_text(statement, parameter, kind.rawValue, -1, SQLITE_TRANSIENT)

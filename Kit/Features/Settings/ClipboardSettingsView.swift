@@ -8,6 +8,10 @@ struct ClipboardSettingsView: View {
 
     var body: some View {
         PreferencesForm {
+            Section("Image Text Search") {
+                Toggle("Search Text in Images", isOn: $settings.imageTextSearchEnabled)
+            }
+
             Section("Content Preview") {
                 Toggle("Render Markdown", isOn: $settings.renderMarkdown)
             }
@@ -69,7 +73,11 @@ struct ClipboardSettingsView: View {
 
 struct HistorySettingsView: View {
     @ObservedObject private var settings = AppCore.shared.settings
+    @ObservedObject private var store = AppCore.shared.clipboardStore
     @State private var confirmingClear = false
+    @State private var confirmingClearImageIndex = false
+    @State private var confirmingRebuildImageIndex = false
+    @State private var imageCountForRebuild = 0
 
     var body: some View {
         PreferencesForm {
@@ -91,6 +99,22 @@ struct HistorySettingsView: View {
             }
 
             Section("Danger Zone") {
+                PreferencesRow(label: "Image Text Index") {
+                    switch store.imageTextIndexState {
+                    case .indexed:
+                        Button("Clear…") { confirmingClearImageIndex = true }
+                            .foregroundStyle(.red)
+                            .accessibilityLabel("Clear Index")
+                    case .none:
+                        Button("Rebuild Index…") {
+                            imageCountForRebuild = store.imageTextIndexImageCount()
+                            confirmingRebuildImageIndex = true
+                        }
+                    case .indexing:
+                        Button("Indexing…") {}
+                            .disabled(true)
+                    }
+                }
                 PreferencesRow(label: "Clear history") {
                     Button("Clear…") { confirmingClear = true }
                         .foregroundStyle(.red)
@@ -109,6 +133,35 @@ struct HistorySettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This can't be undone.")
+        }
+        .confirmationDialog(
+            "Clear the image text index?",
+            isPresented: $confirmingClearImageIndex,
+            titleVisibility: .visible
+        ) {
+            Button("Clear Index", role: .destructive) {
+                if !store.clearImageTextIndex() { NSSound.beep() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Images stay in your history, but you won't be able to find them by their text.")
+        }
+        .confirmationDialog(
+            "Rebuild the image text index?",
+            isPresented: $confirmingRebuildImageIndex,
+            titleVisibility: .visible
+        ) {
+            Button("Rebuild") {
+                if !store.rebuildImageTextIndex() { NSSound.beep() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(verbatim: String(
+                format: AppLocalization.string(
+                    "Kit will re-read text from %d images in your history. This uses significant CPU.",
+                    locale: settings.language.locale),
+                locale: settings.language.locale,
+                imageCountForRebuild))
         }
     }
 }

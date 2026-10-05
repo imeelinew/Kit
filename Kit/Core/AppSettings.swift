@@ -135,6 +135,7 @@ final class AppSettings: ObservableObject {
         static let launchAtLogin = "launchAtLogin"
         static let switchToEnglishInputOnOpen = "switchToEnglishInputOnOpen"
         static let renderMarkdown = "renderMarkdown"
+        static let imageTextSearchEnabled = "imageTextSearchEnabled"
         static let language = "appLanguage"
         static let appearance = "appAppearance"
         static let paletteVisualStyle = "paletteVisualStyle"
@@ -175,6 +176,10 @@ final class AppSettings: ObservableObject {
 
     @Published var renderMarkdown: Bool {
         didSet { defaults.set(renderMarkdown, forKey: Key.renderMarkdown) }
+    }
+
+    @Published var imageTextSearchEnabled: Bool {
+        didSet { defaults.set(imageTextSearchEnabled, forKey: Key.imageTextSearchEnabled) }
     }
 
     @Published var language: AppLanguage {
@@ -267,6 +272,8 @@ final class AppSettings: ObservableObject {
         launchAtLogin = LaunchAtLogin.isEnabled
         switchToEnglishInputOnOpen = defaults.bool(forKey: Key.switchToEnglishInputOnOpen)
         renderMarkdown = defaults.object(forKey: Key.renderMarkdown) as? Bool ?? true
+        imageTextSearchEnabled =
+            defaults.object(forKey: Key.imageTextSearchEnabled) as? Bool ?? true
         language =
             defaults.string(forKey: Key.language).flatMap(AppLanguage.init(rawValue:)) ?? .system
         appearance =

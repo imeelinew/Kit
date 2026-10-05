@@ -662,7 +662,9 @@ final class PaletteViewModel {
         imageQuickLookOpen = false
         ImageQuickLook.close()
         // Keep useful filters, but never leave a restored entry hidden by the current scope.
-        if !queryIsEmpty, !restored.matches(query) { query = "" }
+        if !queryIsEmpty,
+            !restored.matches(query, includeImageText: core.clipboardStore.imageTextSearchEnabled)
+        { query = "" }
         if let kind = kindFilter.kind, restored.kind != kind { applyKindFilter(.all) }
         if let stackFilter, core.clipboardStore.stackID(for: restored.id) != stackFilter {
             applyStackFilter(nil)

@@ -51,6 +51,17 @@
 "General" = "通用";
 "History" = "历史记录";
 "Image" = "图像";
+"Image Text Search" = "图片文字识别";
+"Search Text in Images" = "搜索图片中的文字";
+"Image Text Index" = "图片文字索引";
+"Rebuild Index…" = "重建索引…";
+"Indexing…" = "正在索引";
+"Clear the image text index?" = "要清除图片文字索引吗？";
+"Images stay in your history, but you won't be able to find them by their text." = "图片仍保留在历史中，但无法再用文字搜索到。";
+"Clear Index" = "清除索引";
+"Rebuild the image text index?" = "要重建图片文字索引吗？";
+"Kit will re-read text from %d images in your history. This uses significant CPU." = "会重新识别 %d 张历史图片中的文字，期间会占用较多 CPU。";
+"Rebuild" = "重建";
 "Icon Animation" = "图标动画";
 "Information" = "信息";
 "Items in this stack will also be deleted. This can't be undone." = "其中的所有记录也会被删除，此操作无法撤销。";

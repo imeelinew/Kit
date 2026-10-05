@@ -51,6 +51,17 @@
 "General" = "General";
 "History" = "History";
 "Image" = "Image";
+"Image Text Search" = "Image Text Search";
+"Search Text in Images" = "Search Text in Images";
+"Image Text Index" = "Image Text Index";
+"Rebuild Index…" = "Rebuild Index…";
+"Indexing…" = "Indexing…";
+"Clear the image text index?" = "Clear the image text index?";
+"Images stay in your history, but you won't be able to find them by their text." = "Images stay in your history, but you won't be able to find them by their text.";
+"Clear Index" = "Clear Index";
+"Rebuild the image text index?" = "Rebuild the image text index?";
+"Kit will re-read text from %d images in your history. This uses significant CPU." = "Kit will re-read text from %d images in your history. This uses significant CPU.";
+"Rebuild" = "Rebuild";
 "Icon Animation" = "Icon Animation";
 "Information" = "Information";
 "Items in this stack will also be deleted. This can't be undone." = "Items in this stack will also be deleted. This can't be undone.";

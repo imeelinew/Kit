@@ -90,6 +90,14 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
             imageOCR: imageOCR)
     }
 
+    func withImageOCR(_ metadata: ClipboardImageOCR?) -> ClipboardItem {
+        ClipboardItem(
+            id: id, kind: kind, text: text, imagePath: imagePath,
+            imageFingerprint: imageFingerprint, createdAt: createdAt,
+            sourceBundleID: sourceBundleID, customTitle: customTitle, lastUsedAt: lastUsedAt,
+            imageOCR: metadata)
+    }
+
     /// Visible list/card title: a persisted custom name, otherwise the first line of text or "Image".
     func displayTitle(locale: Locale) -> String {
         if let customTitle {
@@ -113,9 +121,9 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
 
     /// Case-insensitive literal or pinyin match for resident and pinned entries.
     /// Latin-letter queries also match Mandarin pinyin (full spelling or initials) so `nihao` / `nh` can find `你好`.
-    func matches(_ query: String) -> Bool {
+    func matches(_ query: String, includeImageText: Bool = true) -> Bool {
         if matches(query, in: customTitle) { return true }
-        if kind == .image,
+        if includeImageText, kind == .image,
             matches(ClipboardImageTextRecognition.normalizedText(query), in: imageOCR?.text)
         { return true }
         guard let text else { return false }

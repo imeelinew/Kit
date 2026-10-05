@@ -19,6 +19,13 @@ final class ClipboardStore: ObservableObject {
     private(set) var captureGeneration: UInt64 = 0
     var maxAge: TimeInterval = ClipboardRetention.threeMonths.maxAge
 
+    enum ImageTextIndexState: Equatable {
+        case none, indexed, indexing
+    }
+
+    private(set) var imageTextSearchEnabled = true
+    @Published private(set) var imageTextIndexState: ImageTextIndexState = .none
+
     private static let memoryWindow = 1000
     private var lastPrunedAt = Date.distantPast
 
@@ -137,6 +144,9 @@ final class ClipboardStore: ObservableObject {
     private var pendingSearchMetadata: [SearchMetadataUpdate] = []
     private var searchMetadataTask: Task<Void, Never>?
     private var imageOCRTask: Task<Void, Never>?
+    /// A snapshot of historical IDs; new captures never join a manual rebuild while search is off.
+    private var imageOCRRebuildIDs: [ClipboardItem.ID]?
+    private var imageTextSearchGeneration: UInt64 = 0
     private let recognizeImage: @Sendable (URL) async -> ClipboardImageOCRResult
 
     init(
@@ -306,6 +316,7 @@ final class ClipboardStore: ObservableObject {
         stackMembership.removeValue(forKey: item.id)
         deleteBlob(item)
         items.removeAll { $0.id == item.id }
+        refreshImageTextIndexState()
         return true
     }
 
@@ -353,6 +364,7 @@ final class ClipboardStore: ObservableObject {
             scheduleSearchMetadataUpdate(for: restored)
             startImageOCRWorkerIfNeeded()
         }
+        refreshImageTextIndexState()
         return restored
     }
 
@@ -371,8 +383,10 @@ final class ClipboardStore: ObservableObject {
 
     func clearAll() {
         captureGeneration &+= 1
+        imageTextSearchGeneration &+= 1
         searchMetadataTask?.cancel()
         imageOCRTask?.cancel()
+        imageOCRRebuildIDs = nil
         pendingSearchMetadata.removeAll()
         guard sqlite3_exec(db, "DELETE FROM items", nil, nil, nil) == SQLITE_OK else { return }
         discardDeletion()
@@ -381,6 +395,7 @@ final class ClipboardStore: ObservableObject {
         stackMembership.removeAll()
         try? FileManager.default.removeItem(at: imagesDir)
         try? FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
+        refreshImageTextIndexState()
     }
 
     func imageURL(for item: ClipboardItem) -> URL? {
@@ -468,6 +483,7 @@ final class ClipboardStore: ObservableObject {
         for url in contents.imageURLs {
             try? FileManager.default.removeItem(at: url)
         }
+        refreshImageTextIndexState()
         return true
     }
 
@@ -563,6 +579,96 @@ final class ClipboardStore: ObservableObject {
         return stepAndReset(stmt)
     }
 
+    func setImageTextSearchEnabled(_ enabled: Bool) {
+        guard imageTextSearchEnabled != enabled else { return }
+        imageTextSearchEnabled = enabled
+        imageTextSearchGeneration &+= 1
+        if enabled {
+            startImageOCRWorkerIfNeeded()
+        } else {
+            imageOCRRebuildIDs = nil
+            imageOCRTask?.cancel()
+        }
+        revision &+= 1
+    }
+
+    func imageTextIndexImageCount() -> Int {
+        guard let stmt = prepare("SELECT COUNT(*) FROM items WHERE kind = 'image'") else { return 0 }
+        defer { sqlite3_finalize(stmt) }
+        return sqlite3_step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int64(stmt, 0)) : 0
+    }
+
+    @discardableResult
+    func clearImageTextIndex() -> Bool {
+        guard sqlite3_exec(db, """
+            UPDATE items SET ocr_text = NULL, pinyin = NULL, pinyin_initials = NULL,
+                             ocr_status = 'complete', ocr_version = \(ClipboardImageTextRecognition.version)
+            WHERE kind = 'image' AND ocr_text IS NOT NULL
+            """, nil, nil, nil) == SQLITE_OK else { return false }
+        imageTextSearchGeneration &+= 1
+        imageOCRTask?.cancel()
+        imageOCRRebuildIDs = nil
+
+        func cleared(_ item: ClipboardItem) -> ClipboardItem {
+            guard item.kind == .image, let metadata = item.imageOCR, metadata.text != nil else {
+                return item
+            }
+            return item.withImageOCR(ClipboardImageOCR(
+                text: nil, status: .complete, version: ClipboardImageTextRecognition.version,
+                attempts: metadata.attempts))
+        }
+        // Update the resident overlay and undo snapshot before publishing a search revision.
+        if let entry = deletedEntry {
+            deletedEntry = DeletedEntry(
+                item: cleared(entry.item), stackID: entry.stackID, imageBackup: entry.imageBackup)
+        }
+        items = items.map(cleared)
+        refreshImageTextIndexState()
+        return true
+    }
+
+    @discardableResult
+    func rebuildImageTextIndex() -> Bool {
+        guard imageOCRTask == nil else { return false }
+        var ids: [ClipboardItem.ID] = []
+        guard transaction({
+            guard let stmt = prepare("SELECT id FROM items WHERE kind = 'image' ORDER BY created_at, rowid")
+            else { return false }
+            defer { sqlite3_finalize(stmt) }
+            var status = sqlite3_step(stmt)
+            while status == SQLITE_ROW {
+                if let id = ClipboardSQLite.columnString(stmt, 0).flatMap(UUID.init(uuidString:)) {
+                    ids.append(id)
+                }
+                status = sqlite3_step(stmt)
+            }
+            guard status == SQLITE_DONE else { return false }
+            return sqlite3_exec(db, """
+                UPDATE items SET ocr_status = NULL, ocr_version = NULL, ocr_attempts = 0
+                WHERE kind = 'image'
+                """, nil, nil, nil) == SQLITE_OK
+        }) else { return false }
+        imageTextSearchGeneration &+= 1
+        imageOCRRebuildIDs = ids
+        startImageOCRWorkerIfNeeded()
+        revision &+= 1
+        return true
+    }
+
+    private func refreshImageTextIndexState() {
+        let state: ImageTextIndexState
+        if imageOCRTask != nil {
+            state = .indexing
+        } else {
+            guard let stmt = prepare("SELECT EXISTS(SELECT 1 FROM items WHERE kind = 'image' AND ocr_text IS NOT NULL)")
+            else { return }
+            defer { sqlite3_finalize(stmt) }
+            guard sqlite3_step(stmt) == SQLITE_ROW else { return }
+            state = sqlite3_column_int(stmt, 0) == 0 ? .none : .indexed
+        }
+        if imageTextIndexState != state { imageTextIndexState = state }
+    }
+
     /// Query the complete history in pages. All filters run in SQLite before the page limit.
     /// The resident overlay keeps newly captured Han text searchable while its pinyin index is written.
     func searchAsync(
@@ -572,10 +678,12 @@ final class ClipboardStore: ObservableObject {
     ) async -> ClipboardSearchPage {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let path = dbURL.path
+        let includesImageText = imageTextSearchEnabled
+        let imageGeneration = imageTextSearchGeneration
         let databaseTask = Task.detached(priority: .userInitiated) {
             ClipboardSearch.queryDatabase(
                 path: path, query: trimmed, kind: kind, stackID: stackID,
-                after: cursor, limit: limit)
+                after: cursor, limit: limit, includesImageText: includesImageText)
         }
         let membership = stackMembership
         let resident = cursor == nil && !trimmed.isEmpty ? items.filter {
@@ -587,7 +695,7 @@ final class ClipboardStore: ObservableObject {
         } onCancel: {
             databaseTask.cancel()
         }
-        guard !Task.isCancelled, let databasePage else {
+        guard !Task.isCancelled, imageGeneration == imageTextSearchGeneration, let databasePage else {
             return ClipboardSearchPage(items: [], nextCursor: nil)
         }
         guard !resident.isEmpty else { return databasePage }
@@ -599,7 +707,9 @@ final class ClipboardStore: ObservableObject {
             var matches: [ClipboardItem] = []
             for item in resident {
                 guard !Task.isCancelled else { return [ClipboardItem]() }
-                if !databaseIDs.contains(item.id), item.matches(trimmed) {
+                if !databaseIDs.contains(item.id),
+                    item.matches(trimmed, includeImageText: includesImageText)
+                {
                     matches.append(item)
                 }
             }
@@ -610,7 +720,7 @@ final class ClipboardStore: ObservableObject {
         } onCancel: {
             residentTask.cancel()
         }
-        guard !Task.isCancelled else {
+        guard !Task.isCancelled, imageGeneration == imageTextSearchGeneration else {
             return ClipboardSearchPage(items: [], nextCursor: nil)
         }
         guard !residentResult.isEmpty else { return databasePage }
@@ -626,11 +736,22 @@ final class ClipboardStore: ObservableObject {
     }
 
     func waitForImageOCR() async {
-        await imageOCRTask?.value
+        while let task = imageOCRTask { await task.value }
     }
 
     /// Query the entire history through a partial index, independent of the resident 1,000 rows.
     private func nextImageOCRItem() -> ClipboardItem? {
+        if imageOCRRebuildIDs != nil, !imageTextSearchEnabled {
+            while let id = imageOCRRebuildIDs?.last {
+                if let item = loadItem(id: id), item.kind == .image,
+                    item.imageOCR == nil || (item.imageOCR?.status == .failed
+                        && (item.imageOCR?.attempts ?? 0) < ClipboardImageTextRecognition.maxAttempts)
+                { return item }
+                imageOCRRebuildIDs?.removeLast()
+            }
+            return nil
+        }
+        guard imageTextSearchEnabled else { return nil }
         guard let stmt = prepare("""
             SELECT id, kind, text, image_path, created_at, source_app,
                    image_fingerprint, custom_title, last_used_at,
@@ -645,12 +766,21 @@ final class ClipboardStore: ObservableObject {
     }
 
     private func startImageOCRWorkerIfNeeded() {
-        guard imageOCRTask == nil, nextImageOCRItem() != nil else { return }
+        guard imageOCRTask == nil else { return }
+        guard nextImageOCRItem() != nil else {
+            imageOCRRebuildIDs = nil
+            refreshImageTextIndexState()
+            return
+        }
         let recognize = recognizeImage
+        let rebuilding = imageOCRRebuildIDs != nil
         imageOCRTask = Task(priority: .utility) { [weak self] in
+            var completedRebuild = false
             defer {
                 self?.imageOCRTask = nil
-                if Task.isCancelled { self?.startImageOCRWorkerIfNeeded() }
+                self?.imageOCRRebuildIDs = nil
+                self?.refreshImageTextIndexState()
+                if Task.isCancelled || completedRebuild { self?.startImageOCRWorkerIfNeeded() }
             }
             while !Task.isCancelled, let item = self?.nextImageOCRItem() {
                 guard let generation = self?.captureGeneration else { return }
@@ -689,12 +819,15 @@ final class ClipboardStore: ObservableObject {
                     try? await Task.sleep(for: .seconds(1))
                     guard !Task.isCancelled else { return }
                     guard self?.saveImageOCR(metadata.0, forms: metadata.1, for: item,
-                                            generation: generation) == true else { return }
+                                            generation: generation) == true
+                    else { return }
                 }
                 // Yield between images so a large backfill cannot monopolize the app.
                 try? await Task.sleep(for: .milliseconds(25))
             }
+            completedRebuild = rebuilding && !Task.isCancelled
         }
+        refreshImageTextIndexState()
     }
 
     private func saveImageOCR(
@@ -729,6 +862,7 @@ final class ClipboardStore: ObservableObject {
         } else {
             revision &+= 1
         }
+        refreshImageTextIndexState()
         return true
     }
 
@@ -942,6 +1076,7 @@ final class ClipboardStore: ObservableObject {
         if items.last.map({ $0.createdAt < cutoff }) == true {
             items.removeAll { $0.createdAt < cutoff }
         }
+        refreshImageTextIndexState()
     }
 
     private func deleteBlob(_ item: ClipboardItem) {

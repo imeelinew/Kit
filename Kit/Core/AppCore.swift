@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import KeyboardShortcuts
 
 @MainActor
@@ -25,6 +26,7 @@ final class AppCore {
     private var transferGeneration = UUID()
     private var clipboardResumeTask: Task<Void, Never>?
     private var clipboardShortcutIsDown = false
+    private var imageTextSearchObserver: AnyCancellable?
 
     private convenience init() {
         self.init(clipboardStore: ClipboardStore())
@@ -33,6 +35,10 @@ final class AppCore {
     init(clipboardStore: ClipboardStore) {
         self.clipboardStore = clipboardStore
         clipboardManager = ClipboardManager(store: clipboardStore, settings: settings)
+        imageTextSearchObserver = settings.$imageTextSearchEnabled
+            .sink { [weak clipboardStore] enabled in
+                clipboardStore?.setImageTextSearchEnabled(enabled)
+            }
     }
 
     func start() {
