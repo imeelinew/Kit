@@ -62,7 +62,7 @@ enum SearchHighlight {
         source: String, query: String
     ) -> [Range<String.Index>] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !needle.isEmpty, !source.isEmpty else { return [] }
+        guard !Task.isCancelled, !needle.isEmpty, !source.isEmpty else { return [] }
         var ranges = literalRanges(source: source, query: needle)
         if Pinyin.queryLooksLatin(needle) {
             ranges.append(contentsOf: Pinyin.matchingSourceRanges(query: needle, text: source))
@@ -73,7 +73,7 @@ enum SearchHighlight {
     private static func literalRanges(source: String, query: String) -> [Range<String.Index>] {
         var ranges: [Range<String.Index>] = []
         var searchStart = source.startIndex
-        while searchStart < source.endIndex,
+        while !Task.isCancelled, searchStart < source.endIndex,
             let range = source.range(
                 of: query,
                 options: [.caseInsensitive, .diacriticInsensitive],

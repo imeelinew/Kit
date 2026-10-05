@@ -1,11 +1,134 @@
 import Foundation
 
-/// Mandarin romanization helpers for clipboard search (Foundation/`CFStringTransform` only).
+/// Mandarin romanization helpers shared by indexed search, resident entries, and highlights.
 enum Pinyin {
     struct SearchForms: Sendable {
         let full: String
         let initials: String
     }
+
+    /// UTF-16 offsets belong to the exact source bytes, so canonically equivalent strings
+    /// with different encodings never share incompatible highlight positions.
+    struct SourceIndex: Sendable {
+        let forms: SearchForms
+        let sourceRanges: [NSRange]
+        let fullEnds: [Int]
+        let initialEnds: [Int]
+
+        func matchingRanges(query: String) -> [NSRange] {
+            let full = ranges(in: forms.full, ends: fullEnds, query: query)
+            return full.isEmpty ? ranges(in: forms.initials, ends: initialEnds, query: query) : full
+        }
+
+        private func ranges(in spelling: String, ends: [Int], query: String) -> [NSRange] {
+            let spelling = spelling as NSString
+            var start = 0
+            var result: [NSRange] = []
+            while start < spelling.length {
+                guard !Task.isCancelled else { return [] }
+                let match = spelling.range(of: query, range: NSRange(location: start, length: spelling.length - start))
+                guard match.location != NSNotFound else { break }
+                let first = syllable(at: match.location, ends: ends)
+                let last = syllable(at: NSMaxRange(match) - 1, ends: ends)
+                guard sourceRanges.indices.contains(first), sourceRanges.indices.contains(last) else { break }
+                result.append(NSRange(location: sourceRanges[first].location,
+                                      length: NSMaxRange(sourceRanges[last]) - sourceRanges[first].location))
+                start = NSMaxRange(match)
+            }
+            return result
+        }
+
+        private func syllable(at offset: Int, ends: [Int]) -> Int {
+            var lower = 0
+            var upper = ends.count
+            while lower < upper {
+                let middle = (lower + upper) / 2
+                if ends[middle] <= offset { lower = middle + 1 } else { upper = middle }
+            }
+            return lower
+        }
+    }
+
+    /// NSCache is thread-safe. Only a cold character conversion holds the lock; completed
+    /// source indexes and character hits remain available to independent search workers.
+    final class Cache: @unchecked Sendable {
+        private final class IndexBox {
+            let value: SourceIndex
+            init(_ value: SourceIndex) { self.value = value }
+        }
+        private final class TokenBox {
+            let value: String
+            init(_ value: String) { self.value = value }
+        }
+        private let sources = NSCache<NSData, IndexBox>()
+        private let characters = NSCache<NSData, TokenBox>()
+        private let conversionLock = NSLock()
+        private let convert: @Sendable (String) -> String
+
+        init(convert: @escaping @Sendable (String) -> String = Pinyin.romanize) {
+            self.convert = convert
+            sources.countLimit = 2048
+            sources.totalCostLimit = 8 * 1024 * 1024
+            characters.countLimit = 4096
+        }
+
+        func index(for text: String) -> SourceIndex? {
+            guard !Task.isCancelled else { return nil }
+            let key = Data(text.utf8) as NSData
+            if let hit = sources.object(forKey: key) { return hit.value }
+            var full = ""
+            var initials = ""
+            var sourceRanges: [NSRange] = []
+            var fullEnds: [Int] = []
+            var initialEnds: [Int] = []
+            var sourceOffset = 0
+            var fullOffset = 0
+            var initialOffset = 0
+            var index = text.startIndex
+            while index < text.endIndex {
+                guard !Task.isCancelled else { return nil }
+                let next = text.index(after: index)
+                let length = text[index..<next].utf16.count
+                if containsHan(text[index]) {
+                    guard let syllable = token(for: String(text[index..<next])) else { return nil }
+                    if let initial = syllable.first {
+                        full += syllable
+                        initials.append(initial)
+                        fullOffset += syllable.utf16.count
+                        initialOffset += String(initial).utf16.count
+                        sourceRanges.append(NSRange(location: sourceOffset, length: length))
+                        fullEnds.append(fullOffset)
+                        initialEnds.append(initialOffset)
+                    }
+                }
+                sourceOffset += length
+                index = next
+            }
+            guard !Task.isCancelled else { return nil }
+            let value = SourceIndex(forms: SearchForms(full: full, initials: initials),
+                                    sourceRanges: sourceRanges, fullEnds: fullEnds, initialEnds: initialEnds)
+            let cost = key.length + full.utf8.count + initials.utf8.count
+                + sourceRanges.count * MemoryLayout<NSRange>.stride
+                + (fullEnds.count + initialEnds.count) * MemoryLayout<Int>.stride
+            sources.setObject(IndexBox(value), forKey: key, cost: cost)
+            return value
+        }
+
+        private func token(for character: String) -> String? {
+            let key = Data(character.utf8) as NSData
+            if let hit = characters.object(forKey: key) { return hit.value }
+            conversionLock.lock()
+            defer { conversionLock.unlock() }
+            guard !Task.isCancelled else { return nil }
+            if let hit = characters.object(forKey: key) { return hit.value }
+            let token = compact(convert(character))
+            guard !Task.isCancelled else { return nil }
+            characters.setObject(TokenBox(token), forKey: key)
+            return token
+        }
+    }
+
+    private static let cache = Cache()
 
     /// True when `query` is ASCII letters/spaces/apostrophes — the shape of typed pinyin.
     static func queryLooksLatin(_ query: String) -> Bool {
@@ -24,26 +147,16 @@ enum Pinyin {
     }
 
     static func matches(query: String, text: String) -> Bool {
-        !matchingSourceRanges(query: query, text: text).isEmpty
+        let query = compact(query)
+        guard !query.isEmpty, let index = cache.index(for: text) else { return false }
+        return index.forms.full.contains(query) || index.forms.initials.contains(query)
     }
 
-    /// Source-character ranges whose Mandarin pinyin (full spelling or initials) contains `query`.
+    /// Matching uses cached spelling and UTF-16 positions; bool-only search never allocates ranges.
     static func matchingSourceRanges(query: String, text: String) -> [Range<String.Index>] {
-        let q = compact(query)
-        guard !q.isEmpty else { return [] }
-
-        let syllables = syllables(of: text)
-        guard !syllables.isEmpty else { return [] }
-
-        var ranges = rangesMatching(
-            query: q, syllables: syllables,
-            token: \.compact)
-        if ranges.isEmpty {
-            ranges = rangesMatching(
-                query: q, syllables: syllables,
-                token: \.initial)
-        }
-        return ranges
+        let query = compact(query)
+        guard !query.isEmpty, let index = cache.index(for: text) else { return [] }
+        return index.matchingRanges(query: query).compactMap { Range($0, in: text) }
     }
 
     private static func romanize(_ text: String) -> String {
@@ -53,84 +166,13 @@ enum Pinyin {
         return (mutable as String).lowercased()
     }
 
-    /// Persistent search terms contain only Han characters. Latin text already has a literal FTS
-    /// path, so excluding it avoids thousands of unnecessary Core Foundation transforms for the
-    /// overwhelmingly common English query.
+    /// Persistent search forms cover Han characters; Latin text already has a literal FTS path.
     static func searchForms(for text: String) -> SearchForms {
-        var full = ""
-        var initials = ""
-        for character in text where containsHan(character) {
-            let syllable = compact(romanize(String(character)))
-            guard !syllable.isEmpty else { continue }
-            full += syllable
-            initials.append(syllable.first!)
-        }
-        return SearchForms(full: full, initials: initials)
+        cache.index(for: text)?.forms ?? SearchForms(full: "", initials: "")
     }
 
     static func containsHan(_ text: String) -> Bool {
         text.contains(where: containsHan)
-    }
-
-    private struct Syllable {
-        let range: Range<String.Index>
-        let compact: String
-        let initial: String
-    }
-
-    private static func syllables(of text: String) -> [Syllable] {
-        var result: [Syllable] = []
-        var index = text.startIndex
-        while index < text.endIndex {
-            let next = text.index(after: index)
-            let unit = String(text[index..<next])
-            guard containsHan(text[index]) else {
-                index = next
-                continue
-            }
-            let romanized = compact(romanize(unit))
-            if !romanized.isEmpty {
-                result.append(
-                    Syllable(
-                        range: index..<next,
-                        compact: romanized,
-                        initial: String(romanized.prefix(1))))
-            }
-            index = next
-        }
-        return result
-    }
-
-    private static func rangesMatching(
-        query: String, syllables: [Syllable],
-        token: KeyPath<Syllable, String>
-    ) -> [Range<String.Index>] {
-        var concat = ""
-        var map: [Int] = []
-        for (syllableIndex, syllable) in syllables.enumerated() {
-            let piece = syllable[keyPath: token]
-            guard !piece.isEmpty else { continue }
-            for _ in piece {
-                map.append(syllableIndex)
-            }
-            concat += piece
-        }
-        guard !concat.isEmpty, !map.isEmpty else { return [] }
-
-        var ranges: [Range<String.Index>] = []
-        var searchStart = concat.startIndex
-        while searchStart < concat.endIndex,
-            let match = concat.range(of: query, range: searchStart..<concat.endIndex)
-        {
-            let lowerOffset = concat.distance(from: concat.startIndex, to: match.lowerBound)
-            let upperOffset = concat.distance(from: concat.startIndex, to: match.upperBound) - 1
-            guard map.indices.contains(lowerOffset), map.indices.contains(upperOffset) else { break }
-            let start = syllables[map[lowerOffset]].range.lowerBound
-            let end = syllables[map[upperOffset]].range.upperBound
-            ranges.append(start..<end)
-            searchStart = match.upperBound
-        }
-        return ranges
     }
 
     private static func compact(_ string: String) -> String {
@@ -149,4 +191,3 @@ enum Pinyin {
         }
     }
 }
-

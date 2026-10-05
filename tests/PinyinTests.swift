@@ -4,11 +4,41 @@ import Foundation
 /// of typed pinyin queries, per-character syllable conversion, and source range mapping.
 @main
 struct PinyinTests {
+    final class ConversionProbe: @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+        let entered = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        private var blocksOnce: Bool
+
+        init(blocksOnce: Bool = false) { self.blocksOnce = blocksOnce }
+
+        var calls: Int { lock.withLock { count } }
+
+        func convert(_ character: String) -> String {
+            let blocks = lock.withLock {
+                count += 1
+                let blocks = blocksOnce
+                blocksOnce = false
+                return blocks
+            }
+            if blocks {
+                entered.signal()
+                precondition(release.wait(timeout: .now() + 5) == .success)
+            }
+            switch character {
+            case "你": return "ni"
+            case "好": return "hao"
+            default: preconditionFailure("Unexpected fixture character")
+            }
+        }
+    }
+
     static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
         precondition(condition(), message)
     }
 
-    static func main() {
+    static func main() async {
         // Typed-pinyin shape: ASCII letters, spaces, and apostrophes only.
         expect(Pinyin.queryLooksLatin("nihao"), "Plain pinyin looks Latin")
         expect(Pinyin.queryLooksLatin("ni hao"), "Spaces are allowed")
@@ -73,6 +103,45 @@ struct PinyinTests {
         expect(Pinyin.matchingSourceRanges(query: "hao", text: "hello").isEmpty,
                "No ranges without Han syllables")
 
+        for query in ["NI HAO", "ni'hao", "n h"] {
+            expect(Pinyin.matches(query: query, text: "你好"), "Query compaction remains compatible")
+        }
+        for source in ["é你好🙂谢谢", "e\u{301}你好🙂谢谢"] {
+            let ranges = Pinyin.matchingSourceRanges(query: "nihao", text: source)
+            expect(ranges.count == 1 && NSRange(ranges[0], in: source) == (source as NSString).range(of: "你好"),
+                   "Equivalent Unicode encodings retain their own UTF-16 highlight offsets")
+        }
+        let separated = "你🙂a好"
+        expect(Pinyin.matchingSourceRanges(query: "nihao", text: separated).first == separated.startIndex..<separated.endIndex,
+               "Mapped pinyin still spans intervening non-Han characters and emoji")
+
+        let probe = ConversionProbe()
+        let cache = Pinyin.Cache(convert: { probe.convert($0) })
+        let repeated = String(repeating: "你好", count: 500)
+        let cached = cache.index(for: repeated)!
+        expect(cached.forms.full == String(repeating: "nihao", count: 500), "Cached full spelling is complete")
+        expect(cached.matchingRanges(query: "nihao").count == 500, "Cached positions cover every repeated hit")
+        expect(probe.calls == 2, "Cold indexing converts each distinct character once")
+        _ = cache.index(for: repeated)
+        await withTaskGroup(of: Bool.self) { group in
+            for index in 0..<24 {
+                group.addTask { cache.index(for: "\(index)你好")?.forms.full == "nihao" }
+            }
+            for await complete in group { expect(complete, "Concurrent indexing retains complete spelling") }
+        }
+        expect(probe.calls == 2, "Warm source and independent workers reuse character conversions")
+
+        let blocking = ConversionProbe(blocksOnce: true)
+        let cancelledCache = Pinyin.Cache(convert: { blocking.convert($0) })
+        let task = Task.detached { cancelledCache.index(for: "你好") }
+        expect(blocking.entered.wait(timeout: .now() + 5) == .success, "Conversion started")
+        task.cancel()
+        blocking.release.signal()
+        let cancelled = await task.value
+        expect(cancelled == nil, "Cancellation stops index construction without publishing partial spelling")
+        expect(cancelledCache.index(for: "你好")?.forms.full == "nihao", "A retry builds a complete index after cancellation")
+
         print("PASS: query shape, Han detection, search forms, full/initial matching, source ranges")
+        print("PASS: exact Unicode offsets, shared bounded spelling cache, concurrent reuse and cancelled construction")
     }
 }

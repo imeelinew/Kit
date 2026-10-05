@@ -102,6 +102,34 @@ struct ClipboardSearchTests {
         let malformed = await store.searchAsync("\"hi", after: nil, limit: 5)
         expect(malformed.items.isEmpty && malformed.nextCursor == nil,
                "Malformed queries degrade to an empty page at the store layer too")
+
+        let titlePinyin = await store.searchAsync("chao shi", after: nil, limit: 7)
+        expect(titlePinyin.items.contains { $0.id == titled.id },
+               "Resident overlay preserves compacted pinyin matches in custom titles")
+        let greeting = store.addText("你好世界", kind: .text, sourceBundleID: nil)!
+        let immediate = await store.searchAsync("nihao", after: nil, limit: 7)
+        expect(immediate.items.contains { $0.id == greeting.id },
+               "A fresh capture stays searchable while its metadata is being indexed")
+        await store.waitForSearchMetadata()
+        for query in ["NI HAO", "ni'hao", "n h"] {
+            let compacted = await store.searchAsync(query, after: nil, limit: 7)
+            expect(compacted.items.contains { $0.id == greeting.id },
+                   "Indexed entries still support spaced and apostrophe pinyin through the overlay")
+        }
+
+        let entered = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        let cancelledQuery = Task.detached {
+            entered.signal()
+            precondition(release.wait(timeout: .now() + 5) == .success)
+            return ClipboardSearch.queryDatabase(path: database, query: "no match", kind: nil,
+                                                 stackID: nil, after: nil, limit: 7)
+        }
+        expect(entered.wait(timeout: .now() + 5) == .success, "Query worker started")
+        cancelledQuery.cancel()
+        release.signal()
+        let cancelledPage = await cancelledQuery.value
+        expect(cancelledPage == nil, "An already cancelled query performs no database search")
     }
 
     @MainActor

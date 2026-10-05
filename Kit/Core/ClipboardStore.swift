@@ -577,22 +577,40 @@ final class ClipboardStore: ObservableObject {
                 path: path, query: trimmed, kind: kind, stackID: stackID,
                 after: cursor, limit: limit)
         }
-        let resident = cursor == nil && !trimmed.isEmpty ? items : []
         let membership = stackMembership
-        let residentTask = Task.detached(priority: .userInitiated) {
-            resident.filter {
-                $0.matches(trimmed)
-                    && (kind == nil || $0.kind == kind)
-                    && (stackID == nil || membership[$0.id] == stackID)
-            }
-        }
-        let (databasePage, residentResult) = await withTaskCancellationHandler {
-            await (databaseTask.value, residentTask.value)
+        let resident = cursor == nil && !trimmed.isEmpty ? items.filter {
+            (kind == nil || $0.kind == kind)
+                && (stackID == nil || membership[$0.id] == stackID)
+        } : []
+        let databasePage = await withTaskCancellationHandler {
+            await databaseTask.value
         } onCancel: {
             databaseTask.cancel()
-            residentTask.cancel()
         }
         guard !Task.isCancelled, let databasePage else {
+            return ClipboardSearchPage(items: [], nextCursor: nil)
+        }
+        guard !resident.isEmpty else { return databasePage }
+
+        // Titles, compacted pinyin, and Unicode matching still need the resident overlay.
+        // Database hits are already authoritative and never need to be matched twice.
+        let databaseIDs = Set(databasePage.items.map(\.id))
+        let residentTask = Task.detached(priority: .userInitiated) {
+            var matches: [ClipboardItem] = []
+            for item in resident {
+                guard !Task.isCancelled else { return [ClipboardItem]() }
+                if !databaseIDs.contains(item.id), item.matches(trimmed) {
+                    matches.append(item)
+                }
+            }
+            return matches
+        }
+        let residentResult = await withTaskCancellationHandler {
+            await residentTask.value
+        } onCancel: {
+            residentTask.cancel()
+        }
+        guard !Task.isCancelled else {
             return ClipboardSearchPage(items: [], nextCursor: nil)
         }
         guard !residentResult.isEmpty else { return databasePage }

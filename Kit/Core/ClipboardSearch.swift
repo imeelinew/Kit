@@ -23,6 +23,7 @@ enum ClipboardSearch {
         path: String, query: String, kind: ClipboardItem.Kind?,
         stackID: ClipboardStack.ID?, after cursor: ClipboardSearchCursor?, limit: Int
     ) -> ClipboardSearchPage? {
+        guard !Task.isCancelled else { return nil }
         var connection: OpaquePointer?
         guard sqlite3_open_v2(path, &connection, SQLITE_OPEN_READONLY, nil) == SQLITE_OK,
             let connection
@@ -32,6 +33,8 @@ enum ClipboardSearch {
         }
         defer { sqlite3_close_v2(connection) }
         sqlite3_busy_timeout(connection, 500)
+        // Interrupt cancelled scans inside sqlite3_step, including no-result short queries.
+        sqlite3_progress_handler(connection, 1000, { _ in Task.isCancelled ? 1 : 0 }, nil)
 
         let escaped = query
             .replacingOccurrences(of: "\\", with: "\\\\")
@@ -178,6 +181,7 @@ enum ClipboardSearch {
         for entry in batch {
             guard !Task.isCancelled else { return false }
             let forms = Pinyin.searchForms(for: entry.text)
+            guard !Task.isCancelled else { return false }
             sqlite3_bind_text(update, 1, forms.full, -1, SQLITE_TRANSIENT)
             sqlite3_bind_text(update, 2, forms.initials, -1, SQLITE_TRANSIENT)
             sqlite3_bind_text(update, 3, entry.id, -1, SQLITE_TRANSIENT)
@@ -186,6 +190,7 @@ enum ClipboardSearch {
             sqlite3_clear_bindings(update)
             guard status == SQLITE_DONE else { return false }
         }
+        guard !Task.isCancelled else { return false }
         committed = sqlite3_exec(connection, "COMMIT", nil, nil, nil) == SQLITE_OK
         return committed
     }
