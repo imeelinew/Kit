@@ -7,11 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		CAE000000000000000000001 /* ClipboardDateSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAE000000000000000000002 /* ClipboardDateSection.swift */; };
-		CAD000000000000000000001 /* ImageSearchHighlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD000000000000000000002 /* ImageSearchHighlight.swift */; };
-		CAC000000000000000000001 /* ClipboardImageOCR.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC000000000000000000002 /* ClipboardImageOCR.swift */; };
-		ACA000000000000000000003 /* TextFieldPasteTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA000000000000000000004 /* TextFieldPasteTarget.swift */; };
-		ACA000000000000000000001 /* ApplicationMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA000000000000000000002 /* ApplicationMenu.swift */; };
 		02CB1E90666F628DBF9C7C78 /* EdgeDissolve.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6853210949502E0C47D69B9 /* EdgeDissolve.swift */; };
 		068B6C43C18DB6110AED985B /* PopoverMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C234D84C11C94266A6B560D /* PopoverMenu.swift */; };
 		07650D1993A6D4C0D5B7ACD8 /* PalettePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123A20E6FCB60D259A0CC145 /* PalettePanel.swift */; };
@@ -46,6 +41,8 @@
 		A9BFCCAECCC68D9444932887 /* ClipboardManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08EBA3DF42E6A3D8518C909 /* ClipboardManager.swift */; };
 		AA1000000000000000000001 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000002 /* UpdateService.swift */; };
 		AA1000000000000000000003 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = AA1000000000000000000004 /* Sparkle */; };
+		ACA000000000000000000001 /* ApplicationMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA000000000000000000002 /* ApplicationMenu.swift */; };
+		ACA000000000000000000003 /* TextFieldPasteTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA000000000000000000004 /* TextFieldPasteTarget.swift */; };
 		B1C2D3E4F5061728394A5B6C /* PinnedImageWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* PinnedImageWindow.swift */; };
 		B9424F6046260D72728A48DD /* GeneralSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1779D1C157B1B6F9C37365 /* GeneralSettingsView.swift */; };
 		BB41A0000000000000000002 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB41A0000000000000000001 /* MenuBarController.swift */; };
@@ -58,15 +55,18 @@
 		CA1000000000000000000001 /* ClipboardItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1000000000000000000002 /* ClipboardItem.swift */; };
 		CA2000000000000000000001 /* Pinyin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA2000000000000000000002 /* Pinyin.swift */; };
 		CA3000000000000000000001 /* ClipboardTextClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3000000000000000000002 /* ClipboardTextClassifier.swift */; };
-		CA6000000000000000000001 /* TypeSafeClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA6000000000000000000002 /* TypeSafeClassifier.swift */; };
-		CAA000000000000000000001 /* ExperimentsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAA000000000000000000002 /* ExperimentsSettingsView.swift */; };
 		CA4000000000000000000001 /* ClipboardTableCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA4000000000000000000002 /* ClipboardTableCells.swift */; };
 		CA5000000000000000000001 /* ClipboardPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5000000000000000000002 /* ClipboardPreview.swift */; };
+		CA6000000000000000000001 /* TypeSafeClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA6000000000000000000002 /* TypeSafeClassifier.swift */; };
 		CA7000000000000000000001 /* PinnedImageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7000000000000000000002 /* PinnedImageViews.swift */; };
 		CA7100000000000000000001 /* PinnedImageGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7100000000000000000002 /* PinnedImageGeometry.swift */; };
 		CA7200000000000000000001 /* PinnedImagePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7200000000000000000002 /* PinnedImagePanel.swift */; };
 		CA8000000000000000000001 /* ClipboardSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8000000000000000000002 /* ClipboardSearch.swift */; };
 		CA9000000000000000000001 /* ClipboardSQLite.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA9000000000000000000002 /* ClipboardSQLite.swift */; };
+		CAA000000000000000000001 /* ExperimentsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAA000000000000000000002 /* ExperimentsSettingsView.swift */; };
+		CAC000000000000000000001 /* ClipboardImageOCR.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC000000000000000000002 /* ClipboardImageOCR.swift */; };
+		CAD000000000000000000001 /* ImageSearchHighlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD000000000000000000002 /* ImageSearchHighlight.swift */; };
+		CAE000000000000000000001 /* ClipboardDateSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAE000000000000000000002 /* ClipboardDateSection.swift */; };
 		CE1562B33E657CF448D04DDC /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = 40E3D8D2C77ADCC20CD390CC /* KeyboardShortcuts */; };
 		D1F4A37B85934AE6A943621C /* Markdown in Frameworks */ = {isa = PBXBuildFile; productRef = 36DB9A864D8D41DDA74C4DC7 /* Markdown */; };
 		D39624F103CC42692585154F /* NerdFontsSymbolsOnly-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = DB2357C425F1390F61CEB545 /* NerdFontsSymbolsOnly-LICENSE.txt */; };
@@ -82,11 +82,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		CAE000000000000000000002 /* ClipboardDateSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardDateSection.swift; sourceTree = "<group>"; };
-		CAD000000000000000000002 /* ImageSearchHighlight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSearchHighlight.swift; sourceTree = "<group>"; };
-		CAC000000000000000000002 /* ClipboardImageOCR.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardImageOCR.swift; sourceTree = "<group>"; };
-		ACA000000000000000000004 /* TextFieldPasteTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFieldPasteTarget.swift; sourceTree = "<group>"; };
-		ACA000000000000000000002 /* ApplicationMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationMenu.swift; sourceTree = "<group>"; };
 		0C1D141FBB730290AF3CA00C /* AppCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCore.swift; sourceTree = "<group>"; };
 		11927303CFC909AE918568B6 /* PaletteViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteViewModel.swift; sourceTree = "<group>"; };
 		123A20E6FCB60D259A0CC145 /* PalettePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PalettePanel.swift; sourceTree = "<group>"; };
@@ -117,6 +112,8 @@
 		A490C2CECA4C191B712DB9F2 /* LaunchAtLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLogin.swift; sourceTree = "<group>"; };
 		A5FB3EB883C67D7DA6D8FEAF /* ClipboardCapturePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardCapturePipeline.swift; sourceTree = "<group>"; };
 		AA1000000000000000000002 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
+		ACA000000000000000000002 /* ApplicationMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationMenu.swift; sourceTree = "<group>"; };
+		ACA000000000000000000004 /* TextFieldPasteTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFieldPasteTarget.swift; sourceTree = "<group>"; };
 		AF2FD6AB5017BBFF5EE420A4 /* ImageThumbnail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageThumbnail.swift; sourceTree = "<group>"; };
 		B42062A9B167BB7DCD3E7129 /* ClipboardSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSettingsView.swift; sourceTree = "<group>"; };
 		B83EBAE1FB329C0318507DFB /* PasteTransaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteTransaction.swift; sourceTree = "<group>"; };
@@ -131,15 +128,18 @@
 		CA1000000000000000000002 /* ClipboardItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardItem.swift; sourceTree = "<group>"; };
 		CA2000000000000000000002 /* Pinyin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pinyin.swift; sourceTree = "<group>"; };
 		CA3000000000000000000002 /* ClipboardTextClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTextClassifier.swift; sourceTree = "<group>"; };
-		CA6000000000000000000002 /* TypeSafeClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeSafeClassifier.swift; sourceTree = "<group>"; };
-		CAA000000000000000000002 /* ExperimentsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperimentsSettingsView.swift; sourceTree = "<group>"; };
 		CA4000000000000000000002 /* ClipboardTableCells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTableCells.swift; sourceTree = "<group>"; };
 		CA5000000000000000000002 /* ClipboardPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPreview.swift; sourceTree = "<group>"; };
+		CA6000000000000000000002 /* TypeSafeClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypeSafeClassifier.swift; sourceTree = "<group>"; };
 		CA7000000000000000000002 /* PinnedImageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImageViews.swift; sourceTree = "<group>"; };
 		CA7100000000000000000002 /* PinnedImageGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImageGeometry.swift; sourceTree = "<group>"; };
 		CA7200000000000000000002 /* PinnedImagePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImagePanel.swift; sourceTree = "<group>"; };
 		CA8000000000000000000002 /* ClipboardSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSearch.swift; sourceTree = "<group>"; };
 		CA9000000000000000000002 /* ClipboardSQLite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSQLite.swift; sourceTree = "<group>"; };
+		CAA000000000000000000002 /* ExperimentsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperimentsSettingsView.swift; sourceTree = "<group>"; };
+		CAC000000000000000000002 /* ClipboardImageOCR.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardImageOCR.swift; sourceTree = "<group>"; };
+		CAD000000000000000000002 /* ImageSearchHighlight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSearchHighlight.swift; sourceTree = "<group>"; };
+		CAE000000000000000000002 /* ClipboardDateSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardDateSection.swift; sourceTree = "<group>"; };
 		CE39A396D47F5CC467AA9FA1 /* KitSettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KitSettingsWindowController.swift; sourceTree = "<group>"; };
 		D22A18A2E99B807E7716432E /* InputSourceSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSourceSwitcher.swift; sourceTree = "<group>"; };
 		D3E59B58F324A9600EE4325C /* Kit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Kit.entitlements; sourceTree = "<group>"; };
@@ -564,7 +564,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MARKETING_VERSION = 0.4.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -592,6 +592,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MARKETING_VERSION = 0.4.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -661,7 +662,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MARKETING_VERSION = 0.4.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -690,6 +691,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MARKETING_VERSION = 0.4.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",

@@ -16,7 +16,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
-  <img src="https://img.shields.io/badge/macOS-26%2B-black.svg" alt="macOS 26+">
+  <img src="https://img.shields.io/badge/macOS-27%2B-black.svg" alt="macOS 27+">
   <img src="https://img.shields.io/badge/Swift-6.4-orange.svg" alt="Swift 6.4">
 </p>
 
@@ -56,7 +56,7 @@ Kit needs Accessibility permission to send the selected content back to the app 
 
 ## Build from Source
 
-You need macOS 26, Xcode 27, and Swift 6.4.
+You need macOS 27, Xcode 27, and Swift 6.4.
 
 ```bash
 git clone https://github.com/imeelinew/Kit.git
