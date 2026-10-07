@@ -8,6 +8,8 @@ struct ClipboardSettingsView: View {
 
     var body: some View {
         PreferencesForm {
+            LLMClassificationSettingsSection()
+
             Section("Image Text Search") {
                 Toggle("Search Text in Images", isOn: $settings.imageTextSearchEnabled)
             }

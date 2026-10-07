@@ -186,7 +186,6 @@ private struct SettingsWindowRoot: View {
         case .clipboard: ClipboardSettingsView()
         case .history: HistorySettingsView()
         case .about: AboutSettingsView()
-        case .experiments: ExperimentsSettingsView()
         }
     }
 }

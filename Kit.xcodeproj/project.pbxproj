@@ -64,7 +64,7 @@
 		CA7200000000000000000001 /* PinnedImagePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7200000000000000000002 /* PinnedImagePanel.swift */; };
 		CA8000000000000000000001 /* ClipboardSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8000000000000000000002 /* ClipboardSearch.swift */; };
 		CA9000000000000000000001 /* ClipboardSQLite.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA9000000000000000000002 /* ClipboardSQLite.swift */; };
-		CAA000000000000000000001 /* ExperimentsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAA000000000000000000002 /* ExperimentsSettingsView.swift */; };
+		CAA000000000000000000001 /* LLMClassificationSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAA000000000000000000002 /* LLMClassificationSettingsSection.swift */; };
 		CAC000000000000000000001 /* ClipboardImageOCR.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC000000000000000000002 /* ClipboardImageOCR.swift */; };
 		CAD000000000000000000001 /* ImageSearchHighlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAD000000000000000000002 /* ImageSearchHighlight.swift */; };
 		CAE000000000000000000001 /* ClipboardDateSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAE000000000000000000002 /* ClipboardDateSection.swift */; };
@@ -138,7 +138,7 @@
 		CA7200000000000000000002 /* PinnedImagePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImagePanel.swift; sourceTree = "<group>"; };
 		CA8000000000000000000002 /* ClipboardSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSearch.swift; sourceTree = "<group>"; };
 		CA9000000000000000000002 /* ClipboardSQLite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSQLite.swift; sourceTree = "<group>"; };
-		CAA000000000000000000002 /* ExperimentsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperimentsSettingsView.swift; sourceTree = "<group>"; };
+		CAA000000000000000000002 /* LLMClassificationSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMClassificationSettingsSection.swift; sourceTree = "<group>"; };
 		CAC000000000000000000002 /* ClipboardImageOCR.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardImageOCR.swift; sourceTree = "<group>"; };
 		CAD000000000000000000002 /* ImageSearchHighlight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSearchHighlight.swift; sourceTree = "<group>"; };
 		CAE000000000000000000002 /* ClipboardDateSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardDateSection.swift; sourceTree = "<group>"; };
@@ -273,7 +273,7 @@
 			isa = PBXGroup;
 			children = (
 				B42062A9B167BB7DCD3E7129 /* ClipboardSettingsView.swift */,
-				CAA000000000000000000002 /* ExperimentsSettingsView.swift */,
+				CAA000000000000000000002 /* LLMClassificationSettingsSection.swift */,
 				FC1779D1C157B1B6F9C37365 /* GeneralSettingsView.swift */,
 				CE39A396D47F5CC467AA9FA1 /* KitSettingsWindowController.swift */,
 				9DD90436D7A4A7E354F421DD /* SettingsComponents.swift */,
@@ -450,7 +450,7 @@
 				CA8000000000000000000001 /* ClipboardSearch.swift in Sources */,
 				CA9000000000000000000001 /* ClipboardSQLite.swift in Sources */,
 				739ADE5F09C7B1A660B5BE9F /* ClipboardSettingsView.swift in Sources */,
-				CAA000000000000000000001 /* ExperimentsSettingsView.swift in Sources */,
+				CAA000000000000000000001 /* LLMClassificationSettingsSection.swift in Sources */,
 				E2C25F35DF0B1F8C9960CD38 /* ClipboardStore.swift in Sources */,
 				CA3000000000000000000001 /* ClipboardTextClassifier.swift in Sources */,
 				CA6000000000000000000001 /* TypeSafeClassifier.swift in Sources */,

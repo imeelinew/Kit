@@ -145,7 +145,7 @@ final class AppSettings: ObservableObject {
         static let soundEffectsEnabled = "soundEffectsEnabled"
         static let copySoundEffect = "copySoundEffect"
         static let hapticFeedbackEnabled = "hapticFeedbackEnabled"
-        // Preserve the original opt-in flag when upgrading the experiment.
+        // Preserve the original TypeSafe opt-in flag.
         static let llmClassificationEnabled = "typesafeAIEnabled"
         static let typesafeAPIKey = "typesafeAPIKey"
         static let llmClassificationEngine = "llmClassificationEngine"
@@ -227,7 +227,7 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(hapticFeedbackEnabled, forKey: Key.hapticFeedbackEnabled) }
     }
 
-    /// Experimental: classify captured text exclusively through the selected LLM instead of local rules.
+    /// Classify captured text exclusively through the selected LLM instead of local rules.
     @Published var llmClassificationEnabled: Bool {
         didSet { defaults.set(llmClassificationEnabled, forKey: Key.llmClassificationEnabled) }
     }
