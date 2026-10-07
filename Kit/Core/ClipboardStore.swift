@@ -271,7 +271,7 @@ final class ClipboardStore: ObservableObject {
         return true
     }
 
-    /// Re-grade an existing row's kind (async TypeSafe classification). The row id is stable across
+    /// Re-grade an existing row's kind (async LLM classification). The row id is stable across
     /// recopies of the same content, so a late answer lands on the right item or on nothing if
     /// the item was deleted in the meantime.
     @discardableResult

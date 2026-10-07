@@ -73,7 +73,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
             imageOCR: imageOCR)
     }
 
-    /// Same capture re-graded (async TypeSafe classification); identity and every other field stay.
+    /// Same capture re-graded (async LLM classification); identity and every other field stay.
     func withKind(_ kind: Kind) -> ClipboardItem {
         ClipboardItem(
             id: id, kind: kind, text: text, imagePath: imagePath,

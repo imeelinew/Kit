@@ -20,8 +20,14 @@
 "Clear History" = "Clear History";
 "Check for Updates" = "Check for Updates…";
 "Clipboard" = "Clipboard";
-"Enable TypeSafe AI" = "Enable TypeSafe AI";
-"When enabled, Kit uses the TypeSafe model to classify clipboard text" = "When enabled, Kit uses the TypeSafe model to classify clipboard text";
+"LLM Classification" = "LLM Classification";
+"Enable LLM Classification" = "Enable LLM Classification";
+"Classification Engine" = "Classification Engine";
+"API Channel" = "API Channel";
+"Official API" = "Official API";
+"TypeSafe API Key" = "TypeSafe API Key";
+"OpenAI API Key" = "OpenAI API Key";
+"OpenRouter API Key" = "OpenRouter API Key";
 "Experiments" = "Experiments";
 "Save" = "Save";
 "Show Kit" = "Show Kit";

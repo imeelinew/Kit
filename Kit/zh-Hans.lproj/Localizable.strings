@@ -20,8 +20,14 @@
 "Clear History" = "清空历史";
 "Check for Updates" = "检查更新…";
 "Clipboard" = "剪贴板";
-"Enable TypeSafe AI" = "开启 TypeSafe AI";
-"When enabled, Kit uses the TypeSafe model to classify clipboard text" = "开启后，Kit 将使用 TypeSafe 模型进行剪贴板文本分类";
+"LLM Classification" = "LLM 识别分类";
+"Enable LLM Classification" = "开启 LLM 识别分类";
+"Classification Engine" = "分类引擎";
+"API Channel" = "API 渠道";
+"Official API" = "官方 API";
+"TypeSafe API Key" = "TypeSafe API Key";
+"OpenAI API Key" = "OpenAI API Key";
+"OpenRouter API Key" = "OpenRouter API Key";
 "Experiments" = "实验";
 "Save" = "保存";
 "Show Kit" = "打开 Kit";

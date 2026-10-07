@@ -102,16 +102,18 @@ final class ClipboardManager {
 
             switch capture.content {
             case .text(let text):
-                if self.settings.typesafeAIEnabled {
-                    // Capture immediately; only jev decides the eventual classification.
+                if self.settings.llmClassificationEnabled {
+                    // Capture immediately; only the selected LLM decides the eventual classification.
                     guard let item = self.store.addText(
                         text, kind: .text, sourceBundleID: capture.sourceBundleID,
                         expectedGeneration: capture.generation),
-                        let apiKey = self.settings.typesafeAPIKey
+                        let configuration = self.settings.llmClassificationConfiguration
                     else { return }
                     Task { [weak self] in
-                        guard let kind = await TypeSafeClassifier.classify(text, apiKey: apiKey),
-                            let self, self.settings.typesafeAIEnabled,
+                        guard let kind = await LLMTextClassifier.classify(
+                            text, configuration: configuration),
+                            let self, self.settings.llmClassificationEnabled,
+                            self.settings.llmClassificationConfiguration == configuration,
                             self.store.captureGeneration == capture.generation,
                             self.store.item(id: item.id)?.createdAt == item.createdAt
                         else { return }

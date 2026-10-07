@@ -124,7 +124,7 @@ enum CopySoundEffect: Int, CaseIterable, Identifiable {
 
 @MainActor
 final class AppSettings: ObservableObject {
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
     private var reconcilingLaunchAtLogin = false
 
     private enum Key {
@@ -145,8 +145,13 @@ final class AppSettings: ObservableObject {
         static let soundEffectsEnabled = "soundEffectsEnabled"
         static let copySoundEffect = "copySoundEffect"
         static let hapticFeedbackEnabled = "hapticFeedbackEnabled"
-        static let typesafeAIEnabled = "typesafeAIEnabled"
+        // Preserve the original opt-in flag when upgrading the experiment.
+        static let llmClassificationEnabled = "typesafeAIEnabled"
         static let typesafeAPIKey = "typesafeAPIKey"
+        static let llmClassificationEngine = "llmClassificationEngine"
+        static let llmAPIChannel = "llmAPIChannel"
+        static let openAIAPIKey = "openAIAPIKey"
+        static let openRouterAPIKey = "openRouterAPIKey"
     }
 
     @Published var clipboardRetention: ClipboardRetention {
@@ -222,13 +227,66 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(hapticFeedbackEnabled, forKey: Key.hapticFeedbackEnabled) }
     }
 
-    /// Experimental: classify captured text exclusively through TypeSafe instead of local rules.
-    @Published var typesafeAIEnabled: Bool {
-        didSet { defaults.set(typesafeAIEnabled, forKey: Key.typesafeAIEnabled) }
+    /// Experimental: classify captured text exclusively through the selected LLM instead of local rules.
+    @Published var llmClassificationEnabled: Bool {
+        didSet { defaults.set(llmClassificationEnabled, forKey: Key.llmClassificationEnabled) }
     }
 
     /// Saved when the user submits the settings field, not on each keystroke.
     @Published private(set) var typesafeAPIKey: String?
+
+    @Published var llmClassificationEngine: LLMClassificationEngine {
+        didSet { defaults.set(llmClassificationEngine.rawValue, forKey: Key.llmClassificationEngine) }
+    }
+
+    @Published var llmAPIChannel: LLMAPIChannel {
+        didSet { defaults.set(llmAPIChannel.rawValue, forKey: Key.llmAPIChannel) }
+    }
+
+    @Published private(set) var openAIAPIKey: String?
+    @Published private(set) var openRouterAPIKey: String?
+
+    var llmAPIKeyProvider: LLMAPIKeyProvider {
+        if llmAPIChannel == .openRouter { return .openRouter }
+        return llmClassificationEngine == .typeSafe ? .typeSafe : .openAI
+    }
+
+    func apiKey(for provider: LLMAPIKeyProvider) -> String? {
+        switch provider {
+        case .typeSafe: typesafeAPIKey
+        case .openAI: openAIAPIKey
+        case .openRouter: openRouterAPIKey
+        }
+    }
+
+    var llmAPIKey: String? {
+        apiKey(for: llmAPIKeyProvider)
+    }
+
+    var llmClassificationConfiguration: LLMClassificationConfiguration? {
+        guard let apiKey = llmAPIKey, !apiKey.isEmpty else { return nil }
+        return LLMClassificationConfiguration(
+            engine: llmClassificationEngine, channel: llmAPIChannel, apiKey: apiKey)
+    }
+
+    func saveLLMAPIKey(_ key: String) {
+        if llmAPIChannel == .direct && llmClassificationEngine == .typeSafe {
+            saveTypeSafeAPIKey(key)
+            return
+        }
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        let storageKey = llmAPIChannel == .openRouter ? Key.openRouterAPIKey : Key.openAIAPIKey
+        if trimmed.isEmpty {
+            defaults.removeObject(forKey: storageKey)
+        } else {
+            defaults.set(trimmed, forKey: storageKey)
+        }
+        if llmAPIChannel == .openRouter {
+            openRouterAPIKey = trimmed.isEmpty ? nil : trimmed
+        } else {
+            openAIAPIKey = trimmed.isEmpty ? nil : trimmed
+        }
+    }
 
     func saveTypeSafeAPIKey(_ key: String) {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -262,7 +320,8 @@ final class AppSettings: ObservableObject {
         defaults.removeObject(forKey: Key.clipboardPauseUntil)
     }
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         clipboardRetention =
             ClipboardRetention(rawValue: defaults.integer(forKey: Key.clipboardRetention))
             ?? .threeMonths
@@ -295,7 +354,13 @@ final class AppSettings: ObservableObject {
             : CopySoundEffect(rawValue: defaults.integer(forKey: Key.copySoundEffect)) ?? .one
         hapticFeedbackEnabled =
             defaults.object(forKey: Key.hapticFeedbackEnabled) as? Bool ?? true
-        typesafeAIEnabled = defaults.object(forKey: Key.typesafeAIEnabled) as? Bool ?? false
+        llmClassificationEnabled = defaults.object(forKey: Key.llmClassificationEnabled) as? Bool ?? false
         typesafeAPIKey = defaults.string(forKey: Key.typesafeAPIKey)
+        llmClassificationEngine = defaults.string(forKey: Key.llmClassificationEngine)
+            .flatMap(LLMClassificationEngine.init(rawValue:)) ?? .typeSafe
+        llmAPIChannel = defaults.string(forKey: Key.llmAPIChannel)
+            .flatMap(LLMAPIChannel.init(rawValue:)) ?? .direct
+        openAIAPIKey = defaults.string(forKey: Key.openAIAPIKey)
+        openRouterAPIKey = defaults.string(forKey: Key.openRouterAPIKey)
     }
 }

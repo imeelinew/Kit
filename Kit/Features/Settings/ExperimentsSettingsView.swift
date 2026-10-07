@@ -3,46 +3,67 @@ import SwiftUI
 /// Experimental features, quarantined in their own sidebar page so the stable settings stay clean.
 struct ExperimentsSettingsView: View {
     @ObservedObject private var settings = AppCore.shared.settings
-    @State private var apiKeyDraft = ""
+    @State private var apiKeyDrafts: [LLMAPIKeyProvider: String] = [:]
 
     var body: some View {
         PreferencesForm {
-            Section("TypeSafe AI") {
-                Toggle(isOn: $settings.typesafeAIEnabled) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Enable TypeSafe AI")
-                        Text("When enabled, Kit uses the TypeSafe model to classify clipboard text")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+            Section("LLM Classification") {
+                Toggle("Enable LLM Classification", isOn: $settings.llmClassificationEnabled)
 
-                if settings.typesafeAIEnabled {
-                    PreferencesRow(label: "API Key") {
+                if settings.llmClassificationEnabled {
+                    PreferencesRow(label: "Classification Engine") {
+                        Picker("Classification Engine", selection: $settings.llmClassificationEngine) {
+                            ForEach(LLMClassificationEngine.allCases) { engine in
+                                Text(verbatim: engine.title).tag(engine)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                    }
+
+                    PreferencesRow(label: "API Channel") {
+                        Picker("API Channel", selection: $settings.llmAPIChannel) {
+                            ForEach(LLMAPIChannel.allCases) { channel in
+                                Text(LocalizedStringKey(channel.title)).tag(channel)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                    }
+
+                    PreferencesRow(label: LocalizedStringKey(settings.llmAPIKeyProvider.fieldTitle)) {
                         HStack {
-                            SecureField("API Key", text: $apiKeyDraft)
+                            SecureField("API Key", text: apiKeyDraft)
                                 .labelsHidden()
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 240)
-                                .accessibilityLabel("API Key")
+                                .accessibilityLabel(Text(LocalizedStringKey(settings.llmAPIKeyProvider.fieldTitle)))
                                 .onSubmit(saveAPIKey)
 
                             Button("Save", action: saveAPIKey)
-                                .disabled(normalizedDraft == (settings.typesafeAPIKey ?? ""))
+                                .disabled(normalizedDraft == (settings.llmAPIKey ?? ""))
                         }
                     }
                 }
             }
         }
-        .onAppear { apiKeyDraft = settings.typesafeAPIKey ?? "" }
+    }
+
+    private var apiKeyDraft: Binding<String> {
+        let provider = settings.llmAPIKeyProvider
+        return Binding(
+            get: { apiKeyDrafts[provider] ?? settings.apiKey(for: provider) ?? "" },
+            set: { apiKeyDrafts[provider] = $0 })
     }
 
     private var normalizedDraft: String {
-        apiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        apiKeyDraft.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func saveAPIKey() {
-        settings.saveTypeSafeAPIKey(apiKeyDraft)
-        apiKeyDraft = settings.typesafeAPIKey ?? ""
+        settings.saveLLMAPIKey(apiKeyDraft.wrappedValue)
+        apiKeyDraft.wrappedValue = settings.llmAPIKey ?? ""
     }
 }
