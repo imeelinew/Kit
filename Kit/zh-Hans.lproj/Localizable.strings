@@ -72,6 +72,12 @@
 "Items in this stack will also be deleted. This can't be undone." = "其中的所有记录也会被删除，此操作无法撤销。";
 "Input Method" = "输入法";
 "Keep history for" = "历史保留时长";
+"Change history retention to %@?" = "将历史保留时长改为%@？";
+"Delete and Change" = "删除并更改";
+"Permanently delete %@ history entries\nIncluding %@ images and %@ entries in Stacks\n\nThis can't be undone" = "将永久删除 %@ 条历史记录\n其中包括 %@ 张图片，%@ 条位于 Stack 中\n\n此操作无法撤销";
+"Couldn't change history retention" = "无法更改历史保留时长";
+"History and the retention setting haven't changed, try again" = "历史记录和保留时长均未更改，请重试";
+"OK" = "好";
 "Language" = "语言";
 "Light" = "浅色";
 "Link" = "链接";

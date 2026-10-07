@@ -73,6 +73,12 @@
 "Rename…" = "Rename…";
 "Input Method" = "Input Method";
 "Keep history for" = "Keep history for";
+"Change history retention to %@?" = "Change history retention to %@?";
+"Delete and Change" = "Delete and Change";
+"Permanently delete %@ history entries\nIncluding %@ images and %@ entries in Stacks\n\nThis can't be undone" = "Permanently delete %@ history entries\nIncluding %@ images and %@ entries in Stacks\n\nThis can't be undone";
+"Couldn't change history retention" = "Couldn't change history retention";
+"History and the retention setting haven't changed, try again" = "History and the retention setting haven't changed, try again";
+"OK" = "OK";
 "Language" = "Language";
 "Light" = "Light";
 "Link" = "Link";

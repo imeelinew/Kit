@@ -178,6 +178,10 @@ struct ClipboardListAnimationTests {
         let bundleID = Bundle.main.bundleIdentifier!
         precondition(bundleID.hasPrefix("com.eli.Kit.tests.clipboard-list."),
                      "The list harness requires an isolated bundle identity")
+        if CommandLine.arguments.contains("--retention-only") {
+            await ClipboardRetentionSettingsTests.run()
+            return
+        }
         if CommandLine.arguments.contains("--date-groups-only") {
             try await ClipboardDateGroupingTests.run()
             return
@@ -341,6 +345,7 @@ struct ClipboardListAnimationTests {
         try await ClipboardSearchGeometryTests.run()
         try await ClipboardHoverSelectionTests.run()
         try await ClipboardUndoTests.run()
+        await ClipboardRetentionSettingsTests.run()
         try await SingleDeletionUndoTests.run()
         ClipboardTextClassifierTests.run()
         await ClipboardPreviewTests.run()

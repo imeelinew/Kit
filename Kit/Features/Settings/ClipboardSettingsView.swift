@@ -74,28 +74,62 @@ struct ClipboardSettingsView: View {
 }
 
 struct HistorySettingsView: View {
-    @ObservedObject private var settings = AppCore.shared.settings
-    @ObservedObject private var store = AppCore.shared.clipboardStore
+    @ObservedObject private var settings: AppSettings
+    @ObservedObject private var store: ClipboardStore
+    private struct RetentionConfirmation: Identifiable {
+        let id = UUID()
+        let retention: ClipboardRetention
+        let impact: ClipboardStore.RetentionImpact
+    }
+    @State private var retentionConfirmation: RetentionConfirmation?
+    @State private var confirmingRetentionChange = false
+    @State private var retentionChangeFailed = false
     @State private var confirmingClear = false
     @State private var confirmingClearImageIndex = false
     @State private var confirmingRebuildImageIndex = false
     @State private var imageCountForRebuild = 0
 
+    init(
+        settings: AppSettings = AppCore.shared.settings,
+        store: ClipboardStore = AppCore.shared.clipboardStore
+    ) {
+        self.settings = settings
+        self.store = store
+    }
+
     var body: some View {
         PreferencesForm {
             Section {
                 PreferencesRow(label: "Keep history for") {
-                    Picker("Keep history for", selection: $settings.clipboardRetention) {
+                    Picker("Keep history for", selection: Binding(
+                        get: { settings.clipboardRetention },
+                        set: { changeRetention(to: $0) }
+                    )) {
                         ForEach(ClipboardRetention.allCases) { retention in
                             Text(LocalizedStringKey(retention.title)).tag(retention)
                         }
                     }
                     .labelsHidden()
                     .fixedSize()
-                    .onChange(of: settings.clipboardRetention) {
-                        let store = AppCore.shared.clipboardStore
-                        store.maxAge = settings.clipboardRetention.maxAge
-                        store.enforceLimits()
+                    .confirmationDialog(
+                        Text(verbatim: retentionConfirmationTitle),
+                        isPresented: $confirmingRetentionChange,
+                        titleVisibility: .visible,
+                        presenting: retentionConfirmation
+                    ) { confirmation in
+                        Button("Delete and Change", role: .destructive) {
+                            changeRetention(to: confirmation.retention, confirming: confirmation.impact)
+                        }
+                        Button("Cancel", role: .cancel) { retentionConfirmation = nil }
+                    } message: { confirmation in
+                        Text(verbatim: retentionConfirmationMessage(confirmation.impact))
+                    }
+                    .task(id: retentionConfirmation?.id) {
+                        guard retentionConfirmation != nil else { return }
+                        // Let the previous native sheet dismiss before presenting revised counts.
+                        await Task.yield()
+                        guard !Task.isCancelled else { return }
+                        confirmingRetentionChange = true
                     }
                 }
             }
@@ -124,13 +158,18 @@ struct HistorySettingsView: View {
                 }
             }
         }
+        .alert("Couldn't change history retention", isPresented: $retentionChangeFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("History and the retention setting haven't changed, try again")
+        }
         .confirmationDialog(
             "Clear clipboard history?",
             isPresented: $confirmingClear,
             titleVisibility: .visible
         ) {
             Button("Clear History", role: .destructive) {
-                AppCore.shared.clipboardStore.clearAll()
+                store.clearAll()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -165,6 +204,42 @@ struct HistorySettingsView: View {
                 locale: settings.language.locale,
                 imageCountForRebuild))
         }
+    }
+
+    private func changeRetention(
+        to retention: ClipboardRetention, confirming impact: ClipboardStore.RetentionImpact? = nil
+    ) {
+        guard retention != settings.clipboardRetention else { return }
+        switch settings.changeClipboardRetention(to: retention, in: store, confirming: impact) {
+        case .applied:
+            retentionConfirmation = nil
+        case .confirmationRequired(let currentImpact):
+            retentionConfirmation = RetentionConfirmation(retention: retention, impact: currentImpact)
+        case .failed:
+            retentionConfirmation = nil
+            retentionChangeFailed = true
+        }
+    }
+
+    private var retentionConfirmationTitle: String {
+        guard let confirmation = retentionConfirmation else { return "" }
+        let locale = settings.language.locale
+        return String(
+            format: AppLocalization.string("Change history retention to %@?", locale: locale),
+            locale: locale,
+            AppLocalization.string(confirmation.retention.title, locale: locale))
+    }
+
+    private func retentionConfirmationMessage(_ impact: ClipboardStore.RetentionImpact) -> String {
+        let locale = settings.language.locale
+        return String(
+            format: AppLocalization.string(
+                "Permanently delete %@ history entries\nIncluding %@ images and %@ entries in Stacks\n\nThis can't be undone",
+                locale: locale),
+            locale: locale,
+            impact.itemCount.formatted(.number.locale(locale)),
+            impact.imageCount.formatted(.number.locale(locale)),
+            impact.stackItemCount.formatted(.number.locale(locale)))
     }
 }
 

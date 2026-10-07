@@ -154,8 +154,18 @@ final class AppSettings: ObservableObject {
         static let openRouterAPIKey = "openRouterAPIKey"
     }
 
-    @Published var clipboardRetention: ClipboardRetention {
+    @Published private(set) var clipboardRetention: ClipboardRetention {
         didSet { defaults.set(clipboardRetention.rawValue, forKey: Key.clipboardRetention) }
+    }
+
+    /// Persist only a committed policy; requests and cancelled confirmations never reach defaults.
+    func changeClipboardRetention(
+        to retention: ClipboardRetention, in store: ClipboardStore,
+        confirming impact: ClipboardStore.RetentionImpact? = nil, at date: Date = Date()
+    ) -> ClipboardStore.RetentionChangeResult {
+        let result = store.changeRetention(to: retention, confirming: impact, at: date)
+        if result == .applied { clipboardRetention = retention }
+        return result
     }
 
     @Published var clipboardDisabledApps: [String] {
