@@ -1,5 +1,4 @@
 import Foundation
-import Metal
 import Vision
 
 /// Search metadata only: recognizing an image never changes its clipboard content or kind.
@@ -25,25 +24,11 @@ enum ClipboardImageTextRecognition {
     static let maxAttempts = 2
 
     /// Use the same recognition settings for indexing and preview text geometry.
-    static func makeRequest(
-        useCPUOnly: Bool = MTLCreateSystemDefaultDevice() == nil
-    ) -> VNRecognizeTextRequest {
+    static func makeRequest() -> VNRecognizeTextRequest {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]
         request.usesLanguageCorrection = true
-        // Hosted macOS VMs may have no Metal device. Choose a supported CPU before
-        // recognition rather than letting Vision initialize an unavailable accelerator.
-        if useCPUOnly, let stages = try? request.supportedComputeStageDevices {
-            for (stage, devices) in stages {
-                if let cpu = devices.first(where: {
-                    if case .cpu = $0 { return true }
-                    return false
-                }) {
-                    request.setComputeDevice(cpu, for: stage)
-                }
-            }
-        }
         return request
     }
 
