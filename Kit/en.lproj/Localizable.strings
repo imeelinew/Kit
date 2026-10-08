@@ -89,7 +89,6 @@
 "Scroll for more" = "Scroll for more";
 "Name" = "Name";
 "New Stack" = "New Stack";
-"Kit Menu" = "Kit Menu";
 "Pause Kit" = "Pause Kit";
 "Resume Kit" = "Resume Kit";
 "Pause" = "Pause";
@@ -98,8 +97,6 @@
 "For 1 Hour" = "For 1 Hour";
 "For 3 Hours" = "For 3 Hours";
 "For 8 Hours" = "For 8 Hours";
-"Until Tomorrow" = "Until Tomorrow";
-"Indefinitely" = "Indefinitely";
 "Kit" = "Kit";
 "Palette" = "Palette";
 "Paste" = "Paste";
@@ -169,5 +166,3 @@
 "3 Months" = "3 Months";
 "6 Months" = "6 Months";
 "Sound Effect %d" = "Sound Effect %d";
-
-/* Pinned card sizing */

@@ -20,8 +20,6 @@ enum Theme {
         static let md: CGFloat = 8
         static let lg: CGFloat = 10
         static let xl: CGFloat = 12
-        /// Gap under a category header before its first row.
-        static let sectionHeaderBottom: CGFloat = 4
         /// Space above every category header except the first.
         static let sectionSpacing: CGFloat = 12
     }
@@ -57,7 +55,6 @@ enum Theme {
 
     /// System text styles (not hardcoded sizes) so the UI honors Dynamic Type.
     enum Typography {
-        static let searchField = Font.system(size: 20, weight: .regular)
         static let sectionHeader = Font.subheadline.weight(.medium)
         static let keyCap = Font.caption
         static let bar = Font.callout.weight(.medium)
@@ -77,7 +74,6 @@ enum Theme {
         /// Control borders: outlined kbd chips.
         static let border = Color.primary.opacity(0.20)
         static let textSecondary = Color.primary.opacity(0.60)
-        static let textTertiary = Color.primary.opacity(0.40)
         static let cardStroke = Color.primary.opacity(0.10)
         /// Whitish tint layered into the Liquid Glass floating controls (action group + menu circle) so the glass reads frosted rather than clear.
         static let glassFrost = Color.white.opacity(0.05)

@@ -1,5 +1,3 @@
-import SwiftUI
-
 enum SettingsTab: Int, CaseIterable, Hashable, Identifiable {
     case general, shortcuts, appearance, sound, clipboard, history, about
 

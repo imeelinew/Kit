@@ -1,5 +1,4 @@
 import AppKit
-import SwiftUI
 
 /// Reference-counted ownership of the app's regular activation policy. Settings and About may
 /// overlap; closing either one can no longer hide the Dock icon while the other still needs it or

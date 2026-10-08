@@ -88,7 +88,6 @@
 "Scroll for more" = "继续滚动以加载更多";
 "Name" = "名称";
 "New Stack" = "新建 Stack";
-"Kit Menu" = "Kit 菜单";
 "Pause Kit" = "暂停 Kit";
 "Resume Kit" = "继续 Kit";
 "Pause" = "暂停";
@@ -97,8 +96,6 @@
 "For 1 Hour" = "暂停 1 小时";
 "For 3 Hours" = "暂停 3 小时";
 "For 8 Hours" = "暂停 8 小时";
-"Until Tomorrow" = "暂停到明天";
-"Indefinitely" = "无限期暂停";
 "Kit" = "Kit";
 "Palette" = "面板";
 "Paste" = "粘贴";
@@ -169,5 +166,3 @@
 "3 Months" = "3 个月";
 "6 Months" = "6 个月";
 "Sound Effect %d" = "音效%d";
-
-/* Pinned card sizing */
