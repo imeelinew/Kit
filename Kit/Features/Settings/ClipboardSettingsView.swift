@@ -4,20 +4,24 @@ import UniformTypeIdentifiers
 
 struct ClipboardSettingsView: View {
     @ObservedObject private var settings = AppCore.shared.settings
+    @ObservedObject private var store = AppCore.shared.clipboardStore
+    private struct RetentionConfirmation: Identifiable {
+        let id = UUID()
+        let retention: ClipboardRetention
+        let impact: ClipboardStore.RetentionImpact
+    }
+    @State private var retentionConfirmation: RetentionConfirmation?
+    @State private var confirmingRetentionChange = false
+    @State private var retentionChangeFailed = false
+    @State private var confirmingClear = false
+    @State private var confirmingClearImageIndex = false
+    @State private var confirmingRebuildImageIndex = false
+    @State private var imageCountForRebuild = 0
+
     @ObservedObject private var systemClipboardHistory = AppCore.shared.systemClipboardHistory
 
     var body: some View {
         PreferencesForm {
-            LLMClassificationSettingsSection()
-
-            Section("Image Text Search") {
-                Toggle("Search Text in Images", isOn: $settings.imageTextSearchEnabled)
-            }
-
-            Section("Content Preview") {
-                Toggle("Render Markdown", isOn: $settings.renderMarkdown)
-            }
-
             Section("System Clipboard") {
                 Toggle(
                     "Disable System Clipboard",
@@ -40,66 +44,18 @@ struct ClipboardSettingsView: View {
                 }
                 .accessibilityLabel("Add Application…")
             }
-        }
-        .onAppear {
-            systemClipboardHistory.refresh()
-        }
-        .onReceive(
-            NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
-        ) { _ in
-            systemClipboardHistory.refresh()
-        }
-    }
 
-    private func addExcludedApp() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = true
-        panel.allowedContentTypes = [.application]
-        panel.treatsFilePackagesAsDirectories = false
-        panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
-        panel.prompt = AppLocalization.string("Add", locale: settings.language.locale)
-        guard panel.runModal() == .OK else { return }
+            LLMClassificationSettingsSection()
 
-        var apps = settings.clipboardDisabledApps
-        for url in panel.urls {
-            guard let bundleID = Bundle(url: url)?.bundleIdentifier,
-                !apps.contains(bundleID)
-            else { continue }
-            apps.append(bundleID)
-        }
-        settings.clipboardDisabledApps = apps
-    }
-}
+            Section("Image Text Recognition") {
+                Toggle("Search Text in Images", isOn: $settings.imageTextSearchEnabled)
+            }
 
-struct HistorySettingsView: View {
-    @ObservedObject private var settings: AppSettings
-    @ObservedObject private var store: ClipboardStore
-    private struct RetentionConfirmation: Identifiable {
-        let id = UUID()
-        let retention: ClipboardRetention
-        let impact: ClipboardStore.RetentionImpact
-    }
-    @State private var retentionConfirmation: RetentionConfirmation?
-    @State private var confirmingRetentionChange = false
-    @State private var retentionChangeFailed = false
-    @State private var confirmingClear = false
-    @State private var confirmingClearImageIndex = false
-    @State private var confirmingRebuildImageIndex = false
-    @State private var imageCountForRebuild = 0
+            Section("Content Preview") {
+                Toggle("Render Markdown", isOn: $settings.renderMarkdown)
+            }
 
-    init(
-        settings: AppSettings = AppCore.shared.settings,
-        store: ClipboardStore = AppCore.shared.clipboardStore
-    ) {
-        self.settings = settings
-        self.store = store
-    }
-
-    var body: some View {
-        PreferencesForm {
-            Section {
+            Section("History Retention") {
                 PreferencesRow(label: "Keep history for") {
                     Picker("Keep history for", selection: Binding(
                         get: { settings.clipboardRetention },
@@ -158,6 +114,14 @@ struct HistorySettingsView: View {
                 }
             }
         }
+        .onAppear {
+            systemClipboardHistory.refresh()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+        ) { _ in
+            systemClipboardHistory.refresh()
+        }
         .alert("Couldn't change history retention", isPresented: $retentionChangeFailed) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -173,7 +137,7 @@ struct HistorySettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This can't be undone.")
+            Text("This can't be undone")
         }
         .confirmationDialog(
             "Clear the image text index?",
@@ -185,7 +149,7 @@ struct HistorySettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Images stay in your history, but you won't be able to find them by their text.")
+            Text("Images stay in your history, but you won't be able to find them by their text")
         }
         .confirmationDialog(
             "Rebuild the image text index?",
@@ -199,11 +163,32 @@ struct HistorySettingsView: View {
         } message: {
             Text(verbatim: String(
                 format: AppLocalization.string(
-                    "Kit will re-read text from %d images in your history. This uses significant CPU.",
+                    "Kit will re-read text from %d images in your history, this uses significant CPU",
                     locale: settings.language.locale),
                 locale: settings.language.locale,
                 imageCountForRebuild))
         }
+    }
+
+    private func addExcludedApp() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [.application]
+        panel.treatsFilePackagesAsDirectories = false
+        panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
+        panel.prompt = AppLocalization.string("Add", locale: settings.language.locale)
+        guard panel.runModal() == .OK else { return }
+
+        var apps = settings.clipboardDisabledApps
+        for url in panel.urls {
+            guard let bundleID = Bundle(url: url)?.bundleIdentifier,
+                !apps.contains(bundleID)
+            else { continue }
+            apps.append(bundleID)
+        }
+        settings.clipboardDisabledApps = apps
     }
 
     private func changeRetention(

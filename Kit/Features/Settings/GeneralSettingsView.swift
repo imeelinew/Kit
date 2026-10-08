@@ -198,7 +198,7 @@ struct AboutSettingsView: View {
                 )
             }
 
-            Section {
+            Section("Repository") {
                 PreferencesRow(label: "Repository") {
                     Button("GitHub Repository") {
                         NSWorkspace.shared.open(Self.repositoryURL)
@@ -206,7 +206,7 @@ struct AboutSettingsView: View {
                 }
             }
 
-            Section {
+            Section("Acknowledgments") {
                 PreferencesRow(label: "Acknowledgments", alignment: .top) {
                     VStack(alignment: .trailing, spacing: Theme.Spacing.xs) {
                         ForEach(Self.acknowledgments, id: \.name) { item in

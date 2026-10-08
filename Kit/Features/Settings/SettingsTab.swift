@@ -1,5 +1,5 @@
 enum SettingsTab: Int, CaseIterable, Hashable, Identifiable {
-    case general, shortcuts, appearance, sound, clipboard, history, about
+    case general, appearance, sound, clipboard, shortcuts, about
 
     var id: Int { rawValue }
 
@@ -10,7 +10,6 @@ enum SettingsTab: Int, CaseIterable, Hashable, Identifiable {
         case .appearance: return "Appearance"
         case .sound: return "Sound & Haptics"
         case .clipboard: return "Clipboard"
-        case .history: return "History"
         case .about: return "About"
         }
     }
@@ -23,7 +22,6 @@ enum SettingsTab: Int, CaseIterable, Hashable, Identifiable {
         case .appearance: return "lucide-sun-moon"
         case .sound: return "lucide-volume-2"
         case .clipboard: return "lucide-clipboard"
-        case .history: return "lucide-history"
         case .about: return "lucide-info"
         }
     }

@@ -166,3 +166,9 @@
 "3 Months" = "3 Months";
 "6 Months" = "6 Months";
 "Sound Effect %d" = "Sound Effect %d";
+"Image Text Recognition" = "Image Text Recognition";
+"History Retention" = "History Retention";
+"Activation" = "Activation";
+"This can't be undone" = "This can't be undone";
+"Images stay in your history, but you won't be able to find them by their text" = "Images stay in your history, but you won't be able to find them by their text";
+"Kit will re-read text from %d images in your history, this uses significant CPU" = "Kit will re-read text from %d images in your history, this uses significant CPU";

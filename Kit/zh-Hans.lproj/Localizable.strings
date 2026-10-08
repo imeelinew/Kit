@@ -166,3 +166,9 @@
 "3 Months" = "3 个月";
 "6 Months" = "6 个月";
 "Sound Effect %d" = "音效%d";
+"Image Text Recognition" = "图片文字识别";
+"History Retention" = "历史保留";
+"Activation" = "激活";
+"This can't be undone" = "此操作无法撤销";
+"Images stay in your history, but you won't be able to find them by their text" = "图片仍保留在历史记录中，但无法通过图片中的文字搜索";
+"Kit will re-read text from %d images in your history, this uses significant CPU" = "会重新识别 %d 张历史图片中的文字，期间会占用较多 CPU";

@@ -184,7 +184,6 @@ private struct SettingsWindowRoot: View {
         case .appearance: AppearanceSettingsView()
         case .sound: SoundSettingsView()
         case .clipboard: ClipboardSettingsView()
-        case .history: HistorySettingsView()
         case .about: AboutSettingsView()
         }
     }
