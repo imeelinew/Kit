@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Vision
 @testable import Kit
 
 private actor ImageLayoutProbe {
@@ -188,12 +189,26 @@ enum ImageSearchHighlightTests {
     }
 
     private static func rendering(in directory: URL) async throws {
+        let data = fixturePNG()
+        let cpuRequest = ClipboardImageTextRecognition.makeRequest(useCPUOnly: true)
+        guard case .cpu = cpuRequest.computeDevice(for: .main) else {
+            preconditionFailure("The OCR request must select a supported CPU without Metal")
+        }
+        try VNImageRequestHandler(data: data).perform([cpuRequest])
+        let cpuText = (cpuRequest.results ?? []).compactMap {
+            $0.topCandidates(1).first?.string
+        }.joined(separator: "\n")
+        precondition(cpuText.localizedCaseInsensitiveContains("target") && cpuText.contains("账户"),
+                     "CPU-only Vision must recognize both English and Chinese image text")
+        print("PASS: CPU-only Vision recognizes English and Chinese without a Metal compute device")
         let store = ClipboardStore(directory: directory)
-        await store.addImage(fixturePNG(), sourceBundleID: nil)
+        await store.addImage(data, sourceBundleID: nil)
         await store.waitForImageOCR()
         let item = store.items.first!
         let url = store.imageURL(for: item)!
-        let payload = await ImageSearchHighlightPayload.load(url)!
+        guard let payload = await ImageSearchHighlightPayload.load(url) else {
+            preconditionFailure("Vision geometry failed; persisted OCR status: \(String(describing: item.imageOCR?.status))")
+        }
         precondition(item.imageOCR?.text == payload.layout.text,
                      "Real preview recognition agrees with persisted search text")
         let english = payload.layout.matchingBounds(query: "target")

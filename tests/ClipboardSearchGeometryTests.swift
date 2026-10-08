@@ -10,7 +10,13 @@ enum ClipboardSearchGeometryTests {
         return view.subviews.lazy.compactMap { table(in: $0) }.first
     }
 
-    private static func settle() async throws {
+    private static func settle(_ viewModel: PaletteViewModel) async throws {
+        let deadline = Date().addingTimeInterval(5)
+        while !viewModel.searchReady, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        precondition(viewModel.searchReady, "Search must finish within five seconds")
+        // Result publication starts the root transition; let that animation settle too.
         try await Task.sleep(for: .milliseconds(300))
     }
 
@@ -47,7 +53,7 @@ enum ClipboardSearchGeometryTests {
         window.beginPresentation()
         window.orderFront(nil)
         defer { window.close() }
-        try await settle()
+        try await settle(vm)
         let hosting = window.contentView!
         hosting.layoutSubtreeIfNeeded()
         precondition(vm.searchReady && vm.results.count == 41)
@@ -69,7 +75,7 @@ enum ClipboardSearchGeometryTests {
             }
             defer { NotificationCenter.default.removeObserver(token) }
             vm.query = query
-            try await settle()
+            try await settle(vm)
             precondition(vm.searchReady && vm.results.count == expectedCount,
                          "Query \(query) must finish with \(expectedCount) results; ready=\(vm.searchReady), actual=\(vm.results.count)")
             precondition(scrollView.frame == initialFrame,
@@ -84,10 +90,10 @@ enum ClipboardSearchGeometryTests {
 
         // Recreating the list after no matches must not reintroduce fractional geometry.
         vm.query = "no matching fixture"
-        try await settle()
+        try await settle(vm)
         precondition(vm.searchReady && vm.results.isEmpty && table(in: hosting) == nil)
         vm.query = "alpha"
-        try await settle()
+        try await settle(vm)
         precondition(vm.searchReady && vm.results.count == 40)
         try await checkSearch("alph", expectedCount: 40)
         try await checkSearch("", expectedCount: 41)

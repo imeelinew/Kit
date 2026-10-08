@@ -25,6 +25,7 @@ jobs:
         run: |
           xcodebuild -version
           swift --version
+          swift -e 'import Metal; print("Metal device:", MTLCreateSystemDefaultDevice()?.name ?? "none")'
       - name: Store deduplication
         run: ./scripts/test-clipboard-deduplication.sh
       - name: Search pagination
