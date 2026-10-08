@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CB1000000000000000000001 /* ClipboardRowThumbnailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1000000000000000000002 /* ClipboardRowThumbnailCache.swift */; };
 		02CB1E90666F628DBF9C7C78 /* EdgeDissolve.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6853210949502E0C47D69B9 /* EdgeDissolve.swift */; };
 		068B6C43C18DB6110AED985B /* PopoverMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C234D84C11C94266A6B560D /* PopoverMenu.swift */; };
 		07650D1993A6D4C0D5B7ACD8 /* PalettePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123A20E6FCB60D259A0CC145 /* PalettePanel.swift */; };
@@ -82,6 +83,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		CB1000000000000000000002 /* ClipboardRowThumbnailCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardRowThumbnailCache.swift; sourceTree = "<group>"; };
 		0C1D141FBB730290AF3CA00C /* AppCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCore.swift; sourceTree = "<group>"; };
 		11927303CFC909AE918568B6 /* PaletteViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteViewModel.swift; sourceTree = "<group>"; };
 		123A20E6FCB60D259A0CC145 /* PalettePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PalettePanel.swift; sourceTree = "<group>"; };
@@ -205,6 +207,7 @@
 				CA6100000000000000000002 /* LLMTextClassifier.swift */,
 				C6853210949502E0C47D69B9 /* EdgeDissolve.swift */,
 				AF2FD6AB5017BBFF5EE420A4 /* ImageThumbnail.swift */,
+				CB1000000000000000000002 /* ClipboardRowThumbnailCache.swift */,
 				D22A18A2E99B807E7716432E /* InputSourceSwitcher.swift */,
 				A490C2CECA4C191B712DB9F2 /* LaunchAtLogin.swift */,
 				BB41A0000000000000000001 /* MenuBarController.swift */,
@@ -459,6 +462,7 @@
 				CA7200000000000000000001 /* PinnedImagePanel.swift in Sources */,
 				CA7100000000000000000001 /* PinnedImageGeometry.swift in Sources */,
 				F1E4B87385492A86C5F5CDFE /* ImageThumbnail.swift in Sources */,
+				CB1000000000000000000001 /* ClipboardRowThumbnailCache.swift in Sources */,
 				EE9F57DEDBD7C12EA72E7D9E /* InputSourceSwitcher.swift in Sources */,
 				2637AC2FB6592F5FCA9ADA7C /* LaunchAtLogin.swift in Sources */,
 				BB41A0000000000000000002 /* MenuBarController.swift in Sources */,

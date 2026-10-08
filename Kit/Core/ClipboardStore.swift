@@ -173,6 +173,7 @@ final class ClipboardStore: ObservableObject {
     private var pendingSearchMetadata: [SearchMetadataUpdate] = []
     private var searchMetadataTask: Task<Void, Never>?
     private var imageOCRTask: Task<Void, Never>?
+    private var thumbnailWarmTask: Task<Void, Never>?
     /// A snapshot of historical IDs; new captures never join a manual rebuild while search is off.
     private var imageOCRRebuildIDs: [ClipboardItem.ID]?
     private var imageTextSearchGeneration: UInt64 = 0
@@ -213,6 +214,7 @@ final class ClipboardStore: ObservableObject {
         maintenanceTask?.cancel()
         blobDeletionTask?.cancel()
         imageOCRTask?.cancel()
+        thumbnailWarmTask?.cancel()
         closeDatabase()
         try? FileManager.default.removeItem(at: deletedImagesDir)
     }
@@ -323,6 +325,7 @@ final class ClipboardStore: ObservableObject {
         guard !Task.isCancelled, generation == captureGeneration else { return }
         if let existing = image(matching: fingerprint) {
             refresh(existing.refreshed(sourceBundleID: sourceBundleID))
+            if let url = imageURL(for: existing) { warmImageRow(url) }
             startImageOCRWorkerIfNeeded()
             return
         }
@@ -341,6 +344,15 @@ final class ClipboardStore: ObservableObject {
         guard insert(item) else {
             try? FileManager.default.removeItem(at: url)
             return
+        }
+        warmImageRow(url)
+    }
+
+    private func warmImageRow(_ url: URL) {
+        thumbnailWarmTask?.cancel()
+        // Only the latest capture is warmed eagerly; older history is prepared near the viewport.
+        thumbnailWarmTask = Task {
+            _ = await ImageThumbnail.loadAsync(url, maxPixel: ImageThumbnail.rowMaxPixel, priority: .prefetch)
         }
     }
 
@@ -458,6 +470,7 @@ final class ClipboardStore: ObservableObject {
             startImageOCRWorkerIfNeeded()
         }
         refreshImageTextIndexState()
+        if let url = imageURL(for: restored) { warmImageRow(url) }
         return restored
     }
 
@@ -479,6 +492,8 @@ final class ClipboardStore: ObservableObject {
         imageTextSearchGeneration &+= 1
         searchMetadataTask?.cancel()
         imageOCRTask?.cancel()
+        thumbnailWarmTask?.cancel()
+        thumbnailWarmTask = nil
         imageOCRRebuildIDs = nil
         pendingSearchMetadata.removeAll()
         guard sqlite3_exec(db, "DELETE FROM items", nil, nil, nil) == SQLITE_OK else { return }
@@ -487,6 +502,7 @@ final class ClipboardStore: ObservableObject {
         sqlite3_exec(db, "DELETE FROM stack_items", nil, nil, nil)
         stackMembership.removeAll()
         try? FileManager.default.removeItem(at: imagesDir)
+        ImageThumbnail.removeCachedRows(in: imagesDir)
         try? FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
         refreshImageTextIndexState()
     }
@@ -575,6 +591,7 @@ final class ClipboardStore: ObservableObject {
         }
         for url in contents.imageURLs {
             try? FileManager.default.removeItem(at: url)
+            ImageThumbnail.removeCachedImage(for: url)
         }
         refreshImageTextIndexState()
         return true
@@ -1248,7 +1265,9 @@ final class ClipboardStore: ObservableObject {
                 batch.filter { path in
                     // Revalidate immediately before deletion, including jobs restored after restart.
                     guard let url = Self.managedBlobURL(for: path, in: directory) else { return true }
-                    return remove(url)
+                    let removed = remove(url)
+                    if removed { ImageThumbnail.removeCachedImage(for: url) }
+                    return removed
                 }
             }.value
             guard !Task.isCancelled else { return }
@@ -1286,6 +1305,7 @@ final class ClipboardStore: ObservableObject {
     private func deleteBlob(_ item: ClipboardItem) {
         guard let path = item.imagePath, let url = managedBlobURL(for: path) else { return }
         try? FileManager.default.removeItem(at: url)
+        ImageThumbnail.removeCachedImage(for: url)
     }
 
     /// Accept only regular PNG files directly owned by this store. Database paths are data, not

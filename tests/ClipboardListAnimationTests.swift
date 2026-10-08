@@ -173,6 +173,94 @@ struct ClipboardListAnimationTests {
     }
 
     @MainActor
+    static func thumbnailScrollTests(in directory: URL) async throws {
+        let fixture = ListFixture(directory: directory)
+        fixture.store.setImageTextSearchEnabled(false)
+        let data = autoreleasepool { () -> Data in
+            let bitmap = NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: 4000, pixelsHigh: 2500, bitsPerSample: 8,
+                samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                bytesPerRow: 0, bitsPerPixel: 0)!
+            memset(bitmap.bitmapData!, 190, bitmap.bytesPerRow * bitmap.pixelsHigh)
+            return bitmap.representation(using: .png, properties: [:])!
+        }
+        let urls = (0..<50).map { directory.appendingPathComponent("images/scroll-\($0).png") }
+        for url in urls { try data.write(to: url) }
+        let items = urls.map { ClipboardItem(imagePath: $0.path,
+            imageFingerprint: $0.lastPathComponent, sourceBundleID: nil) }
+        fixture.update(items)
+        let hosting = NSHostingView(rootView: FixtureView(fixture: fixture))
+        let frame = NSRect(x: -10000, y: -10000, width: 300, height: 200)
+        let window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = hosting
+        window.orderFront(nil)
+        defer { window.close() }
+        hosting.layoutSubtreeIfNeeded()
+        let table = table(in: hosting)!
+
+        func symbol(in view: NSView) -> NSImageView? {
+            if let image = view as? NSImageView { return image }
+            return view.subviews.lazy.compactMap { symbol(in: $0) }.first
+        }
+        func visibleImages() -> [ClipboardItemCellView] {
+            let range = table.rows(in: table.visibleRect)
+            guard range.location != NSNotFound else { return [] }
+            return (range.location..<NSMaxRange(range)).compactMap { row in
+                let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? ClipboardItemCellView
+                return cell?.displayedKind == .image ? cell : nil
+            }
+        }
+        func waitForImages(_ condition: () -> Bool) async {
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while !condition() {
+                precondition(ContinuousClock.now < deadline, "Visible row thumbnails must finish after scrolling stops")
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+        }
+        await waitForImages {
+            !visibleImages().isEmpty && visibleImages().allSatisfy { symbol(in: $0)?.isHidden == true }
+        }
+        await waitForImages { ImageThumbnail.cached(urls[4], maxPixel: ImageThumbnail.rowMaxPixel) != nil }
+        precondition(ImageThumbnail.cached(urls[49], maxPixel: ImageThumbnail.rowMaxPixel) == nil,
+                     "Viewport prefetch must not decode the full history")
+        if let cell = visibleImages().first {
+            let range = table.rows(in: table.visibleRect)
+            let itemRow = (range.location..<NSMaxRange(range)).first {
+                table.view(atColumn: 0, row: $0, makeIfNecessary: false) === cell
+            }!
+            // All fixtures share today's first header, so item rows begin at 1.
+            let item = items[itemRow - 1]
+            ImageThumbnail.purgeRowMemory()
+            cell.configure(item: item, selected: false, query: "",
+                imageURL: fixture.store.imageURL(for: item), locale: .current)
+            precondition(symbol(in: cell)?.isHidden == true,
+                         "Reconfiguring the same item preserves its image even after memory eviction")
+        }
+        let previews = (20..<24).map { index in Task {
+            let image = await ImageThumbnail.loadAsync(urls[index], maxPixel: 900)
+            return image != nil
+        } }
+        let clip = table.enclosingScrollView!.contentView
+        for offset in [700, 1500, 2600, 500, 0] {
+            clip.scroll(to: NSPoint(x: 0, y: offset))
+            table.enclosingScrollView!.reflectScrolledClipView(clip)
+            hosting.layoutSubtreeIfNeeded()
+            try? await Task.sleep(for: .milliseconds(3))
+        }
+        let stopped = ContinuousClock.now
+        await waitForImages {
+            !visibleImages().isEmpty && visibleImages().allSatisfy { symbol(in: $0)?.isHidden == true }
+        }
+        let recovery = stopped.duration(to: .now)
+        for preview in previews {
+            let succeeded = await preview.value
+            precondition(succeeded)
+        }
+        print("PASS: native table rapid forward/reverse scrolling, bounded neighbor prefetch, retained images, concurrent previews; stopped recovery=\(recovery)")
+    }
+
+    @MainActor
     static func main() async throws {
         _ = NSApplication.shared
         let bundleID = Bundle.main.bundleIdentifier!
@@ -184,6 +272,14 @@ struct ClipboardListAnimationTests {
         }
         if CommandLine.arguments.contains("--date-groups-only") {
             try await ClipboardDateGroupingTests.run()
+            return
+        }
+        if CommandLine.arguments.contains("--thumbnails-only") {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("kit-thumbnail-ui-\(UUID())")
+            defer { try? FileManager.default.removeItem(at: directory) }
+            try await ImageDecodeCoordinatorTests.run()
+            try await ClipboardRowThumbnailTests.run()
+            try await thumbnailScrollTests(in: directory)
             return
         }
         let directory = FileManager.default.temporaryDirectory
@@ -352,5 +448,7 @@ struct ClipboardListAnimationTests {
         try await ImageSearchHighlightTests.run()
         try await ClipboardPreviewLifecycleTests.run()
         try await ImageDecodeCoordinatorTests.run()
+        try await ClipboardRowThumbnailTests.run()
+        try await thumbnailScrollTests(in: directory.appendingPathComponent("image-scroll"))
     }
 }

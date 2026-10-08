@@ -11,6 +11,13 @@ enum ImageFingerprint {
 
 /// Downsampled, memory-capped image loading for the clipboard UI: ImageIO decodes each on-disk image to exactly the pixel size needed and caches it in a system-evicted `NSCache`.
 enum ImageThumbnail {
+    static let rowMaxPixel: CGFloat = 512
+    private static let rowDiskCache = ClipboardRowThumbnailCache()
+
+    enum Priority: Int, Sendable {
+        case visibleRow, preview, prefetch
+    }
+
     /// `NSCache` is thread-safe but not annotated `Sendable`, so cross-thread use (a detached decode populating what the main actor reads) needs the guarantee asserted once here.
     private final class ImageCache: NSCache<NSString, NSImage>, @unchecked Sendable {
         private let mutationLock = NSLock()
@@ -50,7 +57,7 @@ enum ImageThumbnail {
     }()
 
     /// Longest-edge size at or below which a decode is a "row" thumbnail; larger is a "preview".
-    private static let rowThreshold: CGFloat = 512
+    private static let rowThreshold = rowMaxPixel
 
     private static func pick(_ maxPixel: CGFloat) -> ImageCache {
         maxPixel <= rowThreshold ? rowCache : previewCache
@@ -96,6 +103,7 @@ enum ImageThumbnail {
         private struct Waiter {
             let consumer: Consumer
             let continuation: CheckedContinuation<Decoded, Never>
+            let priority: Priority
         }
 
         private struct Job {
@@ -105,17 +113,21 @@ enum ImageThumbnail {
         }
 
         private let limit: Int
+        private let previewLimit: Int
         private let decodeImage: @Sendable (DecodeRequest) -> Decoded
         private let cacheImage: @Sendable (DecodeRequest, Decoded) -> Void
         private var jobs: [UUID: Job] = [:]
         private var requestJobs: [DecodeRequest: UUID] = [:]
         private var queue: [UUID] = []
         private var running = 0
+        private var runningPreviews = 0
 
-        init(limit: Int, decode: @escaping @Sendable (DecodeRequest) -> Decoded,
+        init(limit: Int, previewLimit: Int? = nil, decode: @escaping @Sendable (DecodeRequest) -> Decoded,
              cache: @escaping @Sendable (DecodeRequest, Decoded) -> Void) {
             precondition(limit > 0)
             self.limit = limit
+            self.previewLimit = previewLimit ?? limit
+            precondition(self.previewLimit > 0 && self.previewLimit <= limit)
             decodeImage = decode
             cacheImage = cache
         }
@@ -124,7 +136,7 @@ enum ImageThumbnail {
             (running, queue.count, jobs.values.reduce(0) { $0 + $1.waiters.count })
         }
 
-        func decode(_ request: DecodeRequest) async -> Decoded {
+        func decode(_ request: DecodeRequest, priority: Priority? = nil) async -> Decoded {
             let id = UUID()
             let consumer = Consumer()
             return await withTaskCancellationHandler {
@@ -133,7 +145,8 @@ enum ImageThumbnail {
                         continuation.resume(returning: .empty)
                         return
                     }
-                    let waiter = Waiter(consumer: consumer, continuation: continuation)
+                    let waiter = Waiter(consumer: consumer, continuation: continuation,
+                        priority: priority ?? (request.maxPixel <= Int(rowMaxPixel) ? .visibleRow : .preview))
                     if let jobID = requestJobs[request] {
                         jobs[jobID]?.waiters[id] = waiter
                     } else {
@@ -156,11 +169,16 @@ enum ImageThumbnail {
             else { return }
             waiter.continuation.resume(returning: .empty)
             guard let job = jobs[jobID], job.waiters.isEmpty else { return }
-            requestJobs[request] = nil
             if let worker = job.worker {
-                worker.cancel()
+                // Keep started row work reusable when the user scrolls back. Large previews
+                // still cancel as soon as their last consumer leaves.
+                if request.maxPixel > Int(rowMaxPixel) {
+                    requestJobs[request] = nil
+                    worker.cancel()
+                }
                 // ImageIO is synchronous: keep its slot until the worker actually finishes.
             } else {
+                requestJobs[request] = nil
                 jobs[jobID] = nil
                 queue.removeAll { $0 == jobID }
             }
@@ -168,7 +186,18 @@ enum ImageThumbnail {
 
         private func startQueued() {
             while running < limit, !queue.isEmpty {
-                let jobID = queue.removeFirst()
+                // A preview cannot take the slot reserved for visible row images. Already
+                // running synchronous work cannot be preempted, so bound previews at start.
+                let eligible = queue.indices.filter { index in
+                    guard let job = jobs[queue[index]] else { return true }
+                    return job.request.maxPixel <= Int(rowMaxPixel) || runningPreviews < previewLimit
+                }
+                guard let index = eligible.min(by: { left, right in
+                    let lhs = jobs[queue[left]]?.waiters.values.map(\.priority.rawValue).min() ?? Int.max
+                    let rhs = jobs[queue[right]]?.waiters.values.map(\.priority.rawValue).min() ?? Int.max
+                    return lhs == rhs ? left < right : lhs < rhs
+                }) else { break }
+                let jobID = queue.remove(at: index)
                 guard var job = jobs[jobID] else { continue }
                 // Skip consumers cancelled before their cancellation message reaches this actor.
                 for (id, waiter) in job.waiters where waiter.consumer.isCancelled {
@@ -188,16 +217,19 @@ enum ImageThumbnail {
                 }
                 jobs[jobID] = job
                 running += 1
+                if request.maxPixel > Int(rowMaxPixel) { runningPreviews += 1 }
             }
         }
 
         private func finish(_ jobID: UUID, result: Decoded) {
             guard let job = jobs.removeValue(forKey: jobID) else { return }
             running -= 1
+            if job.request.maxPixel > Int(rowMaxPixel) { runningPreviews -= 1 }
             if requestJobs[job.request] == jobID { requestJobs[job.request] = nil }
             let active = job.waiters.values.filter { $0.consumer.complete() }
-            // Unused or cancelled results never warm the cache; purges also invalidate generations.
-            if !active.isEmpty, job.worker?.isCancelled == false {
+            // Started rows warm the bounded cache even after scrolling away. Preview
+            // results still require a consumer; cache generations guard both paths.
+            if (!active.isEmpty || job.request.maxPixel <= Int(rowMaxPixel)), job.worker?.isCancelled == false {
                 cacheImage(job.request, result)
             }
             for waiter in job.waiters.values {
@@ -209,6 +241,7 @@ enum ImageThumbnail {
 
     private static let decodeCoordinator = DecodeCoordinator(
         limit: 2,
+        previewLimit: 1,
         decode: { load($0.url, maxPixel: CGFloat($0.maxPixel)) },
         cache: { request, result in
             guard let image = result.image else { return }
@@ -222,19 +255,65 @@ enum ImageThumbnail {
         previewCache.purge()
     }
 
+    /// Called after original deletion, invalidating pending writes before an undo can restore it.
+    static func removeCachedImage(for url: URL) {
+        rowCache.purge()
+        previewCache.purge()
+        rowDiskCache.remove(for: url)
+    }
+
+    static func removeCachedRows(in imagesDirectory: URL) {
+        rowCache.purge()
+        previewCache.purge()
+        rowDiskCache.removeAll(in: imagesDirectory)
+    }
+
+    /// Drop only decoded row bitmaps; persistent thumbnails remain available for a cold reload.
+    static func purgeRowMemory() {
+        rowCache.purge()
+    }
+
+    @MainActor
+    final class RowPrefetcher {
+        private var tasks: [URL: (id: UUID, task: Task<Void, Never>)] = [:]
+
+        isolated deinit { cancel() }
+
+        func cancel() {
+            for entry in tasks.values { entry.task.cancel() }
+            tasks.removeAll()
+        }
+
+        /// The caller supplies a bounded viewport neighborhood, ordered by scroll direction.
+        func update(_ urls: [URL]) {
+            let desired = Set(urls)
+            for url in tasks.keys.filter({ !desired.contains($0) }) {
+                tasks.removeValue(forKey: url)?.task.cancel()
+            }
+            for url in urls where tasks[url] == nil && cached(url, maxPixel: rowMaxPixel) == nil {
+                let id = UUID()
+                let task = Task { [weak self] in
+                    _ = await loadAsync(url, maxPixel: rowMaxPixel, priority: .prefetch)
+                    if self?.tasks[url]?.id == id { self?.tasks[url] = nil }
+                }
+                tasks[url] = (id, task)
+            }
+        }
+    }
+
     /// Cache-only lookup (never touches disk) so views render an already-decoded thumbnail on the same frame.
     static func cached(_ url: URL, maxPixel: CGFloat) -> NSImage? {
         pick(CGFloat(Int(maxPixel))).object(forKey: cacheKey(url, maxPixel))
     }
 
     /// Decodes off the main thread and returns the decode directly, not a cache re-read — a purge or eviction mid-decode must not strand a thumbnail on its placeholder.
-    static func loadAsync(_ url: URL, maxPixel: CGFloat) async -> NSImage? {
+    static func loadAsync(_ url: URL, maxPixel: CGFloat, priority: Priority? = nil) async -> NSImage? {
         guard !Task.isCancelled else { return nil }
         let maxPixel = CGFloat(Int(maxPixel))
         if let cached = cached(url, maxPixel: maxPixel) { return cached }
         let generation = pick(maxPixel).currentGeneration()
         let decoded = await decodeCoordinator.decode(DecodeRequest(
-            url: url, maxPixel: Int(maxPixel), generation: generation))
+            url: url, maxPixel: Int(maxPixel), generation: generation), priority: priority)
         guard !Task.isCancelled else { return nil }
         return decoded.image
     }
@@ -243,17 +322,32 @@ enum ImageThumbnail {
     private static func load(_ url: URL, maxPixel: CGFloat) -> Decoded {
         autoreleasepool {
             guard !Task.isCancelled else { return .empty }
-            guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), !Task.isCancelled
-            else { return .empty }
+            let ticket = maxPixel == rowMaxPixel ? rowDiskCache.ticket(for: url) : nil
             let options: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,
                 kCGImageSourceShouldCacheImmediately: true,
                 kCGImageSourceThumbnailMaxPixelSize: maxPixel,
             ]
-            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary),
-                  !Task.isCancelled
-            else { return .empty }
+            let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+            let cachedImage: CGImage? = ticket.flatMap { ticket in
+                guard let cachedURL = rowDiskCache.cachedURL(for: ticket),
+                    let source = CGImageSourceCreateWithURL(cachedURL as CFURL, sourceOptions)
+                else { return nil }
+                return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+            }
+            let cgImage: CGImage
+            if let cachedImage {
+                cgImage = cachedImage
+            } else {
+                guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions), !Task.isCancelled,
+                    let decoded = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary),
+                    !Task.isCancelled
+                else { return .empty }
+                cgImage = decoded
+                if let ticket { rowDiskCache.store(cgImage, for: ticket) }
+            }
+            guard !Task.isCancelled else { return .empty }
             let image = NSImage(
                 cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
             return Decoded(image: image, cost: cgImage.bytesPerRow * cgImage.height)

@@ -211,6 +211,84 @@ enum ImageDecodeCoordinatorTests {
         print("PASS: cancellation before actor registration creates no work or stranded continuation")
     }
 
+    private static func startedRowsSurviveScrollCancellation() async {
+        let gate = DecodeGate()
+        defer { gate.releaseAll() }
+        let queue = coordinator(gate, limit: 1)
+        let image = request("scroll-back", size: 512)
+        let first = Task { await queue.decode(image) }
+        await eventually("Row decode starts") { gate.callCount(image) == 1 }
+        first.cancel()
+        let cancelled = await first.value
+        precondition(cancelled.image == nil)
+        await eventually("Offscreen consumer leaves") { await queue.activity.consumers == 0 }
+        let returning = Task { await queue.decode(image) }
+        await eventually("Returning row rejoins its running work") { await queue.activity.consumers == 1 }
+        let activity = await queue.activity
+        precondition(gate.callCount(image) == 1 && activity.queued == 0)
+        returning.cancel()
+        _ = await returning.value
+        gate.release(image)
+        await eventually("Unused row warms the cache") { await queue.activity.running == 0 }
+        precondition(gate.counts.cached == 1 && gate.counts.cancelled == 0,
+                     "Started row work remains useful after every consumer scrolls away")
+        print("PASS: scroll-away/return shares one row decode, completed offscreen row stays warm")
+    }
+
+    private static func visiblePriorityPromotesSharedPrefetch() async {
+        let gate = DecodeGate()
+        defer { gate.releaseAll() }
+        let queue = coordinator(gate, limit: 1)
+        let blocker = request("priority-blocker")
+        let row = request("priority-row", size: 512)
+        let preview = request("priority-preview")
+        let distant = request("priority-distant", size: 512)
+        let blocking = Task { await queue.decode(blocker) }
+        await eventually("Blocking decode starts") { gate.callCount(blocker) == 1 }
+        let prefetched = Task { await queue.decode(row, priority: .prefetch) }
+        await eventually("Prefetch queues") { await queue.activity.consumers == 2 }
+        let previewed = Task { await queue.decode(preview) }
+        await eventually("Preview queues") { await queue.activity.consumers == 3 }
+        let distantLoad = Task { await queue.decode(distant, priority: .prefetch) }
+        let visible = Task { await queue.decode(row, priority: .visibleRow) }
+        await eventually("Visible row promotes the existing job") { await queue.activity.consumers == 5 }
+        gate.release(blocker)
+        await eventually("Visible row starts before preview") { gate.callCount(row) == 1 }
+        precondition(gate.callCount(preview) == 0 && gate.callCount(distant) == 0)
+        gate.release(row)
+        await eventually("Preview starts before distant prefetch") { gate.callCount(preview) == 1 }
+        precondition(gate.callCount(distant) == 0)
+        gate.releaseAll()
+        _ = await blocking.value
+        let first = await prefetched.value
+        let second = await visible.value
+        _ = await previewed.value
+        _ = await distantLoad.value
+        precondition(first.image === second.image && gate.callCount(row) == 1)
+        print("PASS: visible rows promote shared prefetch jobs; previews precede remaining prefetch")
+    }
+
+    private static func previewsReserveRoomForRows() async {
+        let gate = DecodeGate()
+        defer { gate.releaseAll() }
+        let queue = Coordinator(limit: 2, previewLimit: 1,
+            decode: { gate.decode($0) }, cache: { gate.cache($0, $1) })
+        let a = request("large-a"), b = request("large-b")
+        let row = request("reserved-row", size: 512)
+        let first = Task { await queue.decode(a) }
+        await eventually("Large preview starts") { gate.callCount(a) == 1 }
+        let second = Task { await queue.decode(b) }
+        await eventually("Second preview queues") { await queue.activity.queued == 1 }
+        let visible = Task { await queue.decode(row) }
+        await eventually("Row uses the reserved slot") { gate.callCount(row) == 1 }
+        precondition(gate.callCount(b) == 0 && gate.counts.peak == 2)
+        gate.releaseAll()
+        _ = await first.value
+        _ = await second.value
+        _ = await visible.value
+        print("PASS: synchronous previews cannot occupy both slots and block visible rows")
+    }
+
     private static func independentSizesAndGenerations() async {
         let gate = DecodeGate()
         defer { gate.releaseAll() }
@@ -295,6 +373,9 @@ enum ImageDecodeCoordinatorTests {
         await sharedConsumers()
         await cancelledWorkerAndRetry()
         await cancelledBeforeRegistration()
+        await startedRowsSurviveScrollCancellation()
+        await visiblePriorityPromotesSharedPrefetch()
+        await previewsReserveRoomForRows()
         await independentSizesAndGenerations()
         await failedDecodeReleasesSlot()
         try await realImageAndCancelledCacheHit()

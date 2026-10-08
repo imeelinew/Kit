@@ -47,6 +47,7 @@ xcrun swiftc -swift-version 6 -parse-as-library \
     "$repo_root/tests/ImageSearchHighlightTests.swift" \
     "$repo_root/tests/ClipboardPreviewLifecycleTests.swift" \
     "$repo_root/tests/ImageDecodeCoordinatorTests.swift" \
+    "$repo_root/tests/ClipboardRowThumbnailTests.swift" \
     -o "$test_dir/clipboard-list-tests"
 # Preserve completed checks in CI logs even if a later assertion aborts the harness.
 NSUnbufferedIO=YES "$test_dir/clipboard-list-tests" "$@"

@@ -378,10 +378,11 @@ final class ClipboardItemCellView: NSTableCellView {
 
 private final class ClipboardThumbnailView: NSView {
     /// Covers a full-width preview on a 2× display, including wide screenshots.
-    private static let imageMaxPixel: CGFloat = 512
+    private static let imageMaxPixel = ImageThumbnail.rowMaxPixel
 
     private let symbolView = NSImageView()
     private var representedID: ClipboardItem.ID?
+    private var representedURL: URL?
     private var loadTask: Task<Void, Never>?
     private var displayedImage: NSImage?
     private var placeholderKind: ClipboardItem.Kind = .image
@@ -444,8 +445,13 @@ private final class ClipboardThumbnailView: NSView {
     }
 
     func configure(item: ClipboardItem, imageURL: URL?) {
+        if item.kind == .image, representedID == item.id, representedURL == imageURL,
+            displayedImage != nil || loadTask != nil
+        { return }
         loadTask?.cancel()
+        loadTask = nil
         representedID = item.id
+        representedURL = imageURL
         displayedImage = nil
 
         switch item.kind {
@@ -464,7 +470,9 @@ private final class ClipboardThumbnailView: NSView {
             loadTask = Task { @MainActor [weak self] in
                 let image = await ImageThumbnail.loadAsync(
                     imageURL, maxPixel: Self.imageMaxPixel)
-                guard !Task.isCancelled, let self, representedID == id, let image else { return }
+                guard !Task.isCancelled, let self, representedID == id else { return }
+                loadTask = nil
+                guard let image else { return }
                 showImage(image)
             }
         }
@@ -493,6 +501,7 @@ private final class ClipboardThumbnailView: NSView {
         loadTask?.cancel()
         loadTask = nil
         representedID = nil
+        representedURL = nil
         displayedImage = nil
         cancelKindTransition()
         showKind(.image)

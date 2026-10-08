@@ -94,6 +94,10 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         context.coordinator.makeContainerView()
     }
 
+    static func dismantleNSView(_ nsView: ClipboardTableContainerView, coordinator: Coordinator) {
+        coordinator.stopThumbnailPrefetch()
+    }
+
     func updateNSView(_ containerView: ClipboardTableContainerView, context: Context) {
         context.coordinator.update(
             results: results,
@@ -138,6 +142,10 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private var applyingSelection = false
         private var lastGeometry = ClipboardTableGeometry()
         private var lastBoundsOrigin: NSPoint?
+        private let thumbnailPrefetcher = ImageThumbnail.RowPrefetcher()
+        private var thumbnailPrefetchQueued = false
+        private var thumbnailPrefetchStopped = false
+        private var scrollingDown = true
         private var hoverRefreshQueued = false
         private var hoverRefreshGeneration: UInt64 = 0
         private var regroupingDates = false
@@ -667,6 +675,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
 
         private func reportGeometry(scrolling: Bool) {
             guard let tableView, let scrollView = tableView.enclosingScrollView else { return }
+            queueThumbnailPrefetch()
             let viewport = scrollView.contentView.bounds.height
             let content =
                 tableView.bounds.height + scrollView.contentInsets.top
@@ -698,10 +707,51 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
 
         private func boundsChanged(_ origin: NSPoint) {
             let scrolling = lastBoundsOrigin.map { $0 != origin } ?? false
+            if let previous = lastBoundsOrigin, previous.y != origin.y {
+                scrollingDown = origin.y > previous.y
+            }
             lastBoundsOrigin = origin
             queueHoverRefresh()
             scrollHaptic()
             reportGeometry(scrolling: scrolling)
+        }
+
+        func stopThumbnailPrefetch() {
+            thumbnailPrefetchStopped = true
+            thumbnailPrefetcher.cancel()
+        }
+
+        private func queueThumbnailPrefetch() {
+            guard !thumbnailPrefetchStopped, !thumbnailPrefetchQueued else { return }
+            thumbnailPrefetchQueued = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.thumbnailPrefetchQueued = false
+                guard !self.thumbnailPrefetchStopped, let tableView = self.tableView,
+                    tableView.window?.isVisible == true, tableView.visibleRect.height > 0
+                else { self.thumbnailPrefetcher.cancel(); return }
+                let visible = tableView.rows(in: tableView.visibleRect)
+                guard visible.location != NSNotFound else { self.thumbnailPrefetcher.cancel(); return }
+                let last = min(self.rows.count, NSMaxRange(visible))
+                let first = min(last, visible.location)
+                guard last > first else { self.thumbnailPrefetcher.cancel(); return }
+                // One viewport in the scrolling direction, with a small reverse buffer.
+                // Cap the number of images even for unusually tall windows.
+                let count = min(12, last - first)
+                let start = max(0, first - (self.scrollingDown ? 2 : count))
+                let end = min(self.rows.count, last + (self.scrollingDown ? count : 2))
+                let ahead = self.scrollingDown
+                    ? Array(last..<end) : Array((start..<first).reversed())
+                let behind = self.scrollingDown
+                    ? Array((start..<first).reversed()) : Array(last..<end)
+                let indexes = ahead + behind
+                let urls = indexes.compactMap { index -> URL? in
+                    guard !NSLocationInRange(index, visible), case .item(let item) = self.rows[index],
+                        item.kind == .image else { return nil }
+                    return self.store?.imageURL(for: item)
+                }
+                self.thumbnailPrefetcher.update(Array(urls.prefix(12)))
+            }
         }
 
         /// One tick per row boundary crossing the viewport edge. Quiet while hover selection
