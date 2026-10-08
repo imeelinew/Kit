@@ -125,17 +125,21 @@ enum ClipboardKindFilter: Equatable, CaseIterable {
     }
 }
 
-/// Experimental trackpad haptics for list navigation. No-ops on hardware without a
+/// Trackpad haptics for palette interactions. No-ops on hardware without a
 /// haptic trackpad (mice, older MacBooks).
 @MainActor
 enum PaletteHaptics {
-    private static let performer = NSHapticFeedbackManager.defaultPerformer
-
-    /// The weakest pattern: one tick when the pointer crosses a row, or a row crosses
+    /// One alignment tick when the pointer crosses a row, or a row crosses
     /// the viewport edge during two-finger scrolling.
     static func tick() {
         guard AppCore.shared.settings.hapticFeedbackEnabled else { return }
-        performer.perform(.alignment, performanceTime: .now)
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+    }
+
+    /// Give immediate feedback when the hover preview begins appearing.
+    static func previewOpened() {
+        guard AppCore.shared.settings.hapticFeedbackEnabled else { return }
+        NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
     }
 }
 

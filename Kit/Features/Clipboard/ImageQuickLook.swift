@@ -174,6 +174,13 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
             relativeTo: anchorView.bounds, of: anchorView, preferredEdge: placement.edge)
     }
 
+    func popoverWillShow(_ notification: Notification) {
+        guard let shownPopover = notification.object as? NSPopover,
+            shownPopover === popover, requestedPresented, !isClosing
+        else { return }
+        PaletteHaptics.previewOpened()
+    }
+
     private func beginClose() {
         guard let popover else {
             finishCloseWithoutPopoverIfNeeded()
