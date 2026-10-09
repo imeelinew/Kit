@@ -98,13 +98,18 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     }
 
     func hide(restoreFocus: Bool) {
+        if hiding { return }
+        hiding = true
+        defer { hiding = false }
         presentationID = UUID()
         presentationTask?.cancel()
         presentationTask = nil
         isPresenting = false
-        if hiding { return }
-        hiding = true
-        defer { hiding = false }
+        // AppKit can redraw the parent while a popover closes or restores focus. Mask it
+        // before any teardown, and keep it masked until show() has prepared the next frame.
+        panel?.alphaValue = 0
+        core.palette.imageQuickLookOpen = false
+        ImageQuickLook.close(immediately: true)
         if let panel, panel.isVisible {
             if core.settings.switchToEnglishInputOnOpen {
                 InputSourceSwitcher.restore()

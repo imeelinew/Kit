@@ -266,6 +266,10 @@ struct ClipboardListAnimationTests {
         let bundleID = Bundle.main.bundleIdentifier!
         precondition(bundleID.hasPrefix("com.eli.Kit.tests.clipboard-list."),
                      "The list harness requires an isolated bundle identity")
+        if CommandLine.arguments.contains("--preview-lifecycle-only") {
+            try await ClipboardPreviewLifecycleTests.run()
+            return
+        }
         if CommandLine.arguments.contains("--retention-only") {
             await ClipboardRetentionSettingsTests.run()
             return

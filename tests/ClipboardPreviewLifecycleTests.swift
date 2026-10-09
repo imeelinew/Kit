@@ -14,6 +14,93 @@ enum ClipboardPreviewLifecycleTests {
         return view.subviews.lazy.compactMap { textView(in: $0) }.first
     }
 
+    @MainActor
+    private final class CloseProbe: NSObject {
+        let core: AppCore
+        let panel: PalettePanel
+        let selectedID: ClipboardItem.ID
+        var isHiding = false
+        var checkedClose = false
+
+        init(core: AppCore, panel: PalettePanel, selectedID: ClipboardItem.ID) {
+            self.core = core
+            self.panel = panel
+            self.selectedID = selectedID
+        }
+
+        @objc func willClose(_ notification: Notification) {
+            guard isHiding else { return }
+            checkedClose = true
+            precondition(panel.alphaValue == 0,
+                         "The palette is invisible before AppKit starts closing its popover")
+            precondition(core.palette.selectedID == selectedID && core.palette.isPreviewActive,
+                         "Popover teardown starts before resetting selection and preview")
+            // AppKit can call back into palette dismissal while restoring key focus.
+            core.hidePalette(restoreFocus: false)
+            precondition(core.palette.selectedID == selectedID && core.palette.isPreviewActive,
+                         "A reentrant hide cannot reset the presentation during popover teardown")
+        }
+    }
+
+    private static func quickLookDismissal(core: AppCore, item: ClipboardItem) async throws {
+        let vm = core.palette
+        let first = core.clipboardStore.addText("First result", kind: .text, sourceBundleID: nil)!
+        defer {
+            core.hidePalette(restoreFocus: false)
+            core.clipboardStore.remove(first)
+        }
+        // Exercise a cold presentation, reused panels, an in-flight exit, a completed exit,
+        // and dismissal while the actual AppKit popover is still open.
+        for delay: Int? in [0, 50, 150, 400, nil] {
+            core.showPalette()
+            for _ in 0..<100 {
+                if NSApp.windows.contains(where: {
+                    ($0 as? PalettePanel)?.paletteViewModel === vm && $0.isVisible
+                }) { break }
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            guard let panel = NSApp.windows.compactMap({ $0 as? PalettePanel }).first(where: {
+                $0.isVisible && $0.paletteViewModel === vm
+            }) else { preconditionFailure("The palette must finish presenting") }
+            precondition(panel.alphaValue == 1 && vm.selectedID == first.id && vm.isPreviewActive,
+                         "Reopening restores opacity and prepares the first selection")
+            vm.select(item.id)
+            await settle()
+            let probe = CloseProbe(core: core, panel: panel, selectedID: item.id)
+            NotificationCenter.default.addObserver(
+                probe, selector: #selector(CloseProbe.willClose(_:)),
+                name: NSPopover.willCloseNotification, object: nil)
+            defer { NotificationCenter.default.removeObserver(probe) }
+            vm.setImageQuickLookHovered(true, itemID: item.id)
+            try await Task.sleep(for: .milliseconds(650))
+            guard let previewWindow = panel.childWindows?.first(where: { $0.isVisible }) else {
+                preconditionFailure("The regression must exercise a real, visible NSPopover")
+            }
+            if let delay {
+                vm.setImageQuickLookHovered(false, itemID: item.id)
+                if delay > 0 { try await Task.sleep(for: .milliseconds(delay)) }
+            }
+            probe.isHiding = true
+            core.togglePalette() // The global close shortcut's entry point.
+            probe.isHiding = false
+            precondition(!panel.isVisible && panel.alphaValue == 0,
+                         "Closing immediately hides the palette before the reset can flash")
+            precondition(!previewWindow.isVisible || previewWindow.alphaValue == 0,
+                         "Closing does not leave a popover exit animation onscreen")
+            precondition(vm.selectedID == first.id && !vm.isPreviewActive && !vm.imageQuickLookOpen,
+                         "Selection and preview reset after the windows become invisible")
+            if delay == nil {
+                precondition(probe.checkedClose, "The open-popover close callback was exercised")
+            }
+            for _ in 0..<20 {
+                try await Task.sleep(for: .milliseconds(20))
+                precondition(!panel.isVisible,
+                             "Delayed popover and focus callbacks cannot bring the palette back")
+            }
+        }
+        print("PASS: real popover teardown, shortcut hide, reentrant close, hover-exit timing, repeated reopen")
+    }
+
     static func run() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("kit-preview-lifecycle-\(UUID())")
@@ -33,6 +120,8 @@ enum ClipboardPreviewLifecycleTests {
         await store.waitForImageOCR()
         let item = store.items.first!
         let url = store.imageURL(for: item)!
+
+        try await quickLookDismissal(core: core, item: item)
 
         controller.prewarm()
         await settle()

@@ -3,8 +3,8 @@ import SwiftUI
 
 enum ImageQuickLook {
     /// Close any open Quick Look without going through the SwiftUI binding (palette hide).
-    @MainActor static func close() {
-        ImageQuickLookSession.shared.forceClose()
+    @MainActor static func close(immediately: Bool = false) {
+        ImageQuickLookSession.shared.forceClose(immediately: immediately)
     }
 }
 
@@ -101,9 +101,15 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
     }
 
     /// Palette dismiss / `imageQuickLookOpen = false` when the representable may already be gone.
-    func forceClose() {
+    func forceClose(immediately: Bool) {
         requestedPresented = false
         notifyWhenClosed = false
+        if immediately, let popover {
+            // A hover-exit animation may already be in flight. Hide its window as well;
+            // changing animates alone does not finish an animation that already started.
+            popover.animates = false
+            popover.contentViewController?.view.window?.alphaValue = 0
+        }
         beginClose()
     }
 
