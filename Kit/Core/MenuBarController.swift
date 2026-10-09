@@ -4,7 +4,8 @@ import Combine
 import QuartzCore
 
 /// Menu bar status item: `arrow.trianglehead.clockwise` template icon, left-click toggles the palette,
-/// right-click offers About, Settings, clipboard monitoring pause, and Quit. Spins clockwise on successful copies.
+/// right-click offers About, Settings, an update check, clipboard monitoring pause, and Quit.
+/// Spins clockwise on successful copies.
 @MainActor
 final class MenuBarController: NSObject {
     private let settings: AppSettings
@@ -183,6 +184,16 @@ final class MenuBarController: NSObject {
 
         menu.addItem(.separator())
 
+        let updateItem = NSMenuItem(
+            title: AppLocalization.string("Check for Updates", locale: locale),
+            action: #selector(checkForUpdates),
+            keyEquivalent: ""
+        )
+        updateItem.target = self
+        menu.addItem(updateItem)
+
+        menu.addItem(.separator())
+
         let quitItem = NSMenuItem(
             title: AppLocalization.string("Quit Kit…", locale: locale),
             action: #selector(quit),
@@ -222,6 +233,10 @@ final class MenuBarController: NSObject {
 
     @objc private func openSettings() {
         AppCore.shared.showSettings()
+    }
+
+    @objc private func checkForUpdates() {
+        AppCore.shared.checkForUpdates()
     }
 
     @objc private func quit() {
