@@ -1,5 +1,22 @@
+import AppKit
 import Combine
 import Sparkle
+
+private let versionHistoryURL = URL(string: "https://imeelinew.github.io/Kit/version-history.html")!
+
+/// Gives the no-update alert its "Version History" button and opens the published change log.
+/// Sparkle calls these on the main thread; hopping keeps the nonisolated protocol requirement honest.
+private final class VersionHistoryDriver: NSObject, SPUStandardUserDriverDelegate {
+    func standardUserDriverShouldShowVersionHistoryForAppcastItem(_ item: SUAppcastItem) -> Bool {
+        true
+    }
+
+    func standardUserDriverShowVersionHistory(forAppcastItem item: SUAppcastItem) {
+        Task { @MainActor in
+            NSWorkspace.shared.open(versionHistoryURL)
+        }
+    }
+}
 
 /// Owns Sparkle for the lifetime of the app and exposes only the controls used by Kit's UI.
 /// Sparkle persists its own preferences; Kit deliberately does not duplicate them in AppSettings.
@@ -8,13 +25,19 @@ final class UpdateService: ObservableObject {
     @Published private(set) var canCheckForUpdates = false
     @Published private(set) var automaticallyChecksForUpdates = false
 
-    private let updaterController = SPUStandardUpdaterController(
-        startingUpdater: false,
-        updaterDelegate: nil,
-        userDriverDelegate: nil
-    )
+    /// Sparkle references its user driver delegate weakly, so Kit has to keep it alive here.
+    private let versionHistoryDriver: VersionHistoryDriver
+    private let updaterController: SPUStandardUpdaterController
 
     init() {
+        let versionHistoryDriver = VersionHistoryDriver()
+        self.versionHistoryDriver = versionHistoryDriver
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: false,
+            updaterDelegate: nil,
+            userDriverDelegate: versionHistoryDriver
+        )
+
         let updater = updaterController.updater
         updater.publisher(for: \.canCheckForUpdates)
             .receive(on: RunLoop.main)
