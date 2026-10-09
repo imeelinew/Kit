@@ -1,4 +1,5 @@
 import AppKit
+import Observation
 import SwiftUI
 @testable import Kit
 
@@ -81,10 +82,21 @@ enum ClipboardPreviewLifecycleTests {
                 if delay > 0 { try await Task.sleep(for: .milliseconds(delay)) }
             }
             probe.isHiding = true
+            let displayedContent = panel.contentView!
+            withObservationTracking {
+                _ = vm.isPreviewActive
+            } onChange: {
+                MainActor.assumeIsolated {
+                    precondition(displayedContent.window == nil,
+                                 "Preview teardown must not render into the closing window")
+                }
+            }
             core.togglePalette() // The global close shortcut's entry point.
             probe.isHiding = false
             precondition(!panel.isVisible && panel.alphaValue == 0,
-                         "Closing immediately hides the palette before the reset can flash")
+                         "Closing removes the palette from AppKit's visible window list")
+            precondition(panel.contentView == nil && displayedContent.window == nil,
+                         "Resetting the detached tree cannot change the closing window's pixels")
             precondition(!previewWindow.isVisible || previewWindow.alphaValue == 0,
                          "Closing does not leave a popover exit animation onscreen")
             precondition(vm.selectedID == first.id && !vm.isPreviewActive && !vm.imageQuickLookOpen,
@@ -121,7 +133,11 @@ enum ClipboardPreviewLifecycleTests {
         let item = store.items.first!
         let url = store.imageURL(for: item)!
 
-        try await quickLookDismissal(core: core, item: item)
+        for style in [PaletteVisualStyle.frosted, .liquid] {
+            core.settings.paletteVisualStyle = style
+            await settle()
+            try await quickLookDismissal(core: core, item: item)
+        }
 
         controller.prewarm()
         await settle()

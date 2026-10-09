@@ -6,6 +6,7 @@ import SwiftUI
 final class PaletteWindowController: NSObject, NSWindowDelegate {
     private unowned let core: AppCore
     private var panel: PalettePanel?
+    private var detachedContentView: NSView?
     private var panelStyle: PaletteVisualStyle?
     private var styleObserver: AnyCancellable?
     private var presentationTask: Task<Void, Never>?
@@ -74,6 +75,10 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
                 return
             }
             panel.beginPresentation()
+            if let detachedContentView {
+                panel.contentView = detachedContentView
+                self.detachedContentView = nil
+            }
             panel.alphaValue = 1
             panel.setFrame(finalFrame, display: false)
             // Commit the complete selection, preview and footer while still offscreen.
@@ -116,9 +121,15 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
             }
             panel.orderOut(nil)
         }
+        // A popover can defer the window's removal from the compositor after orderOut
+        // returns. Never render the reset into that window's still-live backing surface.
+        if let contentView = panel?.contentView {
+            detachedContentView = contentView
+            panel?.contentView = nil
+        }
         core.palette.prepareForNextPresentation()
-        // Reconcile the hidden hosting tree so the preview's view state and text storage release.
-        panel?.contentView?.layoutSubtreeIfNeeded()
+        // Release preview view state and text storage in a tree with no window to redraw.
+        detachedContentView?.layoutSubtreeIfNeeded()
         ClipboardPreviewPayload.purge()
         ImageSearchHighlightPayload.purge()
         ImageThumbnail.purgePreviews()
@@ -153,6 +164,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         let style = core.settings.paletteVisualStyle
         if let panel, panelStyle == style { return panel }
         panel?.orderOut(nil)
+        detachedContentView = nil
         let root = RootPaletteView(vm: core.palette, store: core.clipboardStore, settings: core.settings)
         let panel = PalettePanel(rootView: root, visualStyle: style)
         panel.delegate = self
@@ -171,6 +183,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         isPresenting = false
         panel?.orderOut(nil)
         panel = nil
+        detachedContentView = nil
         panelStyle = nil
         if visible {
             show()
