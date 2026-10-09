@@ -3,18 +3,30 @@ import Combine
 import Sparkle
 
 private let versionHistoryURL = URL(string: "https://imeelinew.github.io/Kit/version-history.html")!
+private let versionHistoryEnglishURL = URL(string: "https://imeelinew.github.io/Kit/version-history.en.html")!
 
 /// Gives the no-update alert its "Version History" button and opens the published change log.
 /// Sparkle calls these on the main thread; hopping keeps the nonisolated protocol requirement honest.
 private final class VersionHistoryDriver: NSObject, SPUStandardUserDriverDelegate {
-    func standardUserDriverShouldShowVersionHistoryForAppcastItem(_ item: SUAppcastItem) -> Bool {
+    func standardUserDriverShouldShowVersionHistory(for item: SUAppcastItem) -> Bool {
         true
     }
 
-    func standardUserDriverShowVersionHistory(forAppcastItem item: SUAppcastItem) {
+    func standardUserDriverShowVersionHistory(for item: SUAppcastItem) {
         Task { @MainActor in
-            NSWorkspace.shared.open(versionHistoryURL)
+            NSWorkspace.shared.open(Self.pageURL(for: AppCore.shared.settings.language))
         }
+    }
+
+    /// The change log is published in both of Kit's languages; `.system` follows the resolved bundle.
+    private static func pageURL(for language: AppLanguage) -> URL {
+        let code: String
+        switch language {
+        case .simplifiedChinese: code = "zh-Hans"
+        case .english: code = "en"
+        case .system: code = Bundle.main.preferredLocalizations.first ?? "en"
+        }
+        return code.hasPrefix("zh") ? versionHistoryURL : versionHistoryEnglishURL
     }
 }
 

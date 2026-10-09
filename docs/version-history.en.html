@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#000000">
+<title>Kit Version History</title>
+<style>
+  :root { color-scheme: dark; }
+
+  html { background: #000; }
+
+  body {
+    margin: 0;
+    background: #000;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
+                 "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 1.75;
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  main {
+    max-width: 32rem;
+    margin: 0 auto;
+    padding: 84px 24px 120px;
+  }
+
+  section + section { margin-top: 76px; }
+
+  .tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: #b29929;
+    color: #fdf0c2;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.45;
+    letter-spacing: 0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .date {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: #5c5c5c;
+  }
+
+  .group { margin-top: 32px; }
+
+  h3 {
+    margin: 0 0 10px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: #7a7a7a;
+  }
+
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: item;
+  }
+
+  li {
+    position: relative;
+    padding-left: 1.5em;
+    counter-increment: item;
+  }
+
+  li::before {
+    content: counter(item) ".";
+    position: absolute;
+    left: 0;
+    color: #7a7a7a;
+  }
+
+  li + li { margin-top: 6px; }
+
+  @media (max-width: 480px) {
+    main { padding: 64px 20px 96px; }
+    section + section { margin-top: 60px; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<section>
+  <span class="tag">v0.4.1</span>
+  <p class="date">October 8, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>Optional LLM clipboard classification with OpenRouter support</li>
+      <li>Controls for image text indexing</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>Row thumbnails are cached and visible images decode first</li>
+      <li>Haptic feedback when image previews open</li>
+      <li>Search can be cancelled mid-flight, and pinyin indexes are cached</li>
+      <li>Retention changes need confirmation, and image cleanup can be retried</li>
+      <li>LLM classification settings moved into Clipboard</li>
+      <li>Minimum system version raised to macOS 27</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.4.0</span>
+  <p class="date">October 4, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>Image text search with an index that persists</li>
+      <li>Clipboard items grouped by date, with configurable sections</li>
+      <li>Search matches highlighted inside images</li>
+      <li>Shift-Return pastes and keeps the palette open</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>Image decoding is concurrency-limited and cancellable, for steadier memory use</li>
+      <li>Palette content changes fade through opacity</li>
+      <li>Image Quick Look requires a sustained hover</li>
+      <li>Removed the Backspace delete and Space Quick Look shortcuts</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>A stationary pointer no longer overrides the keyboard selection</li>
+      <li>Stale previews no longer refill purged caches</li>
+      <li>Markdown previews no longer show a half-rendered document</li>
+      <li>Fixed horizontal bounce scrolling in the clipboard list</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.3.1</span>
+  <p class="date">September 30, 2026</p>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>Delete undo keeps only the most recent change, so preview updates stay simple</li>
+      <li>TypeSafe classification is more accurate</li>
+      <li>The TypeSafe API key is stored in app settings</li>
+      <li>The TypeSafe toggle is described in the experiments settings</li>
+      <li>Added third-party license notices</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>Fixed input method composition being interrupted by palette search</li>
+      <li>Fixed clipboard cells being rebuilt during non-animated row updates</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.3.0</span>
+  <p class="date">September 28, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>⌘Z undoes a deletion</li>
+      <li>Experimental TypeSafe AI type refinement</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>The app menu replaces Settings with About</li>
+      <li>The search placeholder is drawn with SwiftUI</li>
+      <li>Image previews take the larger of the left or below placements</li>
+      <li>Follow scrolling waits until row animations settle</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>Fixed the search field losing focus and caret after a menu closes</li>
+      <li>Fixed text editing in the menu-less agent app</li>
+      <li>Fixed input in the API key field</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.2.4</span>
+  <p class="date">September 26, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>Backspace deletes items</li>
+      <li>Optional trackpad haptics for list navigation</li>
+      <li>Shortcuts for switching content types</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>Smoother palette transitions</li>
+      <li>Clicking a list item pastes it</li>
+      <li>Larger image previews in the list</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>Fixed history being reordered when reusing a clipboard item</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.2.3</span>
+  <p class="date">September 25, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>Palette shortcuts to cycle between the clipboard and stacks</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>Simplified pinned card controls, with reset moved to the top right</li>
+      <li>Removed pinned card titles and persistence</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>Fixed the app icon drawing an invisible square on older systems</li>
+      <li>Fixed the settings title not following the selected language</li>
+      <li>Fixed zoom drift on pinned cards</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.2.2</span>
+  <p class="date">September 25, 2026</p>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>Automatic update checks moved to About</li>
+      <li>The settings sidebar uses Lucide icons</li>
+      <li>The palette opens on shortcut key-down, so the first frame is faster</li>
+      <li>Redesigned app icon</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>Fixed the settings sidebar selection style failing on newer systems</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.2.1</span>
+  <p class="date">September 24, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>Local paths are detected and can be opened in Finder</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>The settings window is a native split view</li>
+      <li>The palette's first frame is complete, so it no longer flickers</li>
+      <li>Better rendering for clipboard item titles and icons</li>
+      <li>Preview text is no longer selectable</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>Fixed preview text still being selectable while a menu is open</li>
+      <li>Fixed untranslated strings after the rename to Kit</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.2.0</span>
+  <p class="date">September 23, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>Stacks for grouping clipboard items</li>
+      <li>Create text items manually</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>The app is renamed to Kit</li>
+      <li>The palette uses a Liquid Glass background</li>
+      <li>The menu bar icon spins on copy</li>
+      <li>The clipboard pause state survives a relaunch</li>
+      <li>Removed the Past palette and the visual style switch</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.1.9</span>
+  <p class="date">August 30, 2026</p>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>Fixed some bugs</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.1.8</span>
+  <p class="date">August 21, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>A clipboard type filter next to the search field</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>Updated app icon</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>Fixed the type filter offering types that are not in the list</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.1.7</span>
+  <p class="date">August 18, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>A menu bar icon with spin and sound feedback on copy</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>List hover actions use a Safe Triangle, so the pointer moves more naturally</li>
+      <li>Revised settings copy and Lucide icons</li>
+      <li>Text sizing and scroll position for pinned items</li>
+      <li>Removed the auto spotlight feature</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>Fixed unstable paste-target icon rendering</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.1.6</span>
+  <p class="date">August 17, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>Plain text and links can be pinned to the screen</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>Revised settings page copy</li>
+      <li>More reliable search focus and inline renaming</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>Fixed pinned cards zooming and drawing outside the visible frame</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.1.5</span>
+  <p class="date">August 16, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>Pinned cards support custom titles, renaming, and moving off screen</li>
+      <li>Opacity and background blur settings for pinned cards</li>
+      <li>A shared text size for pinned cards</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>Inline renaming in the palette, with clearer search focus</li>
+      <li>Settings reorganized into a Clipboard pane with grouped sections</li>
+      <li>Open pinned cards are restored after a relaunch</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>⌘W no longer closes Settings while a shortcut is being recorded</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.1.4</span>
+  <p class="date">August 15, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>Pin Markdown and code text to the screen</li>
+      <li>A size preference and shortcuts for pinned image windows</li>
+      <li>An open-in-focus preference</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>Code block highlighting in Markdown previews</li>
+      <li>More robust clipboard IO, with cancellable preview work</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>Fixed pinned windows not hiding in fullscreen Spaces</li>
+      <li>Fixed code detection inside Markdown articles</li>
+      <li>Fixed a leading space in the search field being searched</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.1.3</span>
+  <p class="date">August 12, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>Markdown previews with tables and code block highlighting</li>
+      <li>Customizable palette shortcuts</li>
+      <li>Pin images to the screen</li>
+      <li>Sparkle automatic updates</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>Image capture and deduplication</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>Fixed the Quick Look trigger conditions</li>
+      <li>Fixed pasting images from Finder</li>
+      <li>Fixed Markdown table header parsing</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.1.2</span>
+  <p class="date">August 6, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>An About pane in Settings, closable with ⌘W</li>
+      <li>Space Quick Look for images</li>
+      <li>Whole-string http(s) URLs are classified as links</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>Clipboard ordering and date sections</li>
+      <li>Editing shortcuts in text previews</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>Fixed the settings interface not updating after a language change</li>
+      <li>Fixed a stale paste-target icon in the menu bar popover</li>
+      <li>Fixed Return not pasting after clicking the list</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.1.1</span>
+  <p class="date">August 3, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>Pinyin search with match highlighting</li>
+      <li>Select text in the preview to copy it</li>
+      <li>Code type detection and syntax highlighting</li>
+      <li>Follows the system appearance, with controls for the system clipboard history</li>
+      <li>A localized interface with a language preference</li>
+      <li>Source app icons in the list</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>Clipboard history is persisted and recoverable after an unexpected quit</li>
+      <li>Full-history search moved off the main thread, so typing no longer stutters</li>
+      <li>Settings use native grouped navigation in a single column</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <span class="tag">v0.1.0</span>
+  <p class="date">July 31, 2026</p>
+  <div class="group">
+    <h3>New Features</h3>
+    <ul>
+      <li>First release: clipboard history, a global shortcut palette, image thumbnails, launch at login, and permission settings</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+</body>
+</html>
