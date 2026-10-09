@@ -100,19 +100,19 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>Optional LLM clipboard classification with OpenRouter support</li>
-      <li>Controls for image text indexing</li>
+      <li>Added optional LLM-powered clipboard text classification with custom OpenRouter model support</li>
+      <li>Added preferences to configure image OCR text indexing and trigger manual re-indexing</li>
     </ul>
   </div>
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>Row thumbnails are cached and visible images decode first</li>
-      <li>Haptic feedback when image previews open</li>
-      <li>Search can be cancelled mid-flight, and pinyin indexes are cached</li>
-      <li>Retention changes need confirmation, and image cleanup can be retried</li>
-      <li>LLM classification settings moved into Clipboard</li>
-      <li>Minimum system version raised to macOS 27</li>
+      <li>Introduced row thumbnail caching and prioritized on-demand decoding for visible images to reduce system resource usage</li>
+      <li>Added subtle trackpad haptic feedback when opening image previews</li>
+      <li>Search queries can now be cancelled mid-flight, with cached pinyin indexes for faster keystroke response</li>
+      <li>Added confirmation dialogs before changing clipboard history retention limits, and retry handling for image cache cleanup</li>
+      <li>Consolidated LLM classification settings into the Clipboard preferences tab</li>
+      <li>Raised the minimum required operating system to macOS 27</li>
     </ul>
   </div>
 </section>
@@ -123,28 +123,28 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>Image text search with an index that persists</li>
-      <li>Clipboard items grouped by date, with configurable sections</li>
-      <li>Search matches highlighted inside images</li>
-      <li>Shift-Return pastes and keeps the palette open</li>
+      <li>Added on-device OCR text search for images, backed by a persistent index without repeated recognition</li>
+      <li>Group clipboard history chronologically (Today, Yesterday, Earlier) with configurable section rules</li>
+      <li>Search matches are now visually highlighted directly inside image previews</li>
+      <li>Added ⇧Enter (Shift-Return) to paste items sequentially while keeping the palette open</li>
     </ul>
   </div>
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>Image decoding is concurrency-limited and cancellable, for steadier memory use</li>
-      <li>Palette content changes fade through opacity</li>
-      <li>Image Quick Look requires a sustained hover</li>
-      <li>Removed the Backspace delete and Space Quick Look shortcuts</li>
+      <li>Optimized image decoding pipeline with limited concurrency and full cancellation support for a steadier memory footprint</li>
+      <li>Smooth opacity cross-fade transitions when switching palette views and type filters</li>
+      <li>Image Quick Look now requires a sustained hover to prevent accidental triggers while navigating the list</li>
+      <li>Streamlined keyboard shortcuts by removing Backspace deletion and Spacebar Quick Look to prevent accidental actions</li>
     </ul>
   </div>
   <div class="group">
     <h3>Fixes</h3>
     <ul>
-      <li>A stationary pointer no longer overrides the keyboard selection</li>
-      <li>Stale previews no longer refill purged caches</li>
-      <li>Markdown previews no longer show a half-rendered document</li>
-      <li>Fixed horizontal bounce scrolling in the clipboard list</li>
+      <li>Fixed an issue where a stationary mouse pointer could inadvertently override keyboard selection</li>
+      <li>Fixed cancelled or stale preview tasks repopulating cleared caches with outdated data</li>
+      <li>Fixed Markdown previews momentarily flashing half-rendered layouts before parsing finishes</li>
+      <li>Eliminated unwanted horizontal bounce elasticity in the clipboard table</li>
     </ul>
   </div>
 </section>
@@ -155,18 +155,18 @@
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>Delete undo keeps only the most recent change, so preview updates stay simple</li>
-      <li>TypeSafe classification is more accurate</li>
-      <li>The TypeSafe API key is stored in app settings</li>
-      <li>The TypeSafe toggle is described in the experiments settings</li>
-      <li>Added third-party license notices</li>
+      <li>Streamlined deletion undo to retain only the most recent operation, keeping preview updates lean and reliable</li>
+      <li>Enhanced TypeSafe AI classification accuracy and prompt rules</li>
+      <li>Securely stored the TypeSafe API key in local application preferences</li>
+      <li>Added descriptive helper text for the TypeSafe AI toggle in Experiments settings</li>
+      <li>Added third-party open-source license notices in About</li>
     </ul>
   </div>
   <div class="group">
     <h3>Fixes</h3>
     <ul>
-      <li>Fixed input method composition being interrupted by palette search</li>
-      <li>Fixed clipboard cells being rebuilt during non-animated row updates</li>
+      <li>Fixed palette search interrupting input method composition (IME) during Chinese and Japanese typing</li>
+      <li>Fixed unnecessary clipboard cell re-instantiations during non-animated row updates</li>
     </ul>
   </div>
 </section>
@@ -177,25 +177,25 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>⌘Z undoes a deletion</li>
-      <li>Experimental TypeSafe AI type refinement</li>
+      <li>Support ⌘Z to undo accidental clipboard item deletions</li>
+      <li>Introduced experimental TypeSafe AI content classification to accurately recognize structured text and data kinds</li>
     </ul>
   </div>
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>The app menu replaces Settings with About</li>
-      <li>The search placeholder is drawn with SwiftUI</li>
-      <li>Image previews take the larger of the left or below placements</li>
-      <li>Follow scrolling waits until row animations settle</li>
+      <li>Replaced the Settings menu item with a dedicated About pane in the main application menu</li>
+      <li>Adopted a native SwiftUI overlay to render the search bar placeholder</li>
+      <li>Smart preview placement: automatically positions previews on the left or below based on available display space</li>
+      <li>Improved keyboard navigation by deferring follow-scroll until row animations have completely settled</li>
     </ul>
   </div>
   <div class="group">
     <h3>Fixes</h3>
     <ul>
-      <li>Fixed the search field losing focus and caret after a menu closes</li>
-      <li>Fixed text editing in the menu-less agent app</li>
-      <li>Fixed input in the API key field</li>
+      <li>Fixed the search field losing focus and its blinking cursor caret when contextual menus dismiss</li>
+      <li>Fixed standard keyboard editing shortcuts failing to work in text fields when the app menu bar is hidden</li>
+      <li>Rebuilt the API key field using native secure text fields to resolve keystroke input issues</li>
     </ul>
   </div>
 </section>
@@ -206,23 +206,23 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>Backspace deletes items</li>
-      <li>Optional trackpad haptics for list navigation</li>
-      <li>Shortcuts for switching content types</li>
+      <li>Added Delete/Backspace shortcut to quickly remove selected items from history</li>
+      <li>Added optional trackpad haptic feedback when navigating list items</li>
+      <li>Added configurable keyboard shortcuts to cycle through content type filters</li>
     </ul>
   </div>
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>Smoother palette transitions</li>
-      <li>Clicking a list item pastes it</li>
-      <li>Larger image previews in the list</li>
+      <li>Polished palette animations for smoother view transitions</li>
+      <li>Clicking any clipboard item now directly pastes it into the active frontmost application</li>
+      <li>Increased thumbnail preview dimensions within list rows for clearer visual identification</li>
     </ul>
   </div>
   <div class="group">
     <h3>Fixes</h3>
     <ul>
-      <li>Fixed history being reordered when reusing a clipboard item</li>
+      <li>Fixed an issue where reusing an existing clipboard entry disrupted the chronological history order</li>
     </ul>
   </div>
 </section>
@@ -233,22 +233,22 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>Palette shortcuts to cycle between the clipboard and stacks</li>
+      <li>Added dedicated palette shortcuts to quickly switch between Clipboard History and Stacks</li>
     </ul>
   </div>
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>Simplified pinned card controls, with reset moved to the top right</li>
-      <li>Removed pinned card titles and persistence</li>
+      <li>Streamlined pinned card controls and relocated the window size reset button to the top-right corner</li>
+      <li>Removed custom card titles and relaunch persistence for a cleaner, distraction-free pinning workflow</li>
     </ul>
   </div>
   <div class="group">
     <h3>Fixes</h3>
     <ul>
-      <li>Fixed the app icon drawing an invisible square on older systems</li>
-      <li>Fixed the settings title not following the selected language</li>
-      <li>Fixed zoom drift on pinned cards</li>
+      <li>Fixed the app icon rendering an unwanted white border/square background on earlier macOS releases</li>
+      <li>Fixed the Settings window title failing to update dynamically when changing interface language</li>
+      <li>Unified zoom anchor points on pinned cards to eliminate position drift during resizing</li>
     </ul>
   </div>
 </section>
@@ -259,16 +259,16 @@
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>Automatic update checks moved to About</li>
-      <li>The settings sidebar uses Lucide icons</li>
-      <li>The palette opens on shortcut key-down, so the first frame is faster</li>
-      <li>Redesigned app icon</li>
+      <li>Relocated automatic update check controls into the About pane</li>
+      <li>Refreshed settings sidebar icons with clean, modern Lucide iconography</li>
+      <li>Palette now triggers immediately on key-down, significantly improving first-frame appearance speed</li>
+      <li>Redesigned the application icon in accordance with modern macOS design guidelines</li>
     </ul>
   </div>
   <div class="group">
     <h3>Fixes</h3>
     <ul>
-      <li>Fixed the settings sidebar selection style failing on newer systems</li>
+      <li>Fixed sidebar selection highlight styles breaking on newer macOS versions</li>
     </ul>
   </div>
 </section>
@@ -279,23 +279,23 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>Local paths are detected and can be opened in Finder</li>
+      <li>Intelligently detect local file paths in clipboard items with a one-click action to reveal them in Finder</li>
     </ul>
   </div>
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>The settings window is a native split view</li>
-      <li>The palette's first frame is complete, so it no longer flickers</li>
-      <li>Better rendering for clipboard item titles and icons</li>
-      <li>Preview text is no longer selectable</li>
+      <li>Rebuilt the Settings window with a native macOS split-view layout</li>
+      <li>Pre-calculates layouts before presentation so the palette appears fully formed with zero first-frame flicker</li>
+      <li>Refined title typography and symbol rendering for clipboard entries</li>
+      <li>Made preview text non-selectable to keep focus and navigation crisp</li>
     </ul>
   </div>
   <div class="group">
     <h3>Fixes</h3>
     <ul>
-      <li>Fixed preview text still being selectable while a menu is open</li>
-      <li>Fixed untranslated strings after the rename to Kit</li>
+      <li>Fixed an issue where preview text could still be highlighted while context menus were active</li>
+      <li>Resolved missing localizations and naming inconsistencies following the rebrand to Kit</li>
     </ul>
   </div>
 </section>
@@ -306,18 +306,18 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>Stacks for grouping clipboard items</li>
-      <li>Create text items manually</li>
+      <li>Introduced Stacks: organize, bookmark, and group frequently used clipboard items into custom collections</li>
+      <li>Support manually creating custom text notes and snippets directly within the palette</li>
     </ul>
   </div>
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>The app is renamed to Kit</li>
-      <li>The palette uses a Liquid Glass background</li>
-      <li>The menu bar icon spins on copy</li>
-      <li>The clipboard pause state survives a relaunch</li>
-      <li>Removed the Past palette and the visual style switch</li>
+      <li>Officially renamed the application to Kit with a refreshed, lightweight brand identity</li>
+      <li>Introduced a modern Liquid Glass translucent window backdrop for the main palette</li>
+      <li>Menu bar icon now features an elegant spinning animation whenever new content is captured</li>
+      <li>Clipboard capture pause state now persists seamlessly across application restarts</li>
+      <li>Streamlined architecture by removing the experimental Past palette and redundant visual style toggles</li>
     </ul>
   </div>
 </section>
@@ -326,9 +326,15 @@
   <span class="tag">v0.1.9</span>
   <p class="date">August 30, 2026</p>
   <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>Migrated to native macOS AppIcon asset catalog standards, improving icon rendering fidelity and packaging reliability</li>
+    </ul>
+  </div>
+  <div class="group">
     <h3>Fixes</h3>
     <ul>
-      <li>Fixed some bugs</li>
+      <li>Resolved minor packaging and update distribution edge cases</li>
     </ul>
   </div>
 </section>
@@ -339,19 +345,19 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>A clipboard type filter next to the search field</li>
+      <li>Added a content type filter next to the search field to quickly filter by text, rich text, images, and links</li>
     </ul>
   </div>
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>Updated app icon</li>
+      <li>Updated app icon artwork and added a full unit test suite with CI automated testing workflows</li>
     </ul>
   </div>
   <div class="group">
     <h3>Fixes</h3>
     <ul>
-      <li>Fixed the type filter offering types that are not in the list</li>
+      <li>Fixed the type filter displaying categories that do not exist in the current clipboard history</li>
     </ul>
   </div>
 </section>
@@ -362,22 +368,22 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>A menu bar icon with spin and sound feedback on copy</li>
+      <li>Added a persistent menu bar status item with spinning animation and optional audio feedback upon copying</li>
     </ul>
   </div>
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>List hover actions use a Safe Triangle, so the pointer moves more naturally</li>
-      <li>Revised settings copy and Lucide icons</li>
-      <li>Text sizing and scroll position for pinned items</li>
-      <li>Removed the auto spotlight feature</li>
+      <li>Implemented a Safe Triangle (Menu Aim) hover tracking algorithm, making cursor movement toward action menus seamless and accidental-trigger free</li>
+      <li>Polished interface copy across settings and integrated Lucide icon styling</li>
+      <li>Improved text scaling and scroll position preservation for pinned items</li>
+      <li>Removed legacy auto-spotlight behavior for cleaner, predictable focus control</li>
     </ul>
   </div>
   <div class="group">
     <h3>Fixes</h3>
     <ul>
-      <li>Fixed unstable paste-target icon rendering</li>
+      <li>Fixed rendering instability and flickering of paste-target application icons</li>
     </ul>
   </div>
 </section>
@@ -388,20 +394,20 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>Plain text and links can be pinned to the screen</li>
+      <li>Expanded Pin to Screen: plain text snippets and web links can now be pinned as floating desktop cards</li>
     </ul>
   </div>
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>Revised settings page copy</li>
-      <li>More reliable search focus and inline renaming</li>
+      <li>Refined and clarified descriptive text across settings pages</li>
+      <li>Stabilized search field focus management and inline rename interactions in the palette</li>
     </ul>
   </div>
   <div class="group">
     <h3>Fixes</h3>
     <ul>
-      <li>Fixed pinned cards zooming and drawing outside the visible frame</li>
+      <li>Fixed pinned cards zooming beyond display boundaries and clipping outside the screen frame</li>
     </ul>
   </div>
 </section>
@@ -412,23 +418,23 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>Pinned cards support custom titles, renaming, and moving off screen</li>
-      <li>Opacity and background blur settings for pinned cards</li>
-      <li>A shared text size for pinned cards</li>
+      <li>Enhanced pinned cards with custom titles, inline renaming, and edge-hiding capabilities</li>
+      <li>Added customizable window opacity and frosted background blur settings for pinned cards</li>
+      <li>Adopted a standardized text typography scale across pinned cards</li>
     </ul>
   </div>
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>Inline renaming in the palette, with clearer search focus</li>
-      <li>Settings reorganized into a Clipboard pane with grouped sections</li>
-      <li>Open pinned cards are restored after a relaunch</li>
+      <li>Introduced inline renaming in the palette and clarified search focus transitions</li>
+      <li>Reorganized Preferences into a structured Clipboard pane with native grouped sections</li>
+      <li>Open pinned cards are automatically restored when relaunching the application</li>
     </ul>
   </div>
   <div class="group">
     <h3>Fixes</h3>
     <ul>
-      <li>⌘W no longer closes Settings while a shortcut is being recorded</li>
+      <li>Fixed ⌘W inadvertently closing the Settings window while recording a keyboard shortcut</li>
     </ul>
   </div>
 </section>
@@ -439,24 +445,24 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>Pin Markdown and code text to the screen</li>
-      <li>A size preference and shortcuts for pinned image windows</li>
-      <li>An open-in-focus preference</li>
+      <li>Support pinning Markdown documents and syntax-highlighted code snippets to the screen</li>
+      <li>Added default size preferences and dedicated management shortcuts for pinned image windows</li>
+      <li>Added an "Open with focus" preference to automatically focus the search bar upon invocation</li>
     </ul>
   </div>
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>Code block highlighting in Markdown previews</li>
-      <li>More robust clipboard IO, with cancellable preview work</li>
+      <li>Enhanced Markdown previews with comprehensive syntax highlighting for fenced code blocks</li>
+      <li>Hardened clipboard I/O pipeline and added cancellation support for in-flight preview generation</li>
     </ul>
   </div>
   <div class="group">
     <h3>Fixes</h3>
     <ul>
-      <li>Fixed pinned windows not hiding in fullscreen Spaces</li>
-      <li>Fixed code detection inside Markdown articles</li>
-      <li>Fixed a leading space in the search field being searched</li>
+      <li>Fixed pinned floating windows failing to hide when switching to fullscreen macOS Spaces</li>
+      <li>Fixed inline code detection misclassifying broader Markdown content</li>
+      <li>Fixed leading whitespace in the search bar causing empty query results</li>
     </ul>
   </div>
 </section>
@@ -467,24 +473,24 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>Markdown previews with tables and code block highlighting</li>
-      <li>Customizable palette shortcuts</li>
-      <li>Pin images to the screen</li>
-      <li>Sparkle automatic updates</li>
+      <li>Added full AST-rendered Markdown previews with native table layouts and syntax-highlighted code blocks</li>
+      <li>Added fully customizable global keyboard shortcuts to invoke the clipboard palette</li>
+      <li>Introduced Pin to Screen: pin clipboard images as floating, borderless desktop overlays</li>
+      <li>Integrated Sparkle 2 framework for secure, seamless background update checking and installation</li>
     </ul>
   </div>
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>Image capture and deduplication</li>
+      <li>Optimized clipboard image capture with intelligent deduplication and data integrity checks</li>
     </ul>
   </div>
   <div class="group">
     <h3>Fixes</h3>
     <ul>
-      <li>Fixed the Quick Look trigger conditions</li>
-      <li>Fixed pasting images from Finder</li>
-      <li>Fixed Markdown table header parsing</li>
+      <li>Fixed Spacebar Quick Look triggering conditions and debounce sensitivity</li>
+      <li>Fixed an issue preventing images copied directly in Finder from pasting correctly</li>
+      <li>Fixed Markdown table header parsing errors on complex multi-column tables</li>
     </ul>
   </div>
 </section>
@@ -495,24 +501,24 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>An About pane in Settings, closable with ⌘W</li>
-      <li>Space Quick Look for images</li>
-      <li>Whole-string http(s) URLs are classified as links</li>
+      <li>Added a dedicated About pane in Settings, supporting dismissal via standard ⌘W</li>
+      <li>Added Spacebar Quick Look preview for image items in the clipboard list</li>
+      <li>Enhanced smart URL classification to automatically identify standalone HTTP/HTTPS links</li>
     </ul>
   </div>
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>Clipboard ordering and date sections</li>
-      <li>Editing shortcuts in text previews</li>
+      <li>Refined chronological sorting and added structured date section headers in the history list</li>
+      <li>Migrated text previews to native AppKit views with standard macOS text editing shortcuts</li>
     </ul>
   </div>
   <div class="group">
     <h3>Fixes</h3>
     <ul>
-      <li>Fixed the settings interface not updating after a language change</li>
-      <li>Fixed a stale paste-target icon in the menu bar popover</li>
-      <li>Fixed Return not pasting after clicking the list</li>
+      <li>Fixed the Settings interface failing to refresh immediately when changing languages</li>
+      <li>Fixed stale paste-target application icons appearing in the menu bar popover</li>
+      <li>Fixed Return key failing to paste the selected item after clicking on the list</li>
     </ul>
   </div>
 </section>
@@ -523,20 +529,20 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>Pinyin search with match highlighting</li>
-      <li>Select text in the preview to copy it</li>
-      <li>Code type detection and syntax highlighting</li>
-      <li>Follows the system appearance, with controls for the system clipboard history</li>
-      <li>A localized interface with a language preference</li>
-      <li>Source app icons in the list</li>
+      <li>Added Chinese Pinyin full-spelling and initial-letter search with matched character highlighting</li>
+      <li>Support selecting and copying arbitrary text snippets directly within the preview pane</li>
+      <li>Automatic programming language detection and syntax highlighting for copied code snippets</li>
+      <li>Adaptive macOS light/dark appearance support, with controls for system clipboard history</li>
+      <li>Fully localized bilingual interface (English and Simplified Chinese) with in-app language switching</li>
+      <li>Display original source application icons and names alongside clipboard entries</li>
     </ul>
   </div>
   <div class="group">
     <h3>Improvements</h3>
     <ul>
-      <li>Clipboard history is persisted and recoverable after an unexpected quit</li>
-      <li>Full-history search moved off the main thread, so typing no longer stutters</li>
-      <li>Settings use native grouped navigation in a single column</li>
+      <li>Durable SQLite persistence for clipboard history, ensuring complete recovery after unexpected quits</li>
+      <li>Moved full-history search to background threads, eliminating typing latency and UI stutters</li>
+      <li>Redesigned Settings into a clean single-column layout adhering to macOS Human Interface Guidelines</li>
     </ul>
   </div>
 </section>
@@ -547,7 +553,7 @@
   <div class="group">
     <h3>New Features</h3>
     <ul>
-      <li>First release: clipboard history, a global shortcut palette, image thumbnails, launch at login, and permission settings</li>
+      <li>Initial release of Kit: complete clipboard history management, global hotkey palette, high-fidelity image thumbnails, launch at login, and accessibility permissions setup</li>
     </ul>
   </div>
 </section>
