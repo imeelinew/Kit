@@ -16,6 +16,29 @@ enum ClipboardHoverSelectionTests {
         try await Task.sleep(for: .milliseconds(milliseconds))
     }
 
+    private static func assertHighlight(in table: NSTableView) {
+        table.layoutSubtreeIfNeeded()
+        table.enumerateAvailableRowViews { _, row in
+            guard let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false)
+                as? ClipboardItemCellView
+            else { return }
+            guard let highlight = cell.subviews.first, let layer = highlight.layer else {
+                preconditionFailure("Every visible item must have a highlight layer")
+            }
+            let expected: Float = row == table.selectedRow ? 1 : 0
+            precondition((layer.backgroundColor?.alpha ?? 0) > 0,
+                         "A retained highlight must keep its fill after backing-layer recreation")
+            precondition(abs(layer.cornerRadius - Theme.Radius.row) < 0.01,
+                         "A recreated highlight must keep its rounded shape")
+            precondition(abs(layer.opacity - expected) < 0.01,
+                         "Row \(row) highlight must match selection: \(layer.opacity), expected \(expected)")
+            if let presentation = layer.presentation() {
+                precondition(abs(presentation.opacity - expected) < 0.01,
+                             "The settled highlight must visibly match selection")
+            }
+        }
+    }
+
     private static func mouseEvent(
         _ type: NSEvent.EventType, at point: NSPoint, in window: NSWindow
     ) -> NSEvent {
@@ -63,8 +86,25 @@ enum ClipboardHoverSelectionTests {
 
             func movePointer(to point: NSPoint) {
                 pointer = window.convertPoint(toScreen: point)
-                table.mouseMoved(with: mouseEvent(.mouseMoved, at: point, in: window))
+                window.sendEvent(mouseEvent(.mouseMoved, at: point, in: window))
             }
+
+            let nativePoint = location(for: 2)
+            pointer = window.convertPoint(toScreen: nativePoint)
+            window.sendEvent(mouseEvent(.mouseMoved, at: nativePoint, in: window))
+            precondition(vm.selectedID == vm.results[1].id,
+                         "Window-dispatched movement selects a row before detachment")
+
+            // Simulate tracking-area delivery being lost. Hover must recover on the next
+            // window event, without a new capture, results refresh, or table reconstruction.
+            let generation = vm.resultsGeneration
+            table.trackingAreas.forEach(table.removeTrackingArea)
+            movePointer(to: location(for: 3))
+            precondition(vm.selectedID == vm.results[2].id,
+                         "Window movement works without list tracking areas")
+            try await settle()
+            precondition(vm.resultsGeneration == generation)
+            assertHighlight(in: table)
 
             for (index, query) in ["a", "al", "alp", "al", ""].enumerated() {
                 let point = location(for: 2, x: 70 + CGFloat(index * 2))
@@ -136,12 +176,86 @@ enum ClipboardHoverSelectionTests {
             table.rightMouseDown(with: mouseEvent(.rightMouseDown, at: location(for: 2), in: window))
             precondition(vm.selectedID == vm.results[1].id && vm.menuOpen,
                          "A right click still selects and opens actions immediately")
+            try await settle()
+            let stationaryMenuPointer = pointer
+            movePointer(to: location(for: 3, x: 80))
+            try await settle()
+            precondition(vm.selectedID == vm.results[1].id,
+                         "Window movement cannot select rows under an open menu")
+            movePointer(to: window.convertPoint(fromScreen: stationaryMenuPointer))
             vm.closeMenu()
             try await settle()
             precondition(vm.selectedID == vm.results[1].id,
                          "Closing a menu does not rearm passive hover")
+            assertHighlight(in: table)
+
+            // Dismissal detaches the complete content tree before resetting the model.
+            // Reopen without a history mutation, retaining the table and its existing cells.
+            for cycle in 0..<8 {
+                movePointer(to: location(for: 3, x: 60 + CGFloat(cycle)))
+                window.alphaValue = 0
+                window.orderOut(nil)
+                window.contentView = nil
+                vm.prepareForNextPresentation()
+                hosting.layoutSubtreeIfNeeded()
+                try await settle(30)
+                await vm.prepare()
+                window.beginPresentation()
+                window.contentView = hosting
+                window.alphaValue = 1
+                hosting.layoutSubtreeIfNeeded()
+                window.displayIfNeeded()
+                window.makeKeyAndOrderFront(nil)
+                try await settle()
+                precondition(Self.table(in: hosting) === table,
+                             "Reopening reuses the existing table")
+                assertHighlight(in: table)
+                movePointer(to: location(for: 2, x: 65 + CGFloat(cycle)))
+                precondition(vm.selectedID == vm.results[1].id,
+                             "Hover must resume after reattaching the same content")
+                try await settle()
+                assertHighlight(in: table)
+            }
+
+            // Backing layers are AppKit-owned and can be replaced independently of the
+            // retained cell. Its fill and selection must be restored by the drawing path.
+            table.enumerateAvailableRowViews { _, row in
+                guard let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false)
+                    as? ClipboardItemCellView, let highlight = cell.subviews.first
+                else { return }
+                highlight.layer = highlight.makeBackingLayer()
+                highlight.needsDisplay = true
+            }
+            window.displayIfNeeded()
+            try await settle()
+            assertHighlight(in: table)
+            for row in 1...3 {
+                movePointer(to: location(for: row, x: 60))
+                try await settle()
+                precondition(table.selectedRow == row)
+                assertHighlight(in: table)
+            }
+            for appearance in [NSAppearance.Name.darkAqua, .aqua] {
+                window.appearance = NSAppearance(named: appearance)
+                window.displayIfNeeded()
+                try await settle()
+                assertHighlight(in: table)
+            }
+            // A visit shorter than the deferred entrance still leaves a visible trace,
+            // even though its model opacity has already returned to zero.
+            movePointer(to: location(for: 1, x: 60))
+            movePointer(to: location(for: 2, x: 60))
+            try await settle(50)
+            let briefCell = table.view(atColumn: 0, row: 1, makeIfNecessary: false)!
+            let briefLayer = briefCell.subviews.first!.layer!
+            precondition(briefLayer.animation(forKey: "hoverFade") is CAKeyframeAnimation,
+                         "Rapid hover retains the brief-visit animation")
+            precondition((briefLayer.presentation()?.opacity ?? 0) > 0.01,
+                         "The brief-visit highlight remains visibly animated at zero model opacity")
+            try await settle()
+            assertHighlight(in: table)
             window.close()
-            print("PASS: \(style): stationary hover during typing/backspace/clear, delayed-hover cancellation, physical movement, arrows, empty results, refresh, clicks")
+            print("PASS: \(style): window-routed hover without tracking areas, visible highlights, recreated backing layers, light/dark appearance, repeated reattachment, typing/arrows, delayed-hover cancellation, empty results, refresh, menu shielding, clicks")
         }
     }
 }

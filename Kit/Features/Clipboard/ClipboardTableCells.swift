@@ -43,7 +43,30 @@ final class ClipboardItemCellView: NSTableCellView {
         static let traceDuration: CFTimeInterval = 0.22
     }
 
-    private let highlightView = NSView()
+    /// AppKit may replace backing layers while retaining the cell across presentations.
+    /// Keep the fill in its drawing lifecycle and opacity in NSView's persistent alphaValue.
+    private final class HighlightView: NSView {
+        override var wantsUpdateLayer: Bool { true }
+
+        override func updateLayer() {
+            guard let layer else { return }
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.cornerRadius = Theme.Radius.row
+            layer.cornerCurve = .continuous
+            effectiveAppearance.performAsCurrentDrawingAppearance {
+                layer.backgroundColor = NSColor.labelColor.withAlphaComponent(HighlightMotion.fillAlpha).cgColor
+            }
+            CATransaction.commit()
+        }
+
+        override func viewDidChangeEffectiveAppearance() {
+            super.viewDidChangeEffectiveAppearance()
+            needsDisplay = true
+        }
+    }
+
+    private let highlightView = HighlightView()
     private let thumbnailView = ClipboardThumbnailView()
     private let titleLabel = NSTextField(labelWithString: "")
     private var fullTitle = NSAttributedString(string: "")
@@ -62,8 +85,7 @@ final class ClipboardItemCellView: NSTableCellView {
         super.init(frame: frameRect)
 
         highlightView.wantsLayer = true
-        highlightView.layer?.cornerRadius = Theme.Radius.row
-        highlightView.layer?.cornerCurve = .continuous
+        highlightView.layerContentsRedrawPolicy = .onSetNeedsDisplay
         highlightView.translatesAutoresizingMaskIntoConstraints = false
 
         thumbnailView.translatesAutoresizingMaskIntoConstraints = false
@@ -110,7 +132,6 @@ final class ClipboardItemCellView: NSTableCellView {
             titleLabel.topAnchor.constraint(equalTo: thumbnailView.bottomAnchor, constant: 4),
         ]
         NSLayoutConstraint.activate(standardConstraints)
-        updateHighlightColor()
         setHighlightOpacity(0)
     }
 
@@ -136,7 +157,6 @@ final class ClipboardItemCellView: NSTableCellView {
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
-        updateHighlightColor()
         thumbnailView.refreshAppearance()
     }
 
@@ -311,23 +331,14 @@ final class ClipboardItemCellView: NSTableCellView {
         }
     }
 
-    private func updateHighlightColor() {
-        guard let layer = highlightView.layer else { return }
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        layer.backgroundColor = NSColor.labelColor.withAlphaComponent(HighlightMotion.fillAlpha).cgColor
-        CATransaction.commit()
-    }
-
     private func setHighlightOpacity(_ opacity: Float) {
         fadeToken += 1
         entranceQueued = false
         selectionBeganAt = nil
-        guard let layer = highlightView.layer else { return }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        layer.removeAnimation(forKey: "hoverFade")
-        layer.opacity = opacity
+        highlightView.layer?.removeAnimation(forKey: "hoverFade")
+        highlightView.alphaValue = CGFloat(opacity)
         CATransaction.commit()
     }
 
@@ -336,7 +347,7 @@ final class ClipboardItemCellView: NSTableCellView {
         let current = layer.presentation()?.opacity ?? layer.opacity
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        layer.opacity = opacity
+        highlightView.alphaValue = CGFloat(opacity)
         layer.removeAnimation(forKey: "hoverFade")
         guard abs(current - opacity) > 0.01 else {
             CATransaction.commit()
@@ -361,7 +372,7 @@ final class ClipboardItemCellView: NSTableCellView {
         let current = layer.presentation()?.opacity ?? layer.opacity
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        layer.opacity = 0
+        highlightView.alphaValue = 0
         layer.removeAnimation(forKey: "hoverFade")
         let animation = CAKeyframeAnimation(keyPath: "opacity")
         animation.values = [current, max(current, HighlightMotion.tracePeak), 0]

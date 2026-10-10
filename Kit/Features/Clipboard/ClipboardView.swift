@@ -823,7 +823,7 @@ private final class ClipboardTableScrollView: NSScrollView {
     }
 }
 
-private final class ClipboardTableView: NSTableView, PaletteHoverSelectionResetting {
+private final class ClipboardTableView: NSTableView, PaletteHoverSelectionHandling {
     private static let hoverIntentDelay: Duration = .milliseconds(200)
 
     var onRightClick: ((Int) -> Void)?
@@ -874,7 +874,8 @@ private final class ClipboardTableView: NSTableView, PaletteHoverSelectionResett
         }
         let trackingArea = NSTrackingArea(
             rect: .zero,
-            options: [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect],
+            // PalettePanel owns movement delivery; tracking only resets entry/exit state.
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
             owner: self,
             userInfo: nil
         )
@@ -905,7 +906,7 @@ private final class ClipboardTableView: NSTableView, PaletteHoverSelectionResett
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        (window as? PalettePanel)?.registerHoverSelectionResetter(self)
+        (window as? PalettePanel)?.registerHoverSelectionHandler(self)
         if window == nil {
             clearHover()
         }
@@ -949,6 +950,7 @@ private final class ClipboardTableView: NSTableView, PaletteHoverSelectionResett
     private func updateHover(at point: NSPoint, pointerMoved: Bool) {
         guard hoverEnabled, window?.isVisible == true,
             (window as? PalettePanel)?.allowsHoverSelection != false,
+            visibleRect.contains(point),
             pointerHitsTable(at: point)
         else {
             clearHover()

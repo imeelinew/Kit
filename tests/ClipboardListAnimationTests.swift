@@ -270,6 +270,10 @@ struct ClipboardListAnimationTests {
             try await ClipboardPreviewLifecycleTests.run()
             return
         }
+        if CommandLine.arguments.contains("--hover-only") {
+            try await ClipboardHoverSelectionTests.run()
+            return
+        }
         if CommandLine.arguments.contains("--retention-only") {
             await ClipboardRetentionSettingsTests.run()
             return
