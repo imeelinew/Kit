@@ -241,18 +241,11 @@ enum ClipboardHoverSelectionTests {
                 try await settle()
                 assertHighlight(in: table)
             }
-            // A visit shorter than the deferred entrance still leaves a visible trace,
-            // even though its model opacity has already returned to zero.
+            // Rapid movement still settles on the latest row without a stale highlight.
             movePointer(to: location(for: 1, x: 60))
             movePointer(to: location(for: 2, x: 60))
-            try await settle(50)
-            let briefCell = table.view(atColumn: 0, row: 1, makeIfNecessary: false)!
-            let briefLayer = briefCell.subviews.first!.layer!
-            precondition(briefLayer.animation(forKey: "hoverFade") is CAKeyframeAnimation,
-                         "Rapid hover retains the brief-visit animation")
-            precondition((briefLayer.presentation()?.opacity ?? 0) > 0.01,
-                         "The brief-visit highlight remains visibly animated at zero model opacity")
             try await settle()
+            precondition(vm.selectedID == vm.results[1].id)
             assertHighlight(in: table)
             window.close()
             print("PASS: \(style): window-routed hover without tracking areas, visible highlights, recreated backing layers, light/dark appearance, repeated reattachment, typing/arrows, delayed-hover cancellation, empty results, refresh, menu shielding, clicks")

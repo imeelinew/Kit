@@ -41,7 +41,6 @@ xcrun swiftc -swift-version 6 -parse-as-library \
     "$repo_root/tests/ClipboardHoverSelectionTests.swift" \
     "$repo_root/tests/ClipboardUndoTests.swift" \
     "$repo_root/tests/ClipboardRetentionSettingsTests.swift" \
-    "$repo_root/tests/SingleDeletionUndoTests.swift" \
     "$repo_root/tests/ClipboardTextClassifierTests.swift" \
     "$repo_root/tests/ClipboardPreviewTests.swift" \
     "$repo_root/tests/ImageSearchHighlightTests.swift" \

@@ -450,7 +450,6 @@ struct ClipboardListAnimationTests {
         try await ClipboardHoverSelectionTests.run()
         try await ClipboardUndoTests.run()
         await ClipboardRetentionSettingsTests.run()
-        try await SingleDeletionUndoTests.run()
         ClipboardTextClassifierTests.run()
         await ClipboardPreviewTests.run()
         try await ImageSearchHighlightTests.run()

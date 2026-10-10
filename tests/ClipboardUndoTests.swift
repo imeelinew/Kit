@@ -200,6 +200,13 @@ enum ClipboardUndoTests {
         commandZ(panel, repeating: true)
         precondition(store.item(id: target.id) == nil && !probe.invoked, "Holding the key never repeats undo")
         commandZ(panel)
+        let pendingRevision = store.revision
+        let pendingGeneration = vm.resultsGeneration
+        let pendingScroll = vm.scrollIntent
+        commandZ(panel)
+        precondition(store.revision == pendingRevision && vm.resultsGeneration == pendingGeneration
+                     && vm.scrollIntent == pendingScroll && !probe.invoked,
+                     "A second Command-Z during restoration cannot repeat it or fall through to text undo")
         await ready(vm)
         precondition(vm.selectedID == target.id && vm.query == "undo target" && !probe.invoked,
                      "A deletion from filtered results takes precedence over earlier search edits")
@@ -239,7 +246,7 @@ enum ClipboardUndoTests {
         await ready(vm)
         precondition(vm.selectedID == target.id, "Undo works after deleting the last search result")
         panel.close()
-        print("PASS: Backspace never deletes, menu-only deletion, Command-Z, repeated keys, text/naming priority, filtered deletion, older-page reveal, empty results")
+        print("PASS: Backspace never deletes, menu-only deletion, Command-Z, pending/settled second-undo no-op, repeated keys, text/naming priority, filtered deletion, older-page reveal, empty results")
     }
 
     static func run() async throws {

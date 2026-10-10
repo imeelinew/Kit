@@ -49,8 +49,14 @@ struct ClipboardMemoryProbe {
         print("MEMORY prewarm bytes=\(footprint())")
         let images = store.items
         for cycle in 1...3 {
-            await core.palette.prepare()
-            panel.orderFront(nil)
+            controller.show()
+            let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+            while controller.isPresenting {
+                precondition(ContinuousClock.now < deadline, "The palette must finish presenting")
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            precondition(panel.isVisible && panel.contentView != nil && core.palette.isPreviewActive,
+                         "Each measured cycle must reattach the content and activate previews")
             for item in images {
                 core.palette.select(item.id)
                 panel.contentView?.layoutSubtreeIfNeeded()
