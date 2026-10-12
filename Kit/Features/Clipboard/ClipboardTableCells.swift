@@ -4,6 +4,7 @@ import QuartzCore
 final class ClipboardSectionCellView: NSTableCellView {
     private let titleLabel = NSTextField(labelWithString: "")
     private var topConstraint: NSLayoutConstraint!
+    private var centerYConstraint: NSLayoutConstraint!
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -17,6 +18,7 @@ final class ClipboardSectionCellView: NSTableCellView {
         addSubview(titleLabel)
 
         topConstraint = titleLabel.topAnchor.constraint(equalTo: topAnchor)
+        centerYConstraint = titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor)
         NSLayoutConstraint.activate([
             titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -16),
@@ -27,8 +29,10 @@ final class ClipboardSectionCellView: NSTableCellView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func configure(title: String, isFirst: Bool) {
+    func configure(title: String, isFirst: Bool, centered: Bool = false) {
         titleLabel.stringValue = title
+        NSLayoutConstraint.deactivate([topConstraint, centerYConstraint])
+        NSLayoutConstraint.activate([centered ? centerYConstraint : topConstraint])
         topConstraint.constant = isFirst ? Theme.Spacing.xs : Theme.Spacing.sectionSpacing
     }
 }

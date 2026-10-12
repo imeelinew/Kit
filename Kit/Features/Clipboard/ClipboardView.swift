@@ -489,7 +489,8 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 switch rows[row] {
                 case .header(let section):
                     (view as? ClipboardSectionCellView)?.configure(
-                        title: dateGrouping.title(for: section, locale: locale), isFirst: row == 0)
+                        title: dateGrouping.title(for: section, locale: locale), isFirst: row == 0,
+                        centered: true)
                 case .item(let item):
                     (view as? ClipboardItemCellView)?.updateTitle(
                         item: item, query: query, locale: locale)
@@ -563,7 +564,8 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                         as? ClipboardSectionCellView ?? ClipboardSectionCellView()
                 view.identifier = headerIdentifier
                 view.configure(
-                    title: dateGrouping.title(for: section, locale: locale), isFirst: row == 0)
+                    title: dateGrouping.title(for: section, locale: locale), isFirst: row == 0,
+                    centered: true)
                 return view
             case .item(let item):
                 let view =
