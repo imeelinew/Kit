@@ -17,6 +17,8 @@ private struct PinnedCardBackground: View {
             context.fill(squares, with: .color(Color(white: 0.82)))
         }
         .background(Color(white: 0.94))
+        .compositingGroup()
+        .opacity(0.65)
         .ignoresSafeArea()
     }
 }
