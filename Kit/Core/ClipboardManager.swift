@@ -149,6 +149,12 @@ final class ClipboardManager {
                 forClasses: [NSURL.self],
                 options: [.urlReadingFileURLsOnly: true]
             ) as? [NSURL])?.map { $0 as URL } ?? []
+        if !fileURLs.isEmpty {
+            guard !Task.isCancelled, pasteboard.changeCount == changeCount else { return nil }
+            return PasteboardSnapshot(
+                text: text, imageData: nil, imageIsPNG: false, fileURLs: fileURLs,
+                sourceBundleID: sourceBundleID, generation: generation)
+        }
 
         var imageData: Data?
         var imageIsPNG = false
@@ -162,8 +168,7 @@ final class ClipboardManager {
 
         // `NSImage` understands additional browser and AppKit representations (including
         // promised data) that are not necessarily declared as a UTI conforming to `public.image`.
-        // Avoid this fallback for copied files so Finder icons cannot replace file contents.
-        if imageData == nil, fileURLs.isEmpty,
+        if imageData == nil,
             let image = (pasteboard.readObjects(forClasses: [NSImage.self], options: nil)
                 as? [NSImage])?.first,
             let tiff = image.tiffRepresentation, !tiff.isEmpty

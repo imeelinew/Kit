@@ -1,7 +1,6 @@
 import AppKit
 import Foundation
 import ImageIO
-import UniformTypeIdentifiers
 
 struct PasteboardSnapshot: Sendable {
     let text: String?
@@ -29,17 +28,9 @@ actor ClipboardCapturePipeline {
     static let maxTextBytes = 8 * 1024 * 1024
 
     func process(_ snapshot: PasteboardSnapshot) -> ClipboardCapture? {
-        // Finder publishes copied files as file URLs and may also expose the filename as plain
-        // text. Resolve image files first so WebP, HEIC, JPEG, and other ImageIO formats do not
-        // fall through as filename strings.
-        for url in snapshot.fileURLs {
-            guard !Task.isCancelled else { return nil }
-            if let png = Self.normalizedImageFile(at: url) {
-                return ClipboardCapture(
-                    content: .image(png), sourceBundleID: snapshot.sourceBundleID,
-                    generation: snapshot.generation)
-            }
-        }
+        // A copied file or folder must retain its file identity when pasted again.
+        // Until captures can do that, ignore file URLs and any accompanying text or image data.
+        guard snapshot.fileURLs.isEmpty else { return nil }
 
         if let data = snapshot.imageData,
             let png = snapshot.imageIsPNG ? data : Self.normalizedImageData(data)
@@ -58,17 +49,6 @@ actor ClipboardCapturePipeline {
                 generation: snapshot.generation)
         }
         return nil
-    }
-
-    private static func normalizedImageFile(at url: URL) -> Data? {
-        guard url.isFileURL,
-            let values = try? url.resourceValues(forKeys: [.contentTypeKey]),
-            let contentType = values.contentType,
-            contentType.conforms(to: .image),
-            let source = CGImageSourceCreateWithURL(url as CFURL, nil)
-        else { return nil }
-
-        return normalizedPNG(from: source)
     }
 
     private static func normalizedImageData(_ data: Data) -> Data? {

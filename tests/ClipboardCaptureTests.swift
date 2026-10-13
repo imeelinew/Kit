@@ -104,30 +104,28 @@ struct ClipboardCaptureTests {
         expect(decodeIsPNG(png), "TIFF data is re-encoded as PNG")
         expect(dominantChannel(png, \.redComponent) > 0.9, "Re-encoding keeps the pixels")
 
-        // Copied image files resolve through ImageIO, whatever the disk format.
+        // File copies are ignored even when they also offer text or image data.
         let tiffFile = root.appendingPathComponent("shot.tiff")
         try! blue.tiff.write(to: tiffFile)
-        let fromFile = await pipeline.process(snapshot(text: nil, fileURLs: [tiffFile]))
-        guard case .image(let filePNG)? = fromFile?.content else {
-            preconditionFailure("A copied TIFF file becomes an image capture")
-        }
-        expect(decodeIsPNG(filePNG), "Image files normalize to PNG")
-        expect(dominantChannel(filePNG, \.blueComponent) > 0.9, "File pixels survive normalization")
+        let imageFile = await pipeline.process(snapshot(text: nil, fileURLs: [tiffFile]))
+        expect(imageFile == nil, "Copied image files are ignored")
 
-        // A copied plain file falls through to its path text; image files outrank pasted data.
         let textFile = root.appendingPathComponent("notes.txt")
         try! Data("hello".utf8).write(to: textFile)
-        let pathText = await pipeline.process(
+        let textFileCopy = await pipeline.process(
             snapshot(text: textFile.lastPathComponent, fileURLs: [textFile]))
-        expect(pathText?.content == .text(textFile.lastPathComponent),
-               "Non-image files fall through to the filename text")
+        expect(textFileCopy == nil, "Copied files are not captured as filename text")
 
-        let fileWins = await pipeline.process(
-            snapshot(text: nil, imageData: red.png, imageIsPNG: true, fileURLs: [tiffFile]))
-        guard case .image(let winner)? = fileWins?.content else {
-            preconditionFailure("File URLs take priority over pasteboard data")
-        }
-        expect(dominantChannel(winner, \.blueComponent) > 0.9, "The image file wins over pasted data")
+        let folder = root.appendingPathComponent("folder", isDirectory: true)
+        try! FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let folderCopy = await pipeline.process(
+            snapshot(text: folder.lastPathComponent, fileURLs: [folder]))
+        expect(folderCopy == nil, "Copied folders are not captured as filename text")
+
+        let multipleFiles = await pipeline.process(
+            snapshot(text: "notes.txt\nshot.tiff", imageData: red.png, imageIsPNG: true,
+                     fileURLs: [textFile, tiffFile]))
+        expect(multipleFiles == nil, "Multiple copied files are ignored with their other representations")
 
         // Text rules: images outrank text; blanks and oversize payloads are dropped.
         let imageOverText = await pipeline.process(
@@ -147,6 +145,6 @@ struct ClipboardCaptureTests {
             snapshot(text: String(repeating: "a", count: limit + 1)))
         expect(oversized == nil, "Text beyond the size cap is dropped")
 
-        print("PASS: capture policy, file/data priority, PNG passthrough, TIFF normalization, text limits")
+        print("PASS: capture policy, file copy exclusion, PNG passthrough, TIFF normalization, text limits")
     }
 }
