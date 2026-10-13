@@ -17,16 +17,19 @@ enum Paster {
     /// capture time, source, or ordering; only a successful delivery updates usage.
     @MainActor @discardableResult
     static func paste(
-        _ item: ClipboardItem, store: ClipboardStore, previousApp: NSRunningApplication?,
-        willDeliver: () -> Void
+        _ item: ClipboardItem, store: ClipboardStore, previousApp app: NSRunningApplication,
+        keepingPaletteOpen: Bool = false, willDeliver: () -> Void = {}
     ) async -> Bool {
-        guard let app = previousApp, !app.isTerminated else { return false }
+        guard !app.isTerminated else { return false }
         let pid = app.processIdentifier
         return await PasteTransaction.run(
             permission: Permissions.ensureAccessibility,
             prepare: { await prepare(item, store: store, targetBundleID: app.bundleIdentifier) },
             willDeliver: willDeliver,
-            targetReady: { await activateAndWait(app) },
+            targetReady: {
+                if keepingPaletteOpen { return !app.isTerminated }
+                return await activateAndWait(app)
+            },
             write: write,
             deliver: { postCommandV(toPid: pid) },
             didDeliver: { store.markUsed(id: item.id) })
@@ -71,23 +74,6 @@ enum Paster {
         let pasteboard = NSPasteboard.general
         pasteboard.addTypes([ClipboardManager.internalType], owner: nil)
         _ = pasteboard.setData(Data(), forType: ClipboardManager.internalType)
-    }
-
-    /// Paste into `app` without activating it, keeping the palette frontmost.
-    @MainActor @discardableResult
-    static func pasteInPlace(
-        _ item: ClipboardItem, store: ClipboardStore, into app: NSRunningApplication?
-    ) async -> Bool {
-        guard let app, !app.isTerminated else { return false }
-        let pid = app.processIdentifier
-        return await PasteTransaction.run(
-            permission: Permissions.ensureAccessibility,
-            prepare: { await prepare(item, store: store, targetBundleID: app.bundleIdentifier) },
-            willDeliver: {},
-            targetReady: { !app.isTerminated },
-            write: write,
-            deliver: { postCommandV(toPid: pid) },
-            didDeliver: { store.markUsed(id: item.id) })
     }
 
     @MainActor

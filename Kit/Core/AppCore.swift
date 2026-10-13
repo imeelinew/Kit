@@ -12,7 +12,7 @@ final class AppCore {
     let clipboardManager: ClipboardManager
     lazy var palette = PaletteViewModel(core: self)
     let systemClipboardHistory = SystemClipboardHistory()
-    private(set) var isClipboardPaused = false
+    var isClipboardPaused: Bool { clipboardManager.isPaused }
 
     private lazy var windowController = PaletteWindowController(core: self)
     private let activationPolicy = ActivationPolicyCoordinator()
@@ -112,7 +112,6 @@ final class AppCore {
 
     func pauseClipboard(until date: Date?) {
         clipboardResumeTask?.cancel()
-        isClipboardPaused = true
         settings.saveClipboardPause(until: date)
         clipboardManager.setPaused(true)
 
@@ -128,7 +127,6 @@ final class AppCore {
     func resumeClipboard() {
         clipboardResumeTask?.cancel()
         clipboardResumeTask = nil
-        isClipboardPaused = false
         settings.clearClipboardPause()
         clipboardManager.setPaused(false)
     }
@@ -182,20 +180,14 @@ final class AppCore {
 
     func pasteKeepingWindowOpen(_ item: ClipboardItem) {
         if let target = windowController.pasteTargetTextField {
-            startTransfer { [weak self] generation in
-                guard let self else { return }
+            startTransfer { [clipboardStore] in
                 await Paster.paste(item, store: clipboardStore, into: target, keepingPaletteOpen: true)
-                finishTransfer(generation)
             }
             return
         }
         guard let previous = windowController.pasteTargetApp else { return }
-        startTransfer { [weak self] generation in
-            guard let self else { return }
-            // Selection may have moved while the image payload was loading.
-            // Completion must not pull the user back to the item just pasted.
-            await Paster.pasteInPlace(item, store: self.clipboardStore, into: previous)
-            self.finishTransfer(generation)
+        startTransfer { [clipboardStore] in
+            await Paster.paste(item, store: clipboardStore, previousApp: previous, keepingPaletteOpen: true)
         }
     }
 
@@ -210,7 +202,7 @@ final class AppCore {
     private func startHidingTransfer(
         operation: @escaping @MainActor (_ willHide: () -> Void) async -> Bool
     ) {
-        startTransfer { [weak self] generation in
+        startTransfer { [weak self] in
             guard let self else { return }
             var hidden = false
             let succeeded = await operation {
@@ -224,7 +216,6 @@ final class AppCore {
             if !succeeded && hidden {
                 self.windowController.show()
             }
-            self.finishTransfer(generation)
         }
     }
 
@@ -274,12 +265,15 @@ final class AppCore {
     }
 
     private func startTransfer(
-        _ operation: @escaping @MainActor (_ generation: UUID) async -> Void
+        _ operation: @escaping @MainActor () async -> Void
     ) {
         transferTask?.cancel()
         let generation = UUID()
         transferGeneration = generation
-        transferTask = Task { await operation(generation) }
+        transferTask = Task { [weak self] in
+            await operation()
+            self?.finishTransfer(generation)
+        }
     }
 
     private func finishTransfer(_ generation: UUID) {

@@ -163,7 +163,7 @@ final class PaletteViewModel {
     private(set) var results: [ClipboardItem] = []
     private(set) var resultsKindFilter: ClipboardKindFilter = .all
     private(set) var resultsGeneration: UInt64 = 0
-    private(set) var hasMoreResults = false
+    var hasMoreResults: Bool { nextCursor != nil }
     private(set) var selectedID: ClipboardItem.ID? {
         didSet {
             if oldValue != selectedID {
@@ -214,7 +214,7 @@ final class PaletteViewModel {
     @ObservationIgnored private var previewWarmTask: Task<Void, Never>?
     @ObservationIgnored private var imageQuickLookHoverTask: Task<Void, Never>?
     @ObservationIgnored private var loadMoreTask: Task<Void, Never>?
-    @ObservationIgnored private var nextCursor: ClipboardSearchCursor?
+    private var nextCursor: ClipboardSearchCursor?
     @ObservationIgnored private var loadedPageCount = 1
     @ObservationIgnored private var pendingRestoredItemID: ClipboardItem.ID?
     private var deletionWasLastEdit = false
@@ -798,7 +798,6 @@ final class PaletteViewModel {
         loadMoreTask?.cancel()
         loadMoreTask = nil
         nextCursor = nil
-        hasMoreResults = false
         if resetSelection { loadedPageCount = 1 }
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if blockCommands { searchReady = false }
@@ -837,7 +836,6 @@ final class PaletteViewModel {
                 self.stackFilter == stackID
             else { return }
             nextCursor = page.nextCursor
-            hasMoreResults = page.nextCursor != nil
             loadedPageCount = pageCount
             applyResults(page.items, resetSelection: resetSelection)
             if let restoredID, pendingRestoredItemID == restoredID {
@@ -852,11 +850,10 @@ final class PaletteViewModel {
     }
 
     func loadMoreResults() {
-        guard searchReady, hasMoreResults, loadMoreTask == nil else { return }
+        guard searchReady, let cursor = nextCursor, loadMoreTask == nil else { return }
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let filter = kindFilter
         let stackID = stackFilter
-        guard let cursor = nextCursor else { return }
         loadMoreTask = Task { [weak self] in
             guard let self else { return }
             let page = await core.clipboardStore.searchAsync(
@@ -869,7 +866,6 @@ final class PaletteViewModel {
                 self.nextCursor == cursor
             else { return }
             nextCursor = page.nextCursor
-            hasMoreResults = page.nextCursor != nil
             loadedPageCount += 1
             let seen = Set(results.map(\.id))
             let additions = page.items.filter { !seen.contains($0.id) }

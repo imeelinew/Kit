@@ -204,7 +204,7 @@ final class ClipboardStore: ObservableObject {
         // Undo is session-local. Also remove backups left by an interrupted previous run.
         try? FileManager.default.removeItem(at: deletedImagesDir)
         try? FileManager.default.createDirectory(at: imagesDir, withIntermediateDirectories: true)
-        _ = openDatabase()
+        openDatabase()
     }
 
     private static var defaultDirectory: URL {
@@ -344,11 +344,7 @@ final class ClipboardStore: ObservableObject {
             (try? data.write(to: url, options: .atomic)) != nil
         }.value
         guard wrote else { return }
-        guard !Task.isCancelled, generation == captureGeneration else {
-            try? FileManager.default.removeItem(at: url)
-            return
-        }
-        guard insert(item) else {
+        guard !Task.isCancelled, generation == captureGeneration, insert(item) else {
             try? FileManager.default.removeItem(at: url)
             return
         }
@@ -1046,17 +1042,11 @@ final class ClipboardStore: ObservableObject {
         return true
     }
 
-    /// Cap the in-memory window.
-    private func trimWindow() {
-        guard items.count > Self.memoryWindow else { return }
-        items.removeLast()
-    }
-
     @discardableResult
     private func insert(_ item: ClipboardItem) -> Bool {
         guard let stmt = insertStmt, bindAndInsert(stmt, item) else { return false }
         items.insert(item, at: 0)
-        trimWindow()
+        if items.count > Self.memoryWindow { items.removeLast() }
         pruneIfDue()
         scheduleSearchMetadataUpdate(for: item)
         if item.kind == .image { startImageOCRWorkerIfNeeded() }
@@ -1292,7 +1282,7 @@ final class ClipboardStore: ObservableObject {
         return candidate
     }
 
-    private func openDatabase() -> Bool {
+    private func openDatabase() {
         guard
             sqlite3_open_v2(dbURL.path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil)
                 == SQLITE_OK,
@@ -1300,11 +1290,11 @@ final class ClipboardStore: ObservableObject {
                 db, "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=1000;",
                 nil, nil, nil) == SQLITE_OK,
             sqlite3_exec(db, Self.coreSchema, nil, nil, nil) == SQLITE_OK
-        else { return false }
+        else { return }
         guard migrateUsageMetadata(),
             sqlite3_exec(db, Self.searchSchema, nil, nil, nil) == SQLITE_OK,
             migrateImageSearch()
-        else { return false }
+        else { return }
         insertStmt = prepare(
             """
             INSERT INTO items(
@@ -1351,11 +1341,6 @@ final class ClipboardStore: ObservableObject {
             ON CONFLICT(item_id) DO UPDATE SET stack_id = excluded.stack_id
             """)
         deleteMembershipStmt = prepare("DELETE FROM stack_items WHERE item_id = ?")
-        return insertStmt != nil && loadStmt != nil && refreshStmt != nil
-            && deleteByIDStmt != nil && staleImagesStmt != nil
-            && deleteStaleStmt != nil && imageByFingerprintStmt != nil
-            && itemByIDStmt != nil && textByContentStmt != nil
-            && updateKindStmt != nil && markUsedStmt != nil
     }
 
     /// Existing captures keep their metadata; past usage cannot be reconstructed.

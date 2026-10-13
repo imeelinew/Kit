@@ -17,21 +17,21 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     }
 
     let id: UUID
-    let kind: Kind
+    private(set) var kind: Kind
     let text: String?
     /// Absolute path to the image owned by this store.
     let imagePath: String?
     /// SHA-256 of canonical visible pixels. Text rows leave it nil.
     let imageFingerprint: String?
-    let createdAt: Date
+    private(set) var createdAt: Date
     /// Last successful copy or paste initiated from Kit; never used for ordering or retention.
-    let lastUsedAt: Date?
+    private(set) var lastUsedAt: Date?
     /// Bundle ID of the app frontmost when the copy was captured (see `ClipboardManager.poll`).
-    let sourceBundleID: String?
+    private(set) var sourceBundleID: String?
     /// User-assigned list title. Nil means the visible title is derived from the copied content.
     let customTitle: String?
     /// Persistent OCR metadata. Image rows keep `text` nil and remain image clipboard entries.
-    let imageOCR: ClipboardImageOCR?
+    private(set) var imageOCR: ClipboardImageOCR?
 
     init(text: String, kind: Kind, sourceBundleID: String?) {
         self.init(
@@ -66,36 +66,29 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
 
     /// An external recopy reuses the entry with a fresh copy time and source application.
     func refreshed(sourceBundleID: String?) -> ClipboardItem {
-        ClipboardItem(
-            id: id, kind: kind, text: text, imagePath: imagePath,
-            imageFingerprint: imageFingerprint, createdAt: Date(),
-            sourceBundleID: sourceBundleID, customTitle: customTitle, lastUsedAt: lastUsedAt,
-            imageOCR: imageOCR)
+        var copy = self
+        copy.createdAt = Date()
+        copy.sourceBundleID = sourceBundleID
+        return copy
     }
 
     /// Same capture re-graded (async LLM classification); identity and every other field stay.
     func withKind(_ kind: Kind) -> ClipboardItem {
-        ClipboardItem(
-            id: id, kind: kind, text: text, imagePath: imagePath,
-            imageFingerprint: imageFingerprint, createdAt: createdAt,
-            sourceBundleID: sourceBundleID, customTitle: customTitle, lastUsedAt: lastUsedAt,
-            imageOCR: imageOCR)
+        var copy = self
+        copy.kind = kind
+        return copy
     }
 
     func used(at date: Date) -> ClipboardItem {
-        ClipboardItem(
-            id: id, kind: kind, text: text, imagePath: imagePath,
-            imageFingerprint: imageFingerprint, createdAt: createdAt,
-            sourceBundleID: sourceBundleID, customTitle: customTitle, lastUsedAt: date,
-            imageOCR: imageOCR)
+        var copy = self
+        copy.lastUsedAt = date
+        return copy
     }
 
     func withImageOCR(_ metadata: ClipboardImageOCR?) -> ClipboardItem {
-        ClipboardItem(
-            id: id, kind: kind, text: text, imagePath: imagePath,
-            imageFingerprint: imageFingerprint, createdAt: createdAt,
-            sourceBundleID: sourceBundleID, customTitle: customTitle, lastUsedAt: lastUsedAt,
-            imageOCR: metadata)
+        var copy = self
+        copy.imageOCR = metadata
+        return copy
     }
 
     /// Visible list/card title: a persisted custom name, otherwise the first line of text or "Image".
