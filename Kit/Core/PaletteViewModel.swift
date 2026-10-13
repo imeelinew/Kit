@@ -36,13 +36,6 @@ enum PaletteOverlay: Equatable {
     case addToStack(ClipboardItem.ID)
 
     var isOpen: Bool { self != .none }
-
-    var isMenu: Bool {
-        switch self {
-        case .actions, .appMenu, .typeFilter, .stackFilter, .stackActions, .addToStack: return true
-        default: return false
-        }
-    }
 }
 
 enum StackNameEdit: Equatable {
@@ -204,8 +197,8 @@ final class PaletteViewModel {
                 stackNameEdit = nil
                 stackNameDraft = ""
             }
-            if oldValue.isMenu != overlay.isMenu {
-                onMenuOpenChanged?(overlay.isMenu)
+            if oldValue.isOpen != overlay.isOpen {
+                onMenuOpenChanged?(overlay.isOpen)
             }
         }
     }
@@ -238,7 +231,7 @@ final class PaletteViewModel {
         refreshResults(resetSelection: true, blockCommands: true)
     }
 
-    var menuOpen: Bool { overlay.isMenu }
+    var menuOpen: Bool { overlay.isOpen }
 
     // Keep routing to deletion undo after it is consumed. A second Command-Z must
     // not fall through to an older text edit; typing/naming still owns text undo.
@@ -774,30 +767,26 @@ final class PaletteViewModel {
 
     private func applyStackFilter(_ stackID: ClipboardStack.ID?) {
         guard stackFilter != stackID else { return }
-        pendingRestoredItemID = nil
         stackFilter = stackID
-        imageQuickLookOpen = false
-        ImageQuickLook.close()
-        scrollIntent = ScrollIntent(kind: .top)
-        refreshResults(resetSelection: true, blockCommands: true)
+        searchCriteriaChanged()
     }
 
     private func applyKindFilter(_ filter: ClipboardKindFilter) {
         guard kindFilter != filter else { return }
-        pendingRestoredItemID = nil
         kindFilter = filter
-        imageQuickLookOpen = false
-        ImageQuickLook.close()
-        scrollIntent = ScrollIntent(kind: .top)
-        refreshResults(resetSelection: true, blockCommands: true)
+        searchCriteriaChanged()
     }
 
     private func queryChanged() {
         onSearchQueryChanged?()
         deletionWasLastEdit = false
-        pendingRestoredItemID = nil
         overlay = .none
         menuSelection = 0
+        searchCriteriaChanged()
+    }
+
+    private func searchCriteriaChanged() {
+        pendingRestoredItemID = nil
         imageQuickLookOpen = false
         ImageQuickLook.close()
         scrollIntent = ScrollIntent(kind: .top)

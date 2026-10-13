@@ -32,14 +32,3 @@ struct PreferencesRow<Content: View>: View {
         }
     }
 }
-
-struct PreferencesCheckboxRow: View {
-    let title: LocalizedStringKey
-    @Binding var isOn: Bool
-    var disabled: Bool = false
-
-    var body: some View {
-        Toggle(title, isOn: $isOn)
-            .disabled(disabled)
-    }
-}

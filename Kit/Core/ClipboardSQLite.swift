@@ -4,6 +4,10 @@ import SQLite3
 let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 enum ClipboardSQLite {
+    static func bindText(_ text: String?, to stmt: OpaquePointer, at index: Int32) {
+        sqlite3_bind_text(stmt, index, text, text.map { Int32($0.utf8.count) } ?? 0, SQLITE_TRANSIENT)
+    }
+
     static func row(_ stmt: OpaquePointer?) -> ClipboardItem? {
         guard let idString = columnString(stmt, 0), let id = UUID(uuidString: idString),
             let kindString = columnString(stmt, 1),

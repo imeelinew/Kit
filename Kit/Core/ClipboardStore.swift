@@ -50,6 +50,13 @@ final class ClipboardStore: ObservableObject {
         case failed
     }
 
+    private static let itemSelection = """
+        SELECT id, kind, text, image_path, created_at, source_app,
+               image_fingerprint, custom_title, last_used_at,
+               ocr_text, ocr_status, ocr_version, ocr_attempts
+        FROM items
+        """
+
     private static let coreSchema = """
         CREATE TABLE IF NOT EXISTS items(
           id TEXT NOT NULL UNIQUE,
@@ -835,10 +842,9 @@ final class ClipboardStore: ObservableObject {
         }
         guard !residentResult.isEmpty else { return databasePage }
 
-        var seen = Set<ClipboardItem.ID>()
-        let merged = (databasePage.items + residentResult).filter { seen.insert($0.id).inserted }
         return ClipboardSearchPage(
-            items: Self.displayOrder(merged), nextCursor: databasePage.nextCursor)
+            items: Self.displayOrder(databasePage.items + residentResult),
+            nextCursor: databasePage.nextCursor)
     }
 
     func waitForSearchMetadata() async {
@@ -863,10 +869,7 @@ final class ClipboardStore: ObservableObject {
         }
         guard imageTextSearchEnabled else { return nil }
         guard let stmt = prepare("""
-            SELECT id, kind, text, image_path, created_at, source_app,
-                   image_fingerprint, custom_title, last_used_at,
-                   ocr_text, ocr_status, ocr_version, ocr_attempts
-            FROM items WHERE kind = 'image' AND
+            \(Self.itemSelection) WHERE kind = 'image' AND
               (ocr_status IS NULL OR (ocr_status = 'failed' AND ocr_attempts < \(ClipboardImageTextRecognition.maxAttempts)))
             ORDER BY created_at DESC, rowid DESC LIMIT 1
             """)
@@ -951,11 +954,7 @@ final class ClipboardStore: ObservableObject {
             """)
         else { return false }
         defer { sqlite3_finalize(stmt) }
-        if let text = metadata.text {
-            sqlite3_bind_text(stmt, 1, text, Int32(text.utf8.count), SQLITE_TRANSIENT)
-        } else {
-            sqlite3_bind_null(stmt, 1)
-        }
+        ClipboardSQLite.bindText(metadata.text, to: stmt, at: 1)
         sqlite3_bind_text(stmt, 2, metadata.status.rawValue, -1, SQLITE_TRANSIENT)
         sqlite3_bind_int(stmt, 3, Int32(metadata.version))
         sqlite3_bind_int(stmt, 4, Int32(metadata.attempts))
@@ -1036,11 +1035,7 @@ final class ClipboardStore: ObservableObject {
     private func refresh(_ updated: ClipboardItem) -> Bool {
         guard let stmt = refreshStmt else { return false }
         sqlite3_bind_double(stmt, 1, updated.createdAt.timeIntervalSince1970)
-        if let source = updated.sourceBundleID {
-            sqlite3_bind_text(stmt, 2, source, -1, SQLITE_TRANSIENT)
-        } else {
-            sqlite3_bind_null(stmt, 2)
-        }
+        sqlite3_bind_text(stmt, 2, updated.sourceBundleID, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 3, updated.id.uuidString, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 4, updated.kind.rawValue, -1, SQLITE_TRANSIENT)
         guard stepAndReset(stmt) else { return false }
@@ -1073,43 +1068,19 @@ final class ClipboardStore: ObservableObject {
     private func bindAndInsert(_ stmt: OpaquePointer, _ item: ClipboardItem) -> Bool {
         sqlite3_bind_text(stmt, 1, item.id.uuidString, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 2, item.kind.rawValue, -1, SQLITE_TRANSIENT)
-        if let text = item.text {
-            sqlite3_bind_text(stmt, 3, text, Int32(text.utf8.count), SQLITE_TRANSIENT)
-        } else {
-            sqlite3_bind_null(stmt, 3)
-        }
-        if let path = item.imagePath {
-            sqlite3_bind_text(stmt, 4, path, -1, SQLITE_TRANSIENT)
-        } else {
-            sqlite3_bind_null(stmt, 4)
-        }
+        ClipboardSQLite.bindText(item.text, to: stmt, at: 3)
+        sqlite3_bind_text(stmt, 4, item.imagePath, -1, SQLITE_TRANSIENT)
         sqlite3_bind_double(stmt, 5, item.createdAt.timeIntervalSince1970)
-        if let source = item.sourceBundleID {
-            sqlite3_bind_text(stmt, 6, source, -1, SQLITE_TRANSIENT)
-        } else {
-            sqlite3_bind_null(stmt, 6)
-        }
-        if let fingerprint = item.imageFingerprint {
-            sqlite3_bind_text(stmt, 7, fingerprint, -1, SQLITE_TRANSIENT)
-        } else {
-            sqlite3_bind_null(stmt, 7)
-        }
-        if let customTitle = item.customTitle {
-            sqlite3_bind_text(stmt, 8, customTitle, -1, SQLITE_TRANSIENT)
-        } else {
-            sqlite3_bind_null(stmt, 8)
-        }
+        sqlite3_bind_text(stmt, 6, item.sourceBundleID, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 7, item.imageFingerprint, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 8, item.customTitle, -1, SQLITE_TRANSIENT)
         if let lastUsedAt = item.lastUsedAt {
             sqlite3_bind_double(stmt, 9, lastUsedAt.timeIntervalSince1970)
         } else {
             sqlite3_bind_null(stmt, 9)
         }
         if let metadata = item.imageOCR {
-            if let text = metadata.text {
-                sqlite3_bind_text(stmt, 10, text, Int32(text.utf8.count), SQLITE_TRANSIENT)
-            } else {
-                sqlite3_bind_null(stmt, 10)
-            }
+            ClipboardSQLite.bindText(metadata.text, to: stmt, at: 10)
             sqlite3_bind_text(stmt, 11, metadata.status.rawValue, -1, SQLITE_TRANSIENT)
             sqlite3_bind_int(stmt, 12, Int32(metadata.version))
             sqlite3_bind_int(stmt, 13, Int32(metadata.attempts))
@@ -1124,30 +1095,21 @@ final class ClipboardStore: ObservableObject {
     }
 
     private func loadItem(id: UUID) -> ClipboardItem? {
-        guard let stmt = itemByIDStmt else { return nil }
-        sqlite3_bind_text(stmt, 1, id.uuidString, -1, SQLITE_TRANSIENT)
-        let status = sqlite3_step(stmt)
-        let item = status == SQLITE_ROW ? ClipboardSQLite.row(stmt) : nil
-        sqlite3_reset(stmt)
-        sqlite3_clear_bindings(stmt)
-        return status == SQLITE_ROW || status == SQLITE_DONE ? item : nil
+        findItem(using: itemByIDStmt, matching: id.uuidString)
     }
 
     private func image(matching fingerprint: String) -> ClipboardItem? {
-        guard let stmt = imageByFingerprintStmt else { return nil }
-        sqlite3_bind_text(stmt, 1, fingerprint, -1, SQLITE_TRANSIENT)
-        let status = sqlite3_step(stmt)
-        let item = status == SQLITE_ROW ? ClipboardSQLite.row(stmt) : nil
-        sqlite3_reset(stmt)
-        sqlite3_clear_bindings(stmt)
-        return status == SQLITE_ROW || status == SQLITE_DONE ? item : nil
+        findItem(using: imageByFingerprintStmt, matching: fingerprint)
     }
 
     private func textItem(matching text: String) -> ClipboardItem? {
-        guard let stmt = textByContentStmt else { return nil }
-        sqlite3_bind_text(stmt, 1, text, Int32(text.utf8.count), SQLITE_TRANSIENT)
-        let status = sqlite3_step(stmt)
-        let item = status == SQLITE_ROW ? ClipboardSQLite.row(stmt) : nil
+        findItem(using: textByContentStmt, matching: text)
+    }
+
+    private func findItem(using stmt: OpaquePointer?, matching value: String) -> ClipboardItem? {
+        guard let stmt else { return nil }
+        ClipboardSQLite.bindText(value, to: stmt, at: 1)
+        let item = sqlite3_step(stmt) == SQLITE_ROW ? ClipboardSQLite.row(stmt) : nil
         sqlite3_reset(stmt)
         sqlite3_clear_bindings(stmt)
         return item
@@ -1354,10 +1316,7 @@ final class ClipboardStore: ObservableObject {
         )
         loadStmt = prepare(
             """
-            SELECT id, kind, text, image_path, created_at, source_app,
-                   image_fingerprint, custom_title, last_used_at,
-                   ocr_text, ocr_status, ocr_version, ocr_attempts
-            FROM items ORDER BY created_at DESC, rowid DESC LIMIT ?
+            \(Self.itemSelection) ORDER BY created_at DESC, rowid DESC LIMIT ?
             """)
         refreshStmt = prepare(
             "UPDATE items SET created_at = ?1, source_app = ?2, kind = ?4 WHERE id = ?3")
@@ -1371,25 +1330,16 @@ final class ClipboardStore: ObservableObject {
         deleteStaleStmt = prepare("DELETE FROM items WHERE created_at < ?")
         imageByFingerprintStmt = prepare(
             """
-            SELECT id, kind, text, image_path, created_at, source_app,
-                   image_fingerprint, custom_title, last_used_at,
-                   ocr_text, ocr_status, ocr_version, ocr_attempts
-            FROM items WHERE image_fingerprint = ? LIMIT 1
+            \(Self.itemSelection) WHERE image_fingerprint = ? LIMIT 1
             """)
         textByContentStmt = prepare(
             """
-            SELECT id, kind, text, image_path, created_at, source_app,
-                   image_fingerprint, custom_title, last_used_at,
-                   ocr_text, ocr_status, ocr_version, ocr_attempts
-            FROM items WHERE kind != 'image' AND text = ? COLLATE BINARY
+            \(Self.itemSelection) WHERE kind != 'image' AND text = ? COLLATE BINARY
             ORDER BY created_at DESC, rowid DESC LIMIT 1
             """)
         itemByIDStmt = prepare(
             """
-            SELECT id, kind, text, image_path, created_at, source_app,
-                   image_fingerprint, custom_title, last_used_at,
-                   ocr_text, ocr_status, ocr_version, ocr_attempts
-            FROM items WHERE id = ? LIMIT 1
+            \(Self.itemSelection) WHERE id = ? LIMIT 1
             """)
         updateKindStmt = prepare("UPDATE items SET kind = ? WHERE id = ?")
         markUsedStmt = prepare("UPDATE items SET last_used_at = ? WHERE id = ?")
@@ -1472,21 +1422,6 @@ final class ClipboardStore: ObservableObject {
             staleImagesStmt, deleteStaleStmt, imageByFingerprintStmt, textByContentStmt, itemByIDStmt,
             updateKindStmt, markUsedStmt, insertStackStmt, upsertMembershipStmt, deleteMembershipStmt,
         ].forEach { sqlite3_finalize($0) }
-        insertStmt = nil
-        loadStmt = nil
-        refreshStmt = nil
-        deleteByIDStmt = nil
-        staleImagesStmt = nil
-        deleteStaleStmt = nil
-        imageByFingerprintStmt = nil
-        textByContentStmt = nil
-        itemByIDStmt = nil
-        updateKindStmt = nil
-        markUsedStmt = nil
-        insertStackStmt = nil
-        upsertMembershipStmt = nil
-        deleteMembershipStmt = nil
         sqlite3_close_v2(db)
-        db = nil
     }
 }

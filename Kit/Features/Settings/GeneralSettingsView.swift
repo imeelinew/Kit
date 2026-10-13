@@ -66,16 +66,9 @@ struct AppearanceSettingsView: View {
             }
 
             Section("Menu Bar") {
-                PreferencesCheckboxRow(
-                    title: "Show Menu Bar Icon",
-                    isOn: $settings.showMenuBarIcon
-                )
-
-                PreferencesCheckboxRow(
-                    title: "Icon Animation",
-                    isOn: $settings.animateMenuBarIconOnCopy,
-                    disabled: !settings.showMenuBarIcon
-                )
+                Toggle("Show Menu Bar Icon", isOn: $settings.showMenuBarIcon)
+                Toggle("Icon Animation", isOn: $settings.animateMenuBarIconOnCopy)
+                    .disabled(!settings.showMenuBarIcon)
             }
 
             Section("Pinned Cards") {
