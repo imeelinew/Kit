@@ -5,8 +5,8 @@
 <h1 align="center">Kit</h1>
 
 <p align="center">
-  A native macOS clipboard history tool built for keyboard workflows.<br>
-  Capture text, code, links, and images, then search and paste them back into the source app.
+  A native macOS clipboard history tool built for keyboard workflows<br>
+  Capture text, code, links, and images, then search and paste back into the source app
 </p>
 
 <p align="center">
@@ -24,39 +24,40 @@
   <img src=".github/assets/readme-screenshot.png" alt="Kit clipboard history palette" width="820">
 </p>
 
-## What is Kit?
+## Overview
 
-Kit turns clipboard history into a command palette you can summon whenever you need it. Open the palette, search what you copied, select an item, and paste it back into the app you were using.
+Kit transforms clipboard history into an on-demand command palette, enabling seamless capture, search, pinning, and pasting entirely via keyboard workflows, with all data kept strictly on your local device
 
-## Features
+## Key Features
 
-- **Capture everyday content**: Save text, code, links, and images with their source app
-- **Find items quickly**: Search the full history with SQLite full-text search, including Chinese Pinyin and initials
-- **Stay on the keyboard**: Open the palette, search, select, and paste without leaving your workflow
-- **Preview images**: Browse thumbnails and hover over the image in the right-hand preview for a larger view
-- **Manage history**: Browse items by date, set a retention period, and exclude apps from capture
+- **Multi-Type Capture & Smart Classification**: Automatically captures plain text, Markdown, code, links, file paths, and images with source app and timestamp metadata, supporting local rule classification and opt-in LLM classification (OpenAI, OpenRouter, TypeSafe)
+- **Multi-Dimensional Search & Offline OCR**: Instant results powered by SQLite FTS full-text search, featuring full Pinyin and initialism matching for Chinese, plus local offline OCR to index and highlight matching text within image previews
+- **Keyboard-First Workflow**: Summon the palette instantly with a customizable global shortcut, paste directly, copy immediately, or paste continuously while keeping the palette open, automatically switching to English input to ensure uninterrupted typing, with quick deletion undo
+- **Image Pinning & Full Preview**: Pin image clippings to the front of the screen as floating sticky notes, supporting small, medium, and large sizing with transparent checkerboard backgrounds, and hover over list items for instant full-size previews
+- **Stacks & Organization**: Organize frequent clippings into custom Stacks, with dedicated shortcuts to switch rapidly across groups and content type filters
+- **Privacy & Granular Control**: All history resides strictly in local SQLite storage without cloud dependencies, with customizable application exclusion lists (Keychain Access and Passwords excluded by default), retention policies, and temporary capture pausing
+- **Native macOS Craftsmanship**: Built purely with Swift and SwiftUI/AppKit, offering Light/Dark appearances, Frosted Glass and Liquid Glass visual materials, subtle keyboard sound effects, and trackpad haptic feedback
 
-## Workflow
+## Shortcuts
 
-Press `Option + W` to show or hide the palette. Type to filter history, move with the arrow keys, and press Return to paste.
-
-| Shortcut | Action |
+| Shortcut | Description |
 | --- | --- |
-| `Return` | Paste and close the palette |
-| `⌘ Return` | Copy the selected item |
-| `⌘ Z` | Undo the last deletion; after typing, undo the text edit first |
-
-The action menu also lets you paste while keeping the palette open, reveal an image in Finder, or delete an item. You can record a different global shortcut in Settings.
+| `⌥ W` | Toggle clipboard palette (customizable) |
+| `Return` | Paste selected item and close palette |
+| `⇧ Return` | Paste selected item and keep palette open |
+| `⌘ Return` | Copy selected item to system clipboard |
+| `⌘ K` | Open item action menu |
+| `⌘ Z` | Undo last deletion (prioritizes text undo when editing) |
+| `⌥ ↓` / `⌥ ↑` | Switch to next / previous Stack |
+| `⌥ ⌘ ↓` / `⌥ ⌘ ↑` | Switch to next / previous content type filter |
 
 ## Privacy and Permissions
 
-Clipboard history and images stay on your Mac; no cloud service is required. Choose how long to keep history and which apps to exclude. Keychain Access and Passwords are excluded by default.
-
-Kit needs Accessibility permission to send the selected content back to the app that was active before the palette opened.
+All clipboard history and search indexes remain on your Mac without external cloud sync, and macOS Accessibility permission is required on first paste to return content to your active application
 
 ## Build from Source
 
-You need macOS 27, Xcode 27, and Swift 6.4.
+Requirements: macOS 27+, Xcode 27+, Swift 6.4+
 
 ```bash
 git clone https://github.com/imeelinew/Kit.git
@@ -64,8 +65,8 @@ cd Kit
 open Kit.xcodeproj
 ```
 
-In Xcode, select the **Kit** scheme and choose **Product → Run**. Grant Accessibility permission when prompted before the first paste operation.
+Select the **Kit** scheme in Xcode and choose **Product → Run** to build and launch
 
 ## License
 
-Kit is distributed under the [GNU Affero General Public License v3.0](LICENSE).
+Kit is open-sourced under the [GNU Affero General Public License v3.0](LICENSE)
