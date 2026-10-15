@@ -57,9 +57,6 @@ struct ClipboardSettingsView: View {
 
             Section("Clipboard History") {
                 Toggle("Update history after action", isOn: $settings.updateHistoryAfterAction)
-                Text("When enabled, clipboard items are moved to the top of the history after a copy or paste action")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
             }
 
             Section("History Retention") {

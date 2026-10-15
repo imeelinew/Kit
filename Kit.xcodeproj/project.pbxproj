@@ -47,10 +47,10 @@
 		B1C2D3E4F5061728394A5B6C /* PinnedImageWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* PinnedImageWindow.swift */; };
 		B9424F6046260D72728A48DD /* GeneralSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC1779D1C157B1B6F9C37365 /* GeneralSettingsView.swift */; };
 		BB41A0000000000000000002 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB41A0000000000000000001 /* MenuBarController.swift */; };
-		BB41B0000000000000000002 /* sound-effect-1.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000001 /* sound-effect-1.mp3 */; };
-		BB41B0000000000000000004 /* sound-effect-2.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000003 /* sound-effect-2.mp3 */; };
-		BB41B0000000000000000006 /* sound-effect-3.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000005 /* sound-effect-3.mp3 */; };
-		BB41B0000000000000000008 /* sound-effect-4.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000007 /* sound-effect-4.mp3 */; };
+		BB41B0000000000000000002 /* copy-sound-wood-tap.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000001 /* copy-sound-wood-tap.mp3 */; };
+		BB41B0000000000000000004 /* copy-sound-double-tap.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000003 /* copy-sound-double-tap.mp3 */; };
+		BB41B0000000000000000006 /* copy-sound-crisp-ping.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000005 /* copy-sound-crisp-ping.mp3 */; };
+		BB41B0000000000000000008 /* copy-sound-low-knock.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB41B0000000000000000007 /* copy-sound-low-knock.mp3 */; };
 		C149825C332C2AE4CE7AFE86 /* SettingsComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DD90436D7A4A7E354F421DD /* SettingsComponents.swift */; };
 		C4F6DA55540713BDACAC260D /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = F7DB5B5DB847C967C5B56092 /* Localizable.strings */; };
 		CA1000000000000000000001 /* ClipboardItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA1000000000000000000002 /* ClipboardItem.swift */; };
@@ -122,10 +122,10 @@
 		B8B134FA6B0C91BE3263830E /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		BA150DA7FBE4819BF19B7F31 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BB41A0000000000000000001 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
-		BB41B0000000000000000001 /* sound-effect-1.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "sound-effect-1.mp3"; sourceTree = "<group>"; };
-		BB41B0000000000000000003 /* sound-effect-2.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "sound-effect-2.mp3"; sourceTree = "<group>"; };
-		BB41B0000000000000000005 /* sound-effect-3.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "sound-effect-3.mp3"; sourceTree = "<group>"; };
-		BB41B0000000000000000007 /* sound-effect-4.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "sound-effect-4.mp3"; sourceTree = "<group>"; };
+		BB41B0000000000000000001 /* copy-sound-wood-tap.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "copy-sound-wood-tap.mp3"; sourceTree = "<group>"; };
+		BB41B0000000000000000003 /* copy-sound-double-tap.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "copy-sound-double-tap.mp3"; sourceTree = "<group>"; };
+		BB41B0000000000000000005 /* copy-sound-crisp-ping.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "copy-sound-crisp-ping.mp3"; sourceTree = "<group>"; };
+		BB41B0000000000000000007 /* copy-sound-low-knock.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "copy-sound-low-knock.mp3"; sourceTree = "<group>"; };
 		C6853210949502E0C47D69B9 /* EdgeDissolve.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeDissolve.swift; sourceTree = "<group>"; };
 		CA1000000000000000000002 /* ClipboardItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardItem.swift; sourceTree = "<group>"; };
 		CA2000000000000000000002 /* Pinyin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pinyin.swift; sourceTree = "<group>"; };
@@ -295,10 +295,10 @@
 		BB41B0000000000000000009 /* Sounds */ = {
 			isa = PBXGroup;
 			children = (
-				BB41B0000000000000000001 /* sound-effect-1.mp3 */,
-				BB41B0000000000000000003 /* sound-effect-2.mp3 */,
-				BB41B0000000000000000005 /* sound-effect-3.mp3 */,
-				BB41B0000000000000000007 /* sound-effect-4.mp3 */,
+				BB41B0000000000000000001 /* copy-sound-wood-tap.mp3 */,
+				BB41B0000000000000000003 /* copy-sound-double-tap.mp3 */,
+				BB41B0000000000000000005 /* copy-sound-crisp-ping.mp3 */,
+				BB41B0000000000000000007 /* copy-sound-low-knock.mp3 */,
 			);
 			path = Sounds;
 			sourceTree = "<group>";
@@ -415,10 +415,10 @@
 				C4F6DA55540713BDACAC260D /* Localizable.strings in Resources */,
 				D39624F103CC42692585154F /* NerdFontsSymbolsOnly-LICENSE.txt in Resources */,
 				E46B1E8BC06FFD19A99AA8A3 /* README.md in Resources */,
-				BB41B0000000000000000002 /* sound-effect-1.mp3 in Resources */,
-				BB41B0000000000000000004 /* sound-effect-2.mp3 in Resources */,
-				BB41B0000000000000000006 /* sound-effect-3.mp3 in Resources */,
-				BB41B0000000000000000008 /* sound-effect-4.mp3 in Resources */,
+				BB41B0000000000000000002 /* copy-sound-wood-tap.mp3 in Resources */,
+				BB41B0000000000000000004 /* copy-sound-double-tap.mp3 in Resources */,
+				BB41B0000000000000000006 /* copy-sound-crisp-ping.mp3 in Resources */,
+				BB41B0000000000000000008 /* copy-sound-low-knock.mp3 in Resources */,
 				548476F13FAEFBC9FE5F0632 /* SymbolsNerdFontMono-Regular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

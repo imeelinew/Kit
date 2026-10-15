@@ -163,7 +163,10 @@
 "1 Year" = "1 年";
 "3 Months" = "3 个月";
 "6 Months" = "6 个月";
-"Sound Effect %d" = "音效%d";
+"Wood Tap" = "木质轻敲";
+"Double Tap" = "木质双击";
+"Crisp Ping" = "清脆短叮";
+"Low Knock" = "低沉轻敲";
 "Image Text Recognition" = "图片文字识别";
 "History Retention" = "历史保留";
 "Activation" = "激活";
@@ -174,8 +177,6 @@
 "Clipboard History" = "剪贴板历史";
 
 "Update history after action" = "操作后更新历史";
-
-"When enabled, clipboard items are moved to the top of the history after a copy or paste action" = "开启后，复制或粘贴的条目会移到历史记录顶部";
 
 "Times copied" = "复制次数";
 

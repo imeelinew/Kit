@@ -106,20 +106,33 @@ enum PinnedImageSize: String, CaseIterable, Identifiable {
 }
 
 enum CopySoundEffect: Int, CaseIterable, Identifiable {
-    case one = 1
-    case two = 2
-    case three = 3
-    case four = 4
+    // Declaration order is the order shown in Settings. Raw values keep the two
+    // surviving legacy sounds on their original numbers so existing selections
+    // still play the same sound.
+    case woodTap = 5
+    case doubleTap = 6
+    case crispPing = 1
+    case lowKnock = 3
 
     var id: Int { rawValue }
 
     func title(locale: Locale) -> String {
-        String(
-            format: AppLocalization.string("Sound Effect %d", locale: locale),
-            locale: locale, rawValue)
+        switch self {
+        case .woodTap: return AppLocalization.string("Wood Tap", locale: locale)
+        case .doubleTap: return AppLocalization.string("Double Tap", locale: locale)
+        case .crispPing: return AppLocalization.string("Crisp Ping", locale: locale)
+        case .lowKnock: return AppLocalization.string("Low Knock", locale: locale)
+        }
     }
 
-    var resourceName: String { "sound-effect-\(rawValue)" }
+    var resourceName: String {
+        switch self {
+        case .woodTap: return "copy-sound-wood-tap"
+        case .doubleTap: return "copy-sound-double-tap"
+        case .crispPing: return "copy-sound-crisp-ping"
+        case .lowKnock: return "copy-sound-low-knock"
+        }
+    }
 }
 
 @MainActor
@@ -366,8 +379,8 @@ final class AppSettings: ObservableObject {
         soundEffectsEnabled = defaults.object(forKey: Key.soundEffectsEnabled) as? Bool ?? true
         copySoundEffect =
             defaults.object(forKey: Key.copySoundEffect) == nil
-            ? .one
-            : CopySoundEffect(rawValue: defaults.integer(forKey: Key.copySoundEffect)) ?? .one
+            ? .woodTap
+            : CopySoundEffect(rawValue: defaults.integer(forKey: Key.copySoundEffect)) ?? .woodTap
         hapticFeedbackEnabled =
             defaults.object(forKey: Key.hapticFeedbackEnabled) as? Bool ?? true
         llmClassificationEnabled = defaults.object(forKey: Key.llmClassificationEnabled) as? Bool ?? false
