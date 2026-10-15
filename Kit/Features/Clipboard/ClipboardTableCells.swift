@@ -38,6 +38,21 @@ final class ClipboardSectionCellView: NSTableCellView {
 }
 
 final class ClipboardItemCellView: NSTableCellView {
+    private final class VerticallyCenteredTextCell: NSTextFieldCell {
+        override func drawingRect(forBounds rect: NSRect) -> NSRect {
+            var drawingRect = super.drawingRect(forBounds: rect)
+            let textHeight = cellSize(forBounds: rect).height
+            drawingRect.origin.y = rect.midY - textHeight / 2
+            drawingRect.size.height = textHeight
+            return drawingRect
+        }
+    }
+
+    private static var titleFont: NSFont {
+        ClipboardPreviewFont.regular(
+            ofSize: NSFont.preferredFont(forTextStyle: .subheadline).pointSize + 1)
+    }
+
     private enum HighlightMotion {
         static let fillAlpha: CGFloat = 0.11
         static let briefVisitThreshold: CFTimeInterval = 0.06
@@ -94,7 +109,12 @@ final class ClipboardItemCellView: NSTableCellView {
 
         thumbnailView.translatesAutoresizingMaskIntoConstraints = false
 
-        titleLabel.font = .preferredFont(forTextStyle: .body)
+        titleLabel.cell = VerticallyCenteredTextCell(textCell: "")
+        titleLabel.isEditable = false
+        titleLabel.isSelectable = false
+        titleLabel.isBordered = false
+        titleLabel.drawsBackground = false
+        titleLabel.font = Self.titleFont
         titleLabel.textColor = .labelColor
         titleLabel.lineBreakMode = .byClipping
         titleLabel.maximumNumberOfLines = 1
@@ -117,7 +137,7 @@ final class ClipboardItemCellView: NSTableCellView {
 
             thumbnailView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            titleLabel.heightAnchor.constraint(lessThanOrEqualToConstant: Theme.Size.rowIcon),
+            titleLabel.heightAnchor.constraint(equalToConstant: Theme.Size.rowIcon),
         ])
         standardConstraints = [
             thumbnailView.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -204,7 +224,7 @@ final class ClipboardItemCellView: NSTableCellView {
         fullTitle = SearchHighlight.nsAttributed(
             Self.listTitle(for: item, customTitle: customTitle, locale: locale),
             query: query,
-            font: .preferredFont(forTextStyle: .body))
+            font: Self.titleFont)
         renderedTitleWidth = -1
         renderTitle()
     }
@@ -227,7 +247,7 @@ final class ClipboardItemCellView: NSTableCellView {
         // The table can clip a cell before NSTextField gets a chance to draw its own ellipsis.
         titleLabel.attributedStringValue = Self.truncatedTitle(
             fullTitle, toFit: width - 3, fromHead: truncatesFromHead,
-            font: titleLabel.font ?? .preferredFont(forTextStyle: .body))
+            font: titleLabel.font ?? Self.titleFont)
     }
 
     private static func truncatedTitle(

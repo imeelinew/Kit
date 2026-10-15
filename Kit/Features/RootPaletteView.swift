@@ -113,6 +113,11 @@ struct RootPaletteView: View {
                 .contentShape(Rectangle())
                 .allowsHitTesting(vm.menuOpen)
                 .onTapGesture { vm.closeMenu() }
+                .overlay {
+                    if vm.menuOpen {
+                        MenuRightClickHandler { vm.closeMenu() }
+                    }
+                }
         }
         .overlay(alignment: .bottomLeading) {
             if showAppMenu {

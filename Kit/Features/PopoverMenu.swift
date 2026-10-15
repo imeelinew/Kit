@@ -295,14 +295,14 @@ private struct PopoverMenuRow: View {
         .onHover { if $0 { onHover() } }
         .overlay {
             if let onRightClick {
-                StackRowRightClick(action: onRightClick)
+                MenuRightClickHandler(action: onRightClick)
             }
         }
     }
 }
 
 /// Lets a left click reach the SwiftUI button, and handles a right click itself.
-private struct StackRowRightClick: NSViewRepresentable {
+struct MenuRightClickHandler: NSViewRepresentable {
     let action: () -> Void
 
     func makeNSView(context: Context) -> RightClickView {
@@ -321,11 +321,21 @@ private struct StackRowRightClick: NSViewRepresentable {
         override func hitTest(_ point: NSPoint) -> NSView? {
             guard bounds.contains(point) else { return nil }
             let rightButton = NSEvent.pressedMouseButtons & (1 << 1) != 0
-            return rightButton ? self : nil
+            let controlClick = NSApp.currentEvent?.type == .leftMouseDown
+                && NSApp.currentEvent?.modifierFlags.contains(.control) == true
+            return rightButton || controlClick ? self : nil
         }
 
         override func rightMouseDown(with event: NSEvent) {
             action?()
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            if event.modifierFlags.contains(.control) {
+                action?()
+            } else {
+                super.mouseDown(with: event)
+            }
         }
     }
 }
