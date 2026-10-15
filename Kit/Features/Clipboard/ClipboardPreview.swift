@@ -115,6 +115,8 @@ struct ClipboardPreview: View {
                             information
                         }
                         .scrollIndicators(.visible)
+                        // Keep right-aligned values out of the overlay scroller's gutter.
+                        .contentMargins(.trailing, 12, for: .scrollContent)
                         .frame(height: min(information.contentHeight, geometry.size.height / 2))
                     }
                 }
@@ -259,7 +261,7 @@ private struct ClipboardInfoSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             Text("Information")
-                .font(Theme.Typography.sectionHeader)
+                .font(.callout.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .frame(height: 16)
                 .padding(.horizontal, 8)
