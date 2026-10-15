@@ -10,10 +10,32 @@ enum ClipboardPreviewFont {
         CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
     }()
 
+    private static let chineseFontName: String? = {
+        guard let url = Bundle.main.url(forResource: "LXGWNeoXiHei", withExtension: "ttf")
+        else { return nil }
+        CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+        guard let descriptors = CTFontManagerCreateFontDescriptorsFromURL(url as CFURL)
+            as? [CTFontDescriptor], let descriptor = descriptors.first,
+            let name = CTFontDescriptorCopyAttribute(descriptor, kCTFontNameAttribute) as? String
+        else { return nil }
+        return name
+    }()
+
     static func regular(ofSize size: CGFloat) -> NSFont {
         _ = registration
-        return NSFont(name: "JetBrainsMono-Regular", size: size)
+        let font = NSFont(name: "JetBrainsMono-Regular", size: size)
             ?? NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+        return withChineseFallback(font)
+    }
+
+    static func withChineseFallback(_ font: NSFont) -> NSFont {
+        guard let chineseFontName else { return font }
+        let chineseDescriptor = NSFontDescriptor(name: chineseFontName, size: font.pointSize)
+        let existing = font.fontDescriptor.object(forKey: .cascadeList) as? [NSFontDescriptor] ?? []
+        let descriptor = font.fontDescriptor.addingAttributes([
+            .cascadeList: [chineseDescriptor] + existing
+        ])
+        return NSFont(descriptor: descriptor, size: font.pointSize) ?? font
     }
 }
 
@@ -179,9 +201,9 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
         }
 
         mutable.enumerateAttribute(.font, in: full) { value, range, _ in
-            if value == nil {
-                mutable.addAttribute(.font, value: font, range: range)
-            }
+            let original = value as? NSFont ?? font
+            mutable.addAttribute(
+                .font, value: ClipboardPreviewFont.withChineseFallback(original), range: range)
         }
         mutable.enumerateAttribute(.foregroundColor, in: full) { value, range, _ in
             if value == nil {
@@ -205,7 +227,9 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
         let font = fontSize.map { NSFont.systemFont(ofSize: $0) }
             ?? NSFont.preferredFont(forTextStyle: .subheadline)
         mutable.enumerateAttribute(.font, in: full) { value, range, _ in
-            if value == nil { mutable.addAttribute(.font, value: font, range: range) }
+            let original = value as? NSFont ?? font
+            mutable.addAttribute(
+                .font, value: ClipboardPreviewFont.withChineseFallback(original), range: range)
         }
         mutable.enumerateAttribute(.foregroundColor, in: full) { value, range, _ in
             if value == nil {
