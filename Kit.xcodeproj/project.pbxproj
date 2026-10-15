@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CB1100000000000000000001 /* JetBrainsMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CB1100000000000000000002 /* JetBrainsMono-Regular.ttf */; };
+		CB1100000000000000000003 /* JetBrainsMono-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = CB1100000000000000000004 /* JetBrainsMono-LICENSE.txt */; };
 		CB1000000000000000000001 /* ClipboardRowThumbnailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1000000000000000000002 /* ClipboardRowThumbnailCache.swift */; };
 		02CB1E90666F628DBF9C7C78 /* EdgeDissolve.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6853210949502E0C47D69B9 /* EdgeDissolve.swift */; };
 		068B6C43C18DB6110AED985B /* PopoverMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C234D84C11C94266A6B560D /* PopoverMenu.swift */; };
@@ -83,6 +85,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		CB1100000000000000000002 /* JetBrainsMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Regular.ttf"; sourceTree = "<group>"; };
+		CB1100000000000000000004 /* JetBrainsMono-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "JetBrainsMono-LICENSE.txt"; sourceTree = "<group>"; };
 		CB1000000000000000000002 /* ClipboardRowThumbnailCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardRowThumbnailCache.swift; sourceTree = "<group>"; };
 		0C1D141FBB730290AF3CA00C /* AppCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCore.swift; sourceTree = "<group>"; };
 		11927303CFC909AE918568B6 /* PaletteViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteViewModel.swift; sourceTree = "<group>"; };
@@ -258,6 +262,8 @@
 				DB2357C425F1390F61CEB545 /* NerdFontsSymbolsOnly-LICENSE.txt */,
 				B8B134FA6B0C91BE3263830E /* README.md */,
 				6127F340C801F2F566147DE2 /* SymbolsNerdFontMono-Regular.ttf */,
+				CB1100000000000000000002 /* JetBrainsMono-Regular.ttf */,
+				CB1100000000000000000004 /* JetBrainsMono-LICENSE.txt */,
 			);
 			path = Fonts;
 			sourceTree = "<group>";
@@ -420,6 +426,8 @@
 				BB41B0000000000000000006 /* copy-sound-crisp-ping.mp3 in Resources */,
 				BB41B0000000000000000008 /* copy-sound-low-knock.mp3 in Resources */,
 				548476F13FAEFBC9FE5F0632 /* SymbolsNerdFontMono-Regular.ttf in Resources */,
+				CB1100000000000000000001 /* JetBrainsMono-Regular.ttf in Resources */,
+				CB1100000000000000000003 /* JetBrainsMono-LICENSE.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

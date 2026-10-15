@@ -1,5 +1,20 @@
 import AppKit
+import CoreText
 import SwiftUI
+
+enum ClipboardPreviewFont {
+    private static let registration: Void = {
+        guard let url = Bundle.main.url(forResource: "JetBrainsMono-Regular", withExtension: "ttf")
+        else { return }
+        CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+    }()
+
+    static func regular(ofSize size: CGFloat) -> NSFont {
+        _ = registration
+        return NSFont(name: "JetBrainsMono-Regular", size: size)
+            ?? NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+    }
+}
 
 /// Identifies the logical input and whether its asynchronous rendering has completed.
 struct PreviewContentID: Hashable {
@@ -106,7 +121,7 @@ struct AttributedTextPreview: NSViewRepresentable {
         fontSize: CGFloat?
     ) -> NSAttributedString {
         let size = fontSize ?? NSFont.preferredFont(forTextStyle: .subheadline).pointSize
-        let font = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+        let font = ClipboardPreviewFont.regular(ofSize: size)
         let mutable = NSMutableAttributedString(attributedString: NSAttributedString(attributed))
         let full = NSRange(location: 0, length: mutable.length)
         guard full.length > 0 else { return mutable }

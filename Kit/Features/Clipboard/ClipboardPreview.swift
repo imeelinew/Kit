@@ -102,6 +102,7 @@ struct ClipboardPreview: View {
                     ?? (loadedPayload?.itemID == item.id ? loadedPayload : nil)
                 VStack(alignment: .leading, spacing: 0) {
                     content(for: item, payload: payload)
+                        .padding(.vertical, item.kind == .image ? 0 : 16)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         .id(item.kind)
                         .transition(.opacity)
@@ -110,7 +111,7 @@ struct ClipboardPreview: View {
                         item: item, details: payload?.details ?? .init(), store: store,
                         settings: settings)
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 24)
                 .id(item.id)
                 .transition(.opacity)
             } else {
@@ -276,7 +277,7 @@ private struct ClipboardInfoSection: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     }
-                    .font(.callout)
+                    .font(.system(size: 11))
                     .padding(.vertical, Theme.Spacing.sm)
                 }
             }
