@@ -100,18 +100,25 @@ struct ClipboardPreview: View {
                 let payload = (vm.preparedPreview?.itemID == item.id ? vm.preparedPreview : nil)
                     ?? ClipboardPreviewPayload.cached(for: item)
                     ?? (loadedPayload?.itemID == item.id ? loadedPayload : nil)
-                VStack(alignment: .leading, spacing: 0) {
-                    content(for: item, payload: payload)
-                        .padding(.vertical, item.kind == .image ? 0 : 16)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                        .id(item.kind)
-                        .transition(.opacity)
-                        .animation(reduceMotion ? nil : Theme.Motion.content, value: item.kind)
-                    ClipboardInfoSection(
+                GeometryReader { geometry in
+                    let information = ClipboardInfoSection(
                         item: item, details: payload?.details ?? .init(), store: store,
                         settings: settings)
+                    VStack(alignment: .leading, spacing: 0) {
+                        content(for: item, payload: payload)
+                            .padding(.vertical, item.kind == .image ? 0 : 12)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            .id(item.kind)
+                            .transition(.opacity)
+                            .animation(reduceMotion ? nil : Theme.Motion.content, value: item.kind)
+                        ScrollView(.vertical) {
+                            information
+                        }
+                        .scrollIndicators(.visible)
+                        .frame(height: min(information.contentHeight, geometry.size.height / 2))
+                    }
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, 20)
                 .id(item.id)
                 .transition(.opacity)
             } else {
@@ -245,22 +252,27 @@ private struct ClipboardInfoSection: View {
         return formatter
     }()
 
+    var contentHeight: CGFloat {
+        12 + 16 + Theme.Spacing.sm + CGFloat(rows.count) * 28
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             Text("Information")
                 .font(Theme.Typography.sectionHeader)
                 .foregroundStyle(.secondary)
+                .frame(height: 16)
+                .padding(.horizontal, 8)
             VStack(spacing: 0) {
                 let rows = self.rows
-                ForEach(rows) { row in
-                    if row.id != rows.first?.id { Divider() }
+                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                     HStack(spacing: Theme.Spacing.sm) {
                         Text(LocalizedStringKey(row.label)).foregroundStyle(.secondary)
                         Spacer(minLength: Theme.Spacing.lg)
                         if let icon = row.icon {
                             Image(nsImage: icon)
                                 .resizable()
-                                .frame(width: 20, height: 20)
+                                .frame(width: 16, height: 16)
                         }
                         Group {
                             if row.localizesValue {
@@ -278,7 +290,14 @@ private struct ClipboardInfoSection: View {
                         .truncationMode(.middle)
                     }
                     .font(.system(size: 11))
-                    .padding(.vertical, Theme.Spacing.sm)
+                    .padding(.horizontal, 8)
+                    .frame(height: 28)
+                    .background {
+                        if index.isMultiple(of: 2) {
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.primary.opacity(0.025))
+                        }
+                    }
                 }
             }
         }

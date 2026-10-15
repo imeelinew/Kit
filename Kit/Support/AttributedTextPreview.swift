@@ -1,5 +1,6 @@
 import AppKit
 import CoreText
+import QuartzCore
 import SwiftUI
 
 enum ClipboardPreviewFont {
@@ -197,6 +198,9 @@ struct AttributedTextPreview: NSViewRepresentable {
 final class PreviewTextScrollView: NSScrollView {
     let textView = PreviewTextView()
     private var styleObserver: NotificationToken?
+    private var boundsObserver: NotificationToken?
+    private let bottomMask = CAGradientLayer()
+    private static let fadeHeight: CGFloat = 32
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -209,6 +213,8 @@ final class PreviewTextScrollView: NSScrollView {
         autohidesScrollers = true
         automaticallyAdjustsContentInsets = false
         contentView.drawsBackground = false
+        contentView.wantsLayer = true
+        contentView.postsBoundsChangedNotifications = true
 
         textView.drawsBackground = false
         textView.isEditable = false
@@ -224,6 +230,12 @@ final class PreviewTextScrollView: NSScrollView {
         textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         documentView = textView
+        let token = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification, object: contentView, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateBottomMask() }
+        }
+        boundsObserver = NotificationToken(token, center: .default)
     }
 
     @available(*, unavailable)
@@ -252,11 +264,33 @@ final class PreviewTextScrollView: NSScrollView {
             width: width, height: CGFloat.greatestFiniteMagnitude)
         textView.layoutManager?.ensureLayout(for: textContainer)
         let contentHeight = textView.intrinsicContentSize.height
-        let height = max(contentSize.height, contentHeight)
+        // The final line can scroll above the fade instead of remaining hidden underneath it
+        let overflows = contentHeight > contentSize.height
+        let height = max(contentSize.height, contentHeight + (overflows ? Self.fadeHeight : 0))
         let size = NSSize(width: width, height: height)
         if textView.frame.size != size {
             textView.setFrameSize(size)
         }
+        updateBottomMask()
+    }
+
+    private func updateBottomMask() {
+        let bounds = contentView.bounds
+        let textHeight = textView.intrinsicContentSize.height
+        guard bounds.height > 0, textHeight > bounds.height else {
+            contentView.layer?.mask = nil
+            return
+        }
+        let fade = min(Self.fadeHeight, bounds.height)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        bottomMask.frame = bounds
+        bottomMask.startPoint = CGPoint(x: 0.5, y: contentView.isFlipped ? 0 : 1)
+        bottomMask.endPoint = CGPoint(x: 0.5, y: contentView.isFlipped ? 1 : 0)
+        bottomMask.colors = [NSColor.black.cgColor, NSColor.black.cgColor, NSColor.clear.cgColor]
+        bottomMask.locations = [0, NSNumber(value: 1 - fade / bounds.height), 1]
+        contentView.layer?.mask = bottomMask
+        CATransaction.commit()
     }
 
     private func observeScrollerStyleChanges() {
