@@ -2,7 +2,7 @@ import Foundation
 import SQLite3
 
 struct ClipboardSearchCursor: Sendable, Equatable {
-    let createdAt: Date
+    let lastCopiedAt: Date
     let rowID: Int64
 }
 
@@ -90,8 +90,8 @@ enum ClipboardSearch {
             """
         let sql = """
             SELECT i.id, i.kind, i.text, i.image_path, i.created_at, i.source_app,
-                   i.image_fingerprint, i.custom_title, i.last_used_at,
-                   i.ocr_text, i.ocr_status, i.ocr_version, i.ocr_attempts, i.rowid
+                   i.image_fingerprint, i.custom_title, i.first_copied_at,
+                   i.ocr_text, i.ocr_status, i.ocr_version, i.ocr_attempts, i.copy_count, i.rowid
             FROM items i
             \(stackJoin)
             WHERE \(textCondition)\(kindCondition)\(stackCondition)\(cursorCondition)
@@ -121,8 +121,8 @@ enum ClipboardSearch {
             parameter += 1
         }
         if let cursor {
-            sqlite3_bind_double(statement, parameter, cursor.createdAt.timeIntervalSince1970)
-            sqlite3_bind_double(statement, parameter + 1, cursor.createdAt.timeIntervalSince1970)
+            sqlite3_bind_double(statement, parameter, cursor.lastCopiedAt.timeIntervalSince1970)
+            sqlite3_bind_double(statement, parameter + 1, cursor.lastCopiedAt.timeIntervalSince1970)
             sqlite3_bind_int64(statement, parameter + 2, cursor.rowID)
             parameter += 3
         }
@@ -136,8 +136,8 @@ enum ClipboardSearch {
                 results.append((
                     item: item,
                     cursor: ClipboardSearchCursor(
-                        createdAt: item.createdAt,
-                        rowID: sqlite3_column_int64(statement, 13))))
+                        lastCopiedAt: item.lastCopiedAt,
+                        rowID: sqlite3_column_int64(statement, 14))))
             }
             status = sqlite3_step(statement)
         }

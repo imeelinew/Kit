@@ -95,7 +95,7 @@ struct ClipboardListAnimationTests {
         let matching = kinds.map { kind in
             ClipboardItem(
                 id: UUID(), kind: kind, text: kind == .image ? nil : "你好世界",
-                imagePath: nil, imageFingerprint: nil, createdAt: today,
+                imagePath: nil, imageFingerprint: nil, lastCopiedAt: today,
                 sourceBundleID: nil, imageOCR: kind == .image ? ClipboardImageOCR(
                     text: "你好世界", status: .complete, version: 1, attempts: 1) : nil)
         }
@@ -266,6 +266,10 @@ struct ClipboardListAnimationTests {
         let bundleID = Bundle.main.bundleIdentifier!
         precondition(bundleID.hasPrefix("com.eli.Kit.tests.clipboard-list."),
                      "The list harness requires an isolated bundle identity")
+        if CommandLine.arguments.contains("--preview-only") {
+            await ClipboardPreviewTests.run()
+            return
+        }
         if CommandLine.arguments.contains("--preview-lifecycle-only") {
             try await ClipboardPreviewLifecycleTests.run()
             return
@@ -298,7 +302,7 @@ struct ClipboardListAnimationTests {
         func item(_ name: String, daysAgo: Int = 0) -> ClipboardItem {
             ClipboardItem(
                 id: UUID(), kind: .text, text: name, imagePath: nil, imageFingerprint: nil,
-                createdAt: Calendar.current.date(byAdding: .day, value: -daysAgo, to: today)!,
+                lastCopiedAt: Calendar.current.date(byAdding: .day, value: -daysAgo, to: today)!,
                 sourceBundleID: nil)
         }
         let a = item("A"), b = item("B"), c = item("C", daysAgo: 1)

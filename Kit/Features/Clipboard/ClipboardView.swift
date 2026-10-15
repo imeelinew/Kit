@@ -507,7 +507,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         ) -> [ClipboardTableRow] {
             var grouped: [ClipboardDateSection: [ClipboardItem]] = [:]
             for item in results {
-                let section = grouping.section(for: item.createdAt)
+                let section = grouping.section(for: item.lastCopiedAt)
                 grouped[section, default: []].append(item)
             }
 

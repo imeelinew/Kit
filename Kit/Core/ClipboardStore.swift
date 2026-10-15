@@ -17,6 +17,8 @@ final class ClipboardStore: ObservableObject {
     /// Fired after a successful external capture, including recopies of existing content.
     var onItemCaptured: (() -> Void)?
     private(set) var captureGeneration: UInt64 = 0
+    var updateHistoryAfterAction = true
+    private(set) var hasDeferredHistoryUpdates = false
     var maxAge: TimeInterval = ClipboardRetention.threeMonths.maxAge
 
     enum ImageTextIndexState: Equatable {
@@ -52,8 +54,8 @@ final class ClipboardStore: ObservableObject {
 
     private static let itemSelection = """
         SELECT id, kind, text, image_path, created_at, source_app,
-               image_fingerprint, custom_title, last_used_at,
-               ocr_text, ocr_status, ocr_version, ocr_attempts
+               image_fingerprint, custom_title, first_copied_at,
+               ocr_text, ocr_status, ocr_version, ocr_attempts, copy_count
         FROM items
         """
 
@@ -67,7 +69,8 @@ final class ClipboardStore: ObservableObject {
           source_app TEXT,
           image_fingerprint TEXT,
           custom_title TEXT,
-          last_used_at REAL,
+          first_copied_at REAL,
+          copy_count INTEGER NOT NULL DEFAULT 1,
           pinyin TEXT,
           pinyin_initials TEXT,
           ocr_text TEXT,
@@ -160,7 +163,7 @@ final class ClipboardStore: ObservableObject {
         guard maxAge.isFinite, maxAge >= 0, maxAge != ClipboardRetention.forever.maxAge else {
             return true
         }
-        return deletedEntry.item.createdAt >= Date().addingTimeInterval(-maxAge)
+        return deletedEntry.item.lastCopiedAt >= Date().addingTimeInterval(-maxAge)
     }
     private var db: OpaquePointer?
     private var insertStmt: OpaquePointer?
@@ -173,7 +176,6 @@ final class ClipboardStore: ObservableObject {
     private var textByContentStmt: OpaquePointer?
     private var itemByIDStmt: OpaquePointer?
     private var updateKindStmt: OpaquePointer?
-    private var markUsedStmt: OpaquePointer?
     private var insertStackStmt: OpaquePointer?
     private var upsertMembershipStmt: OpaquePointer?
     private var deleteMembershipStmt: OpaquePointer?
@@ -314,7 +316,7 @@ final class ClipboardStore: ObservableObject {
     ) -> ClipboardItem? {
         if let expectedGeneration, expectedGeneration != captureGeneration { return nil }
         if let existing = textItem(matching: text) {
-            let updated = existing.refreshed(sourceBundleID: sourceBundleID).withKind(kind)
+            let updated = existing.recopied(sourceBundleID: sourceBundleID).withKind(kind)
             return refresh(updated) ? updated : nil
         }
         let item = ClipboardItem(text: text, kind: kind, sourceBundleID: sourceBundleID)
@@ -331,7 +333,7 @@ final class ClipboardStore: ObservableObject {
         }.value
         guard !Task.isCancelled, generation == captureGeneration else { return }
         if let existing = image(matching: fingerprint) {
-            refresh(existing.refreshed(sourceBundleID: sourceBundleID))
+            refresh(existing.recopied(sourceBundleID: sourceBundleID))
             if let url = imageURL(for: existing) { warmImageRow(url) }
             startImageOCRWorkerIfNeeded()
             return
@@ -364,19 +366,24 @@ final class ClipboardStore: ObservableObject {
         return loadItem(id: id)
     }
 
-    /// Update usage metadata in place without treating reuse as an external capture.
+    /// Raycast leaves history metadata untouched when this preference is disabled
     @discardableResult
-    func markUsed(id: ClipboardItem.ID, at date: Date = Date()) -> Bool {
-        guard let stmt = markUsedStmt else { return false }
-        sqlite3_bind_double(stmt, 1, date.timeIntervalSince1970)
-        sqlite3_bind_text(stmt, 2, id.uuidString, -1, SQLITE_TRANSIENT)
-        guard stepAndReset(stmt), sqlite3_changes(db) == 1 else { return false }
-        if let index = items.firstIndex(where: { $0.id == id }) {
-            items[index] = items[index].used(at: date)
-        } else {
-            revision &+= 1
-        }
-        return true
+    func recordHistoryAction(
+        id: ClipboardItem.ID, at date: Date = Date(), deferPublication: Bool = false
+    ) -> Bool {
+        guard updateHistoryAfterAction else { return true }
+        // Read persisted metadata because a previous keep-open paste may not be published yet
+        guard let existing = loadItem(id: id) else { return false }
+        return refresh(
+            existing.recopied(at: date, sourceBundleID: existing.sourceBundleID),
+            externalCapture: false, deferPublication: deferPublication)
+    }
+
+    /// Keep the visible list and preview stable until the palette closes
+    func publishDeferredHistoryUpdates() {
+        guard hasDeferredHistoryUpdates else { return }
+        hasDeferredHistoryUpdates = false
+        load()
     }
 
     /// Re-grade an existing row's kind (async LLM classification). The row id is stable across
@@ -1021,30 +1028,40 @@ final class ClipboardStore: ObservableObject {
         values.enumerated().sorted { lhs, rhs in
             let left = lhs.element
             let right = rhs.element
-            if left.createdAt != right.createdAt { return left.createdAt > right.createdAt }
+            if left.lastCopiedAt != right.lastCopiedAt { return left.lastCopiedAt > right.lastCopiedAt }
             return lhs.offset < rhs.offset
         }.map(\.element)
     }
 
-    /// Only a new external copy refreshes history; reusing an item never calls this path.
+    /// Copy metadata and history position commit together before feedback
     @discardableResult
-    private func refresh(_ updated: ClipboardItem) -> Bool {
+    private func refresh(
+        _ updated: ClipboardItem, externalCapture: Bool = true, deferPublication: Bool = false
+    ) -> Bool {
         guard let stmt = refreshStmt else { return false }
-        sqlite3_bind_double(stmt, 1, updated.createdAt.timeIntervalSince1970)
+        sqlite3_bind_double(stmt, 1, updated.lastCopiedAt.timeIntervalSince1970)
         sqlite3_bind_text(stmt, 2, updated.sourceBundleID, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 3, updated.id.uuidString, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 4, updated.kind.rawValue, -1, SQLITE_TRANSIENT)
-        guard stepAndReset(stmt) else { return false }
+        sqlite3_bind_int64(stmt, 5, Int64(updated.copyCount))
+        guard stepAndReset(stmt), sqlite3_changes(db) == 1 else { return false }
+        if deferPublication {
+            hasDeferredHistoryUpdates = true
+            return true
+        }
+        publishDeferredHistoryUpdates()
         // Publish one complete revision, without briefly removing the selected item.
         items = Array(([updated] + items.filter { $0.id != updated.id }).prefix(Self.memoryWindow))
         pruneIfDue()
-        onItemCaptured?()
+        if externalCapture { onItemCaptured?() }
         return true
     }
 
     @discardableResult
     private func insert(_ item: ClipboardItem) -> Bool {
         guard let stmt = insertStmt, bindAndInsert(stmt, item) else { return false }
+        publishDeferredHistoryUpdates()
+        items.removeAll { $0.id == item.id }
         items.insert(item, at: 0)
         if items.count > Self.memoryWindow { items.removeLast() }
         pruneIfDue()
@@ -1060,15 +1077,11 @@ final class ClipboardStore: ObservableObject {
         sqlite3_bind_text(stmt, 2, item.kind.rawValue, -1, SQLITE_TRANSIENT)
         ClipboardSQLite.bindText(item.text, to: stmt, at: 3)
         sqlite3_bind_text(stmt, 4, item.imagePath, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_double(stmt, 5, item.createdAt.timeIntervalSince1970)
+        sqlite3_bind_double(stmt, 5, item.lastCopiedAt.timeIntervalSince1970)
         sqlite3_bind_text(stmt, 6, item.sourceBundleID, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 7, item.imageFingerprint, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 8, item.customTitle, -1, SQLITE_TRANSIENT)
-        if let lastUsedAt = item.lastUsedAt {
-            sqlite3_bind_double(stmt, 9, lastUsedAt.timeIntervalSince1970)
-        } else {
-            sqlite3_bind_null(stmt, 9)
-        }
+        sqlite3_bind_double(stmt, 9, item.firstCopiedAt.timeIntervalSince1970)
         if let metadata = item.imageOCR {
             ClipboardSQLite.bindText(metadata.text, to: stmt, at: 10)
             sqlite3_bind_text(stmt, 11, metadata.status.rawValue, -1, SQLITE_TRANSIENT)
@@ -1081,6 +1094,7 @@ final class ClipboardStore: ObservableObject {
         let forms = Pinyin.searchForms(for: item.imageOCR?.text ?? "")
         sqlite3_bind_text(stmt, 14, forms.full, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 15, forms.initials, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_int64(stmt, 16, Int64(item.copyCount))
         return stepAndReset(stmt)
     }
 
@@ -1170,10 +1184,10 @@ final class ClipboardStore: ObservableObject {
             return true
         }) else { return false }
         lastPrunedAt = date
-        let undoExpired = deletedEntry.map { $0.item.createdAt < cutoff } == true
+        let undoExpired = deletedEntry.map { $0.item.lastCopiedAt < cutoff } == true
         if undoExpired { discardDeletion() }
         for id in expiredMemberships { stackMembership.removeValue(forKey: id) }
-        let remaining = items.filter { $0.createdAt >= cutoff }
+        let remaining = items.filter { $0.lastCopiedAt >= cutoff }
         if remaining.count != items.count {
             items = remaining
         } else if deletedCount > 0 || undoExpired || !expiredMemberships.isEmpty {
@@ -1291,7 +1305,7 @@ final class ClipboardStore: ObservableObject {
                 nil, nil, nil) == SQLITE_OK,
             sqlite3_exec(db, Self.coreSchema, nil, nil, nil) == SQLITE_OK
         else { return }
-        guard migrateUsageMetadata(),
+        guard migrateCopyMetadata(),
             sqlite3_exec(db, Self.searchSchema, nil, nil, nil) == SQLITE_OK,
             migrateImageSearch()
         else { return }
@@ -1299,9 +1313,9 @@ final class ClipboardStore: ObservableObject {
             """
             INSERT INTO items(
               id, kind, text, image_path, created_at, source_app, image_fingerprint,
-              custom_title, last_used_at, ocr_text, ocr_status, ocr_version, ocr_attempts,
-              pinyin, pinyin_initials
-            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+              custom_title, first_copied_at, ocr_text, ocr_status, ocr_version, ocr_attempts,
+              pinyin, pinyin_initials, copy_count
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """
         )
         loadStmt = prepare(
@@ -1309,7 +1323,7 @@ final class ClipboardStore: ObservableObject {
             \(Self.itemSelection) ORDER BY created_at DESC, rowid DESC LIMIT ?
             """)
         refreshStmt = prepare(
-            "UPDATE items SET created_at = ?1, source_app = ?2, kind = ?4 WHERE id = ?3")
+            "UPDATE items SET created_at = ?1, source_app = ?2, kind = ?4, copy_count = ?5 WHERE id = ?3")
         deleteByIDStmt = prepare("DELETE FROM items WHERE id = ?")
         staleImagesStmt = prepare(
             """
@@ -1332,7 +1346,6 @@ final class ClipboardStore: ObservableObject {
             \(Self.itemSelection) WHERE id = ? LIMIT 1
             """)
         updateKindStmt = prepare("UPDATE items SET kind = ? WHERE id = ?")
-        markUsedStmt = prepare("UPDATE items SET last_used_at = ? WHERE id = ?")
         insertStackStmt = prepare(
             "INSERT INTO stacks(id, name, position) VALUES(?,?,?)")
         upsertMembershipStmt = prepare(
@@ -1343,18 +1356,29 @@ final class ClipboardStore: ObservableObject {
         deleteMembershipStmt = prepare("DELETE FROM stack_items WHERE item_id = ?")
     }
 
-    /// Existing captures keep their metadata; past usage cannot be reconstructed.
-    private func migrateUsageMetadata() -> Bool {
+    /// The legacy created_at column stores the most recent copy time
+    /// Older first-copy times and copy counts cannot be reconstructed
+    private func migrateCopyMetadata() -> Bool {
         guard let stmt = prepare("PRAGMA table_info(items)") else { return false }
-        defer { sqlite3_finalize(stmt) }
+        var columns = Set<String>()
         var status = sqlite3_step(stmt)
         while status == SQLITE_ROW {
-            if ClipboardSQLite.columnString(stmt, 1) == "last_used_at" { return true }
+            if let name = ClipboardSQLite.columnString(stmt, 1) { columns.insert(name) }
             status = sqlite3_step(stmt)
         }
+        sqlite3_finalize(stmt)
         guard status == SQLITE_DONE else { return false }
-        return sqlite3_exec(db, "ALTER TABLE items ADD COLUMN last_used_at REAL", nil, nil, nil)
-            == SQLITE_OK
+        return transaction {
+            for (name, type) in [
+                ("first_copied_at", "REAL"), ("copy_count", "INTEGER NOT NULL DEFAULT 1"),
+            ] where !columns.contains(name) {
+                guard sqlite3_exec(db, "ALTER TABLE items ADD COLUMN \(name) \(type)",
+                                   nil, nil, nil) == SQLITE_OK else { return false }
+            }
+            return sqlite3_exec(db,
+                "UPDATE items SET first_copied_at = created_at WHERE first_copied_at IS NULL",
+                nil, nil, nil) == SQLITE_OK
+        }
     }
 
     private func migrateImageSearch() -> Bool {
@@ -1405,7 +1429,7 @@ final class ClipboardStore: ObservableObject {
         [
             insertStmt, loadStmt, refreshStmt, deleteByIDStmt,
             staleImagesStmt, deleteStaleStmt, imageByFingerprintStmt, textByContentStmt, itemByIDStmt,
-            updateKindStmt, markUsedStmt, insertStackStmt, upsertMembershipStmt, deleteMembershipStmt,
+            updateKindStmt, insertStackStmt, upsertMembershipStmt, deleteMembershipStmt,
         ].forEach { sqlite3_finalize($0) }
         sqlite3_close_v2(db)
     }

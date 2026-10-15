@@ -33,8 +33,6 @@
 "Code" = "代码";
 "Content Preview" = "内容预览";
 "Clipboard history is empty" = "剪贴板历史为空";
-"Last Captured" = "最近收录";
-"Last Used" = "最近使用";
 "Copy to Clipboard" = "复制到剪贴板";
 "Danger Zone" = "危险操作";
 "Dark" = "深色";
@@ -172,3 +170,17 @@
 "This can't be undone" = "此操作无法撤销";
 "Images stay in your history, but you won't be able to find them by their text" = "图片仍保留在历史记录中，但无法通过图片中的文字搜索";
 "Kit will re-read text from %d images in your history, this uses significant CPU" = "会重新识别 %d 张历史图片中的文字，期间会占用较多 CPU";
+
+"Clipboard History" = "剪贴板历史";
+
+"Update history after action" = "操作后更新历史";
+
+"When enabled, clipboard items are moved to the top of the history after a copy or paste action" = "开启后，复制或粘贴的条目会移到历史记录顶部";
+
+"Times copied" = "复制次数";
+
+"Last copied" = "最近复制";
+
+"First copied" = "首次复制";
+
+"Copied" = "复制时间";

@@ -13,8 +13,8 @@ enum Paster {
     }
 
     /// Prepare, target, write, and deliver as one ordered transaction. The caller hides the palette
-    /// only after permission and payload preparation succeed. Reusing history never changes its
-    /// capture time, source, or ordering; only a successful delivery updates usage.
+    /// only after permission and payload preparation succeed. Reusing history preserves its
+    /// source, while successful delivery updates history according to the preference.
     @MainActor @discardableResult
     static func paste(
         _ item: ClipboardItem, store: ClipboardStore, previousApp app: NSRunningApplication,
@@ -32,7 +32,7 @@ enum Paster {
             },
             write: write,
             deliver: { postCommandV(toPid: pid) },
-            didDeliver: { store.markUsed(id: item.id) })
+            didDeliver: { store.recordHistoryAction(id: item.id, deferPublication: keepingPaletteOpen) })
     }
 
     /// Our own field editors can receive Paste directly, including secure fields. No synthetic key
@@ -49,7 +49,7 @@ enum Paster {
             targetReady: { target.restoreEditing(activateWindow: !keepingPaletteOpen) },
             write: write,
             deliver: { target.paste() },
-            didDeliver: { store.markUsed(id: item.id) })
+            didDeliver: { store.recordHistoryAction(id: item.id, deferPublication: keepingPaletteOpen) })
     }
 
     /// Put the item on the pasteboard without pasting. Image bytes are loaded before the caller
@@ -63,7 +63,7 @@ enum Paster {
         else { return false }
         willWrite()
         guard write(payload) else { return false }
-        store.markUsed(id: item.id)
+        store.recordHistoryAction(id: item.id)
         return true
     }
 

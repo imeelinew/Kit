@@ -90,15 +90,16 @@ struct ClipboardImageOCRTests {
         let stack = store.createStack(name: "Saved")!
         store.assign(original.id, to: stack.id)
         let usage = Date(timeIntervalSince1970: 1_790_000_000)
-        precondition(store.markUsed(id: original.id, at: usage))
+        precondition(store.recordHistoryAction(id: original.id, at: usage))
         await probe.waitForCall(1)
         precondition(dbSearch(directory, "账户").items.isEmpty, "Unprocessed images have no text match")
         await probe.release(.recognized("账 户管理 ＰａｄｄｌｅＯＣＲ\nEnglish words 50%_off"))
         await store.waitForImageOCR()
         let image = store.item(id: original.id)!
         precondition(image.kind == .image && image.text == nil && image.imagePath == original.imagePath)
-        precondition(abs(image.createdAt.timeIntervalSince(original.createdAt)) < 0.000001)
-        precondition(image.sourceBundleID == "original" && image.lastUsedAt == usage)
+        precondition(abs(image.lastCopiedAt.timeIntervalSince(usage)) < 0.000001)
+        precondition(image.sourceBundleID == "original" && image.copyCount == 2
+                     && abs(image.firstCopiedAt.timeIntervalSince(original.firstCopiedAt)) < 0.000001)
         precondition(store.stackID(for: image.id) == stack.id && captures == 1)
         precondition(image.defaultTitle(locale: .current) == "Image", "OCR never changes visible image titles")
         precondition(image.imageOCR?.status == .complete && image.imageOCR?.attempts == 1)

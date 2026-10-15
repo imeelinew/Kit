@@ -127,7 +127,7 @@ enum ClipboardRowThumbnailTests {
         _ = await ImageThumbnail.loadAsync(expiredURL, maxPixel: ImageThumbnail.rowMaxPixel)
         let expiredTicket = reader.ticket(for: expiredURL)!
         store.maxAge = 1
-        precondition(store.enforceLimits(at: expired.createdAt.addingTimeInterval(2)))
+        precondition(store.enforceLimits(at: expired.lastCopiedAt.addingTimeInterval(2)))
         await store.waitForRetentionCleanup()
         precondition(!FileManager.default.fileExists(atPath: expiredTicket.destination.path))
         precondition(ImageThumbnail.cached(expiredURL, maxPixel: ImageThumbnail.rowMaxPixel) == nil)

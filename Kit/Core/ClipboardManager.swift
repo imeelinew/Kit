@@ -115,7 +115,7 @@ final class ClipboardManager {
                             let self, self.settings.llmClassificationEnabled,
                             self.settings.llmClassificationConfiguration == configuration,
                             self.store.captureGeneration == capture.generation,
-                            self.store.item(id: item.id)?.createdAt == item.createdAt
+                            self.store.item(id: item.id) != nil
                         else { return }
                         self.store.updateKind(id: item.id, to: kind)
                     }

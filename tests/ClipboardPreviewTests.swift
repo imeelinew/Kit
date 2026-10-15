@@ -100,6 +100,10 @@ struct ClipboardPreviewTests {
 
     @MainActor
     static func run() async {
+        let sample = ClipboardItem(text: "CLIPTEST-UTF16 👩‍💻", kind: .text, sourceBundleID: nil)
+        let samplePayload = await ClipboardPreviewPayload.load(for: sample, imageURL: nil)
+        precondition(samplePayload.details.characters == 20 && samplePayload.details.words == 2,
+                     "Character and word counts match the Raycast reference sample")
         func settle() async {
             ClipboardListAnimationTests.settle(0.03)
             try? await Task.sleep(for: .milliseconds(50))

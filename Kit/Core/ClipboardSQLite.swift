@@ -25,10 +25,10 @@ enum ClipboardSQLite {
         return ClipboardItem(
             id: id, kind: storedKind, text: columnString(stmt, 2), imagePath: columnString(stmt, 3),
             imageFingerprint: columnString(stmt, 6),
-            createdAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4)),
+            lastCopiedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4)),
             sourceBundleID: columnString(stmt, 5), customTitle: columnString(stmt, 7),
-            lastUsedAt: sqlite3_column_type(stmt, 8) == SQLITE_NULL
-                ? nil : Date(timeIntervalSince1970: sqlite3_column_double(stmt, 8)),
+            firstCopiedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 8)),
+            copyCount: Int(sqlite3_column_int64(stmt, 13)),
             imageOCR: imageOCR)
     }
 

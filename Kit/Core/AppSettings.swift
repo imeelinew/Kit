@@ -129,6 +129,7 @@ final class AppSettings: ObservableObject {
 
     private enum Key {
         static let clipboardRetention = "clipboardRetentionDays"
+        static let updateHistoryAfterAction = "updateHistoryAfterAction"
         static let clipboardDisabledApps = "clipboardDisabledApps"
         static let clipboardPaused = "clipboardPaused"
         static let clipboardPauseUntil = "clipboardPauseUntil"
@@ -156,6 +157,10 @@ final class AppSettings: ObservableObject {
 
     @Published private(set) var clipboardRetention: ClipboardRetention {
         didSet { defaults.set(clipboardRetention.rawValue, forKey: Key.clipboardRetention) }
+    }
+
+    @Published var updateHistoryAfterAction: Bool {
+        didSet { defaults.set(updateHistoryAfterAction, forKey: Key.updateHistoryAfterAction) }
     }
 
     /// Persist only a committed policy; requests and cancelled confirmations never reach defaults.
@@ -332,6 +337,7 @@ final class AppSettings: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        updateHistoryAfterAction = defaults.object(forKey: Key.updateHistoryAfterAction) as? Bool ?? true
         clipboardRetention =
             ClipboardRetention(rawValue: defaults.integer(forKey: Key.clipboardRetention))
             ?? .threeMonths

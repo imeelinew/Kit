@@ -20,7 +20,13 @@ enum ClipboardRetentionSettingsTests {
             defaults.removePersistentDomain(forName: suite)
             try? FileManager.default.removeItem(at: directory)
         }
+        await deferredHistoryTests(in: directory.appendingPathComponent("deferred-history"))
         let settings = AppSettings(defaults: defaults)
+        precondition(settings.updateHistoryAfterAction, "History updates are enabled by default")
+        settings.updateHistoryAfterAction = false
+        precondition(!AppSettings(defaults: defaults).updateHistoryAfterAction, "The disabled preference survives restart")
+        settings.updateHistoryAfterAction = true
+        precondition(AppSettings(defaults: defaults).updateHistoryAfterAction, "The enabled preference survives restart")
         let store = ClipboardStore(directory: directory)
         store.setImageTextSearchEnabled(false)
         store.maxAge = settings.clipboardRetention.maxAge
@@ -81,5 +87,29 @@ enum ClipboardRetentionSettingsTests {
         execute(directory, "DROP TRIGGER fail_retention_setting")
         await store.waitForRetentionCleanup()
         print("PASS: destructive-change consent, cancellation, growing-count reconfirmation, persistence, Forever, zero-deletion changes without confirmation, failure rollback and restart")
+    }
+
+    private static func deferredHistoryTests(in directory: URL) async {
+        let store = ClipboardStore(directory: directory)
+        let core = AppCore(clipboardStore: store)
+        let older = store.addText("earlier copy", kind: .text, sourceBundleID: "source")!
+        let newer = store.addText("later copy", kind: .text, sourceBundleID: "source")!
+        let vm = core.palette
+        await vm.prepare()
+        precondition(vm.results.map(\.id) == [newer.id, older.id])
+        precondition(store.recordHistoryAction(id: older.id, deferPublication: true))
+        precondition(store.updateKind(id: newer.id, to: .code))
+        await vm.prepare()
+        precondition(vm.results.map(\.id) == [newer.id, older.id],
+                     "Background metadata must not reorder a keep-open paste")
+        store.publishDeferredHistoryUpdates()
+        await vm.prepare()
+        precondition(vm.results.map(\.id) == [older.id, newer.id])
+        precondition(vm.results.first?.copyCount == 2)
+        core.settings.updateHistoryAfterAction = false
+        precondition(!store.updateHistoryAfterAction, "Changing settings immediately reaches the store")
+        core.settings.updateHistoryAfterAction = true
+        precondition(store.updateHistoryAfterAction)
+        print("PASS: deferred history stays stable through background revisions, publishes on close, live setting updates")
     }
 }

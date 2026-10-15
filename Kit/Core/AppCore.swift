@@ -27,6 +27,7 @@ final class AppCore {
     private var clipboardResumeTask: Task<Void, Never>?
     private var clipboardShortcutIsDown = false
     private var imageTextSearchObserver: AnyCancellable?
+    private var historyAfterActionObserver: AnyCancellable?
 
     private convenience init() {
         self.init(clipboardStore: ClipboardStore())
@@ -38,6 +39,10 @@ final class AppCore {
         imageTextSearchObserver = settings.$imageTextSearchEnabled
             .sink { [weak clipboardStore] enabled in
                 clipboardStore?.setImageTextSearchEnabled(enabled)
+            }
+        historyAfterActionObserver = settings.$updateHistoryAfterAction
+            .sink { [weak clipboardStore] enabled in
+                clipboardStore?.updateHistoryAfterAction = enabled
             }
     }
 
@@ -92,6 +97,7 @@ final class AppCore {
             transferGeneration = UUID()
         }
         windowController.hide(restoreFocus: restoreFocus)
+        clipboardStore.publishDeferredHistoryUpdates()
     }
 
     func handleReopen() {

@@ -46,7 +46,7 @@ final class ClipboardPreviewPayload {
             var details = Details()
             guard !Task.isCancelled else { return details }
             if let text = item.text {
-                details.characters = text.count
+                details.characters = text.utf16.count
                 var count = 0
                 var inWord = false
                 for scalar in text.unicodeScalars {
@@ -318,11 +318,15 @@ private struct ClipboardInfoSection: View {
             } ?? "—"))
         }
         Self.timestampFormatter.locale = settings.language.locale
-        rows.append(
-            InfoRow(label: "Last Captured", value: Self.timestampFormatter.string(from: item.createdAt)))
-        if let lastUsedAt = item.lastUsedAt {
+        if item.copyCount > 1 {
+            rows.append(InfoRow(label: "Times copied", value: item.copyCount.formatted(.number.locale(settings.language.locale))))
             rows.append(
-                InfoRow(label: "Last Used", value: Self.timestampFormatter.string(from: lastUsedAt)))
+                InfoRow(label: "Last copied", value: Self.timestampFormatter.string(from: item.lastCopiedAt)))
+            rows.append(
+                InfoRow(label: "First copied", value: Self.timestampFormatter.string(from: item.firstCopiedAt)))
+        } else {
+            rows.append(
+                InfoRow(label: "Copied", value: Self.timestampFormatter.string(from: item.lastCopiedAt)))
         }
         return rows
     }

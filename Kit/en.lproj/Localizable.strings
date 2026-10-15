@@ -33,8 +33,6 @@
 "Code" = "Code";
 "Content Preview" = "Content Preview";
 "Clipboard history is empty" = "Clipboard history is empty";
-"Last Captured" = "Last Captured";
-"Last Used" = "Last Used";
 "Copy to Clipboard" = "Copy to Clipboard";
 "Danger Zone" = "Danger Zone";
 "Dark" = "Dark";
@@ -172,3 +170,17 @@
 "This can't be undone" = "This can't be undone";
 "Images stay in your history, but you won't be able to find them by their text" = "Images stay in your history, but you won't be able to find them by their text";
 "Kit will re-read text from %d images in your history, this uses significant CPU" = "Kit will re-read text from %d images in your history, this uses significant CPU";
+
+"Clipboard History" = "Clipboard History";
+
+"Update history after action" = "Update history after action";
+
+"When enabled, clipboard items are moved to the top of the history after a copy or paste action" = "When enabled, clipboard items are moved to the top of the history after a copy or paste action";
+
+"Times copied" = "Times copied";
+
+"Last copied" = "Last copied";
+
+"First copied" = "First copied";
+
+"Copied" = "Copied";

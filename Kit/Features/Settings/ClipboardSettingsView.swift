@@ -55,6 +55,13 @@ struct ClipboardSettingsView: View {
                 Toggle("Render Markdown", isOn: $settings.renderMarkdown)
             }
 
+            Section("Clipboard History") {
+                Toggle("Update history after action", isOn: $settings.updateHistoryAfterAction)
+                Text("When enabled, clipboard items are moved to the top of the history after a copy or paste action")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("History Retention") {
                 PreferencesRow(label: "Keep history for") {
                     Picker("Keep history for", selection: Binding(

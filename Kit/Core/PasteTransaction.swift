@@ -2,7 +2,7 @@ import Foundation
 
 /// Ordered commit protocol for a paste operation. Expensive payload preparation may suspend, but
 /// the clipboard is written only after permission and target readiness have both succeeded.
-/// Successful delivery may update usage metadata without changing the history's order.
+/// Successful delivery updates history according to the selected preference
 @MainActor
 enum PasteTransaction {
     static func run<Payload>(

@@ -79,7 +79,7 @@ enum ClipboardUndoTests {
         await store.addImage(data, sourceBundleID: "recopy")
         let recopiedImage = store.items.first!
         // Compare by id: Date() and Date(timeIntervalSince1970:) can sit 1 ULP apart, so a
-        // full == between an in-memory item and its DB-read copy flakes on createdAt.
+        // full == between an in-memory item and its DB-read copy flakes on lastCopiedAt.
         precondition(recopiedImage.id != image.id && store.undoLastDeletion()?.id == recopiedImage.id)
         precondition(store.items.filter { $0.imageFingerprint == image.imageFingerprint }.count == 1)
         precondition(backups(directory).isEmpty)
@@ -234,7 +234,7 @@ enum ClipboardUndoTests {
         await ready(vm)
         precondition(vm.query.isEmpty && vm.selectedID == target.id && vm.results.count == 171,
                      "Undo reveals an older entry across pagination and incompatible filters")
-        precondition(store.item(id: target.id)?.createdAt == target.createdAt)
+        precondition(store.item(id: target.id)?.lastCopiedAt == target.lastCopiedAt)
 
         vm.query = "undo target"
         await ready(vm)

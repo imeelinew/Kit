@@ -6,7 +6,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
 
         var typeLabel: String {
             switch self {
-            case .text: "Plain Text"
+            case .text: "Text"
             case .markdown: "Markdown"
             case .code: "Code"
             case .link: "Link"
@@ -23,9 +23,9 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     let imagePath: String?
     /// SHA-256 of canonical visible pixels. Text rows leave it nil.
     let imageFingerprint: String?
-    private(set) var createdAt: Date
-    /// Last successful copy or paste initiated from Kit; never used for ordering or retention.
-    private(set) var lastUsedAt: Date?
+    let firstCopiedAt: Date
+    private(set) var lastCopiedAt: Date
+    private(set) var copyCount: Int
     /// Bundle ID of the app frontmost when the copy was captured (see `ClipboardManager.poll`).
     private(set) var sourceBundleID: String?
     /// User-assigned list title. Nil means the visible title is derived from the copied content.
@@ -36,20 +36,20 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     init(text: String, kind: Kind, sourceBundleID: String?) {
         self.init(
             id: UUID(), kind: kind, text: text,
-            imagePath: nil, imageFingerprint: nil, createdAt: Date(),
+            imagePath: nil, imageFingerprint: nil, lastCopiedAt: Date(),
             sourceBundleID: sourceBundleID)
     }
 
     init(imagePath: String, imageFingerprint: String, sourceBundleID: String?) {
         self.init(
             id: UUID(), kind: .image, text: nil, imagePath: imagePath,
-            imageFingerprint: imageFingerprint, createdAt: Date(), sourceBundleID: sourceBundleID)
+            imageFingerprint: imageFingerprint, lastCopiedAt: Date(), sourceBundleID: sourceBundleID)
     }
 
     init(
         id: UUID, kind: Kind, text: String?, imagePath: String?, imageFingerprint: String?,
-        createdAt: Date, sourceBundleID: String?,
-        customTitle: String? = nil, lastUsedAt: Date? = nil,
+        lastCopiedAt: Date, sourceBundleID: String?,
+        customTitle: String? = nil, firstCopiedAt: Date? = nil, copyCount: Int = 1,
         imageOCR: ClipboardImageOCR? = nil
     ) {
         self.id = id
@@ -57,17 +57,19 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
         self.text = text
         self.imagePath = imagePath
         self.imageFingerprint = imageFingerprint
-        self.createdAt = createdAt
-        self.lastUsedAt = lastUsedAt
+        self.firstCopiedAt = firstCopiedAt ?? lastCopiedAt
+        self.lastCopiedAt = lastCopiedAt
+        self.copyCount = copyCount
         self.imageOCR = imageOCR
         self.sourceBundleID = sourceBundleID
         self.customTitle = customTitle
     }
 
     /// An external recopy reuses the entry with a fresh copy time and source application.
-    func refreshed(sourceBundleID: String?) -> ClipboardItem {
+    func recopied(at date: Date = Date(), sourceBundleID: String?) -> ClipboardItem {
         var copy = self
-        copy.createdAt = Date()
+        copy.lastCopiedAt = date
+        copy.copyCount += 1
         copy.sourceBundleID = sourceBundleID
         return copy
     }
@@ -76,12 +78,6 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     func withKind(_ kind: Kind) -> ClipboardItem {
         var copy = self
         copy.kind = kind
-        return copy
-    }
-
-    func used(at date: Date) -> ClipboardItem {
-        var copy = self
-        copy.lastUsedAt = date
         return copy
     }
 

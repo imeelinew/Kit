@@ -142,7 +142,7 @@ enum ClipboardDateGroupingTests {
         let grouping = ClipboardDateGrouping(now: date(2026, 10, 4, calendar: calendar), calendar: calendar)
         func item(_ title: String, at date: Date) -> ClipboardItem {
             ClipboardItem(id: UUID(), kind: .text, text: title, imagePath: nil, imageFingerprint: nil,
-                          createdAt: date, sourceBundleID: nil)
+                          lastCopiedAt: date, sourceBundleID: nil)
         }
         let daily = (0..<40).map { item("Day \($0)", at: day($0, in: grouping)) }
         let august = item("August", at: date(2026, 8, 15, calendar: calendar))
