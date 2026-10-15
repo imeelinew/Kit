@@ -28,8 +28,8 @@ struct ThinScrollbar: ViewModifier {
     @State private var hoverExit: Task<Void, Never>?
 
     // Knob/rail geometry: thin at rest, fatter on hover/drag — like the macOS overlay knob.
-    private let thinWidth: CGFloat = 6
-    private let expandedWidth: CGFloat = 10
+    private let thinWidth: CGFloat = 4
+    private let expandedWidth: CGFloat = 8
     private let inset: CGFloat = 3
     private let minThumb: CGFloat = 28
     private let hoverZone: CGFloat = 16  // trailing strip that reveals the rail; wider than the thumb
@@ -70,14 +70,14 @@ struct ThinScrollbar: ViewModifier {
             ZStack(alignment: .top) {
                 // Rail: a faint full-height track, present only while hovering/dragging.
                 Capsule()
-                    .fill(Color.primary.opacity(0.10))
+                    .fill(Color.primary.opacity(0.05))
                     .frame(width: expandedWidth, height: track)
                     .offset(y: inset)
                     .opacity(expanded ? 1 : 0)
 
                 // Thumb: proportional knob, thin at rest and fatter when expanded.
                 Capsule()
-                    .fill(Color.primary.opacity(isDragging ? 0.5 : (expanded ? 0.42 : 0.30)))
+                    .fill(Color.primary.opacity(isDragging ? 0.38 : (expanded ? 0.28 : 0.18)))
                     .frame(width: expanded ? expandedWidth : thinWidth, height: thumbHeight)
                     .frame(width: expandedWidth)
                     .offset(y: thumbOffset)

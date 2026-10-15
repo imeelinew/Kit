@@ -92,6 +92,8 @@ struct ClipboardPreview: View {
 
     @State private var loadedPayload: ClipboardPreviewPayload?
     @State private var imageHighlights: ImageSearchHighlightPayload?
+    @State private var informationScrollbar = ThinScrollbarMetrics()
+    @State private var informationScrollActivity = UUID()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -111,12 +113,34 @@ struct ClipboardPreview: View {
                             .id(item.kind)
                             .transition(.opacity)
                             .animation(reduceMotion ? nil : Theme.Motion.content, value: item.kind)
-                        ScrollView(.vertical) {
-                            information
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Information")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.primary)
+                                .frame(height: 18)
+                                .padding(.horizontal, 8)
+                            ScrollView(.vertical) {
+                                information
+                            }
+                            .scrollIndicators(.hidden)
+                            .contentMargins(.trailing, 16, for: .scrollContent)
+                            .onScrollGeometryChange(for: ThinScrollbarMetrics.self) { geometry in
+                                ThinScrollbarMetrics(
+                                    offset: geometry.contentOffset.y,
+                                    insetTop: geometry.contentInsets.top,
+                                    content: geometry.contentSize.height,
+                                    viewport: geometry.containerSize.height)
+                            } action: { old, new in
+                                informationScrollbar = new
+                                if old.offset != new.offset {
+                                    informationScrollActivity = UUID()
+                                }
+                            }
+                            .thinScrollbar(
+                                metrics: informationScrollbar,
+                                scrollToken: informationScrollActivity)
                         }
-                        .scrollIndicators(.visible)
-                        // Keep right-aligned values out of the overlay scroller's gutter.
-                        .contentMargins(.trailing, 12, for: .scrollContent)
+                        .padding(.top, 12)
                         .frame(height: min(information.contentHeight, geometry.size.height / 2))
                     }
                 }
@@ -255,57 +279,48 @@ private struct ClipboardInfoSection: View {
     }()
 
     var contentHeight: CGFloat {
-        12 + 16 + Theme.Spacing.sm + CGFloat(rows.count) * 28
+        12 + 18 + 10 + CGFloat(rows.count) * 28
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            Text("Information")
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .frame(height: 16)
-                .padding(.horizontal, 8)
-            VStack(spacing: 0) {
-                let rows = self.rows
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    HStack(spacing: Theme.Spacing.sm) {
-                        Text(LocalizedStringKey(row.label)).foregroundStyle(.secondary)
-                        Spacer(minLength: Theme.Spacing.lg)
-                        if let icon = row.icon {
-                            Image(nsImage: icon)
-                                .resizable()
-                                .frame(width: 16, height: 16)
-                        }
-                        Group {
-                            if row.localizesValue {
-                                Text(LocalizedStringKey(row.value))
-                            } else {
-                                Text(row.value)
-                            }
-                        }
-                        .contentTransition(.opacity)
-                        .animation(
-                            NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-                                ? nil : Theme.Motion.content,
-                            value: item.kind)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+        VStack(spacing: 0) {
+            let rows = self.rows
+            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                HStack(spacing: Theme.Spacing.sm) {
+                    Text(LocalizedStringKey(row.label)).foregroundStyle(.secondary)
+                    Spacer(minLength: Theme.Spacing.lg)
+                    if let icon = row.icon {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .frame(width: 16, height: 16)
                     }
-                    .font(.system(size: 11))
-                    .padding(.horizontal, 8)
-                    .frame(height: 28)
-                    .background {
-                        if index.isMultiple(of: 2) {
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.primary.opacity(0.025))
+                    Group {
+                        if row.localizesValue {
+                            Text(LocalizedStringKey(row.value))
+                        } else {
+                            Text(row.value)
                         }
+                    }
+                    .contentTransition(.opacity)
+                    .animation(
+                        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                            ? nil : Theme.Motion.content,
+                        value: item.kind)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                }
+                .font(.system(size: 11))
+                .padding(.horizontal, 8)
+                .frame(height: 28)
+                .background {
+                    if index.isMultiple(of: 2) {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.primary.opacity(0.025))
                     }
                 }
             }
         }
-        .padding(.top, Theme.Spacing.xl)
     }
-
     private var rows: [InfoRow] {
         var rows: [InfoRow] = []
         if let source {
