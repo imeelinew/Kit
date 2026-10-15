@@ -23,4 +23,18 @@ fi
     print -u2 "Signing skill not found: $sign_script"
     exit 69
 }
-exec python3 "$sign_script" sign --project "$repo_root" "$@"
+# Resolve the default Release product and report through Xcode, including spaces
+sign_args=("$@")
+has_app=0
+has_report=0
+for argument in "$@"; do
+    [[ "$argument" != --app && "$argument" != --app=* ]] || has_app=1
+    [[ "$argument" != --report && "$argument" != --report=* ]] || has_report=1
+done
+if (( ! has_app )); then
+    sign_args+=(--app "$(python3 "$script_dir/xcode-path.py" Release)")
+fi
+if (( ! has_report )); then
+    sign_args+=(--report "${MAC_SIGN_REPORT:-$(python3 "$script_dir/xcode-path.py" Release --derived-data)/local-signing.json}")
+fi
+exec python3 "$sign_script" sign --project "$repo_root" "${sign_args[@]}"
