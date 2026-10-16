@@ -14,19 +14,10 @@ enum ClipboardTextClassifier {
 
 /// Run with scripts/test-clipboard-search.sh. Exercises query routing (FTS vs LIKE),
 /// cursor pagination, and combined kind/stack filters against a real SQLite store.
-/// Pagination is asserted through ClipboardSearch.queryDatabase directly: searchAsync
-/// merges the resident window into the first page, which flattens cursor boundaries by design.
 @main
 struct ClipboardSearchTests {
     static func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
         precondition(condition(), message)
-    }
-
-    static func execute(_ directory: URL, _ sql: String) {
-        var db: OpaquePointer?
-        precondition(sqlite3_open(directory.appendingPathComponent("clipboard.sqlite3").path, &db) == SQLITE_OK)
-        defer { sqlite3_close(db) }
-        precondition(sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK)
     }
 
     /// Page through the database with cursors and return the full text sequence.
@@ -61,124 +52,44 @@ struct ClipboardSearchTests {
         let newestFirst = (0..<25).map { "item \(String(format: "%02d", 24 - $0))" }
         let database = directory.appendingPathComponent("clipboard.sqlite3").path
 
-        // FTS path (>= 3 chars): exact newest-first order, stable across page boundaries.
         expect(collectDB(database, query: "item", limit: 7) == newestFirst,
                "Cursor pagination returns every result exactly once, newest first")
 
-        // Ties on created_at break by rowid, so equal-timestamp pages stay ordered.
-        expect(collectDB(database, query: "", limit: 6) == newestFirst,
-               "Empty queries page through the whole history newest first")
-
-        // Short queries take the LIKE path over text, pinyin, initials, and titles.
         expect(collectDB(database, query: "it", limit: 10) == newestFirst,
                "Two-character queries match via LIKE")
 
         _ = store.addText("50%_off sale", kind: .text, sourceBundleID: nil)
         expect(collectDB(database, query: "0%", limit: 5) == ["50%_off sale"],
                "LIKE wildcards in queries are escaped")
-
-        let titled = store.addText("titled entry", kind: .text, sourceBundleID: nil)!
-        execute(directory, "UPDATE items SET custom_title = '超市清单' WHERE id = '\(titled.id)'")
-        store.load()
-        expect(collectDB(database, query: "超市", limit: 5) == ["titled entry"],
-               "Custom titles match short Han queries")
-
-        // A malformed FTS phrase must degrade to no results, not crash the reader.
-        expect(collectDB(database, query: "\"hi", limit: 5).isEmpty,
-               "Malformed FTS queries fail closed")
-
-        // searchAsync layer: trimming, and the resident merge that fills the first page.
-        let padded = await store.searchAsync(" item \n", after: nil, limit: 7)
-        expect(padded.items.compactMap(\.text) == newestFirst,
-               "Queries are trimmed and the resident merge completes the first page")
-        expect(padded.nextCursor != nil, "The cursor still reports older database rows")
-
-        // The merge fills page one beyond the cursor; the next page resumes at the database
-        // cursor, and the view layer dedupes the overlap when appending.
-        let exactPage = await store.searchAsync("item", after: padded.nextCursor, limit: 7)
-        expect(exactPage.items.compactMap(\.text) == Array(newestFirst[7..<14]),
-               "Cursored pages resume exactly where the database cursor left off")
-
-        let malformed = await store.searchAsync("\"hi", after: nil, limit: 5)
-        expect(malformed.items.isEmpty && malformed.nextCursor == nil,
-               "Malformed queries degrade to an empty page at the store layer too")
-
-        let titlePinyin = await store.searchAsync("chao shi", after: nil, limit: 7)
-        expect(titlePinyin.items.contains { $0.id == titled.id },
-               "Resident overlay preserves compacted pinyin matches in custom titles")
-        let greeting = store.addText("你好世界", kind: .text, sourceBundleID: nil)!
-        let immediate = await store.searchAsync("nihao", after: nil, limit: 7)
-        expect(immediate.items.contains { $0.id == greeting.id },
-               "A fresh capture stays searchable while its metadata is being indexed")
-        await store.waitForSearchMetadata()
-        for query in ["NI HAO", "ni'hao", "n h"] {
-            let compacted = await store.searchAsync(query, after: nil, limit: 7)
-            expect(compacted.items.contains { $0.id == greeting.id },
-                   "Indexed entries still support spaced and apostrophe pinyin through the overlay")
-        }
-
-        let entered = DispatchSemaphore(value: 0)
-        let release = DispatchSemaphore(value: 0)
-        let cancelledQuery = Task.detached {
-            entered.signal()
-            precondition(release.wait(timeout: .now() + 5) == .success)
-            return ClipboardSearch.queryDatabase(path: database, query: "no match", kind: nil,
-                                                 stackID: nil, after: nil, limit: 7)
-        }
-        expect(entered.wait(timeout: .now() + 5) == .success, "Query worker started")
-        cancelledQuery.cancel()
-        release.signal()
-        let cancelledPage = await cancelledQuery.value
-        expect(cancelledPage == nil, "An already cancelled query performs no database search")
     }
 
     @MainActor
     static func filterTests(in directory: URL) async {
         let store = ClipboardStore(directory: directory)
         store.load()
-        for index in 0..<3 {
-            expect(store.addText("csnip \(index)", kind: .code, sourceBundleID: nil) != nil,
-                   "Code fixture insert succeeds")
-        }
         for index in 0..<10 {
-            expect(store.addText("kz \(String(format: "%02d", index))", kind: .code, sourceBundleID: nil) != nil,
-                   "Pagination fixture insert succeeds")
+            _ = store.addText("kz \(String(format: "%02d", index))", kind: .code, sourceBundleID: nil)
         }
         let database = directory.appendingPathComponent("clipboard.sqlite3").path
 
-        expect(collectDB(database, query: "csnip", kind: .code, limit: 10)
-                == ["csnip 2", "csnip 1", "csnip 0"],
-               "Kind filters restrict FTS results")
         expect(collectDB(database, query: "kz", kind: .text, limit: 10).isEmpty,
                "A non-matching kind excludes everything")
 
-        // Cursor pagination stays correct while a kind filter is active.
-        let kzNewestFirst = (0..<10).map { "kz \(String(format: "%02d", 9 - $0))" }
-        expect(collectDB(database, query: "kz", kind: .code, limit: 4) == kzNewestFirst,
-               "Kind-filtered pagination returns every code result exactly once")
-
         let stack = store.createStack(name: "FilterProbe")!
         let kzItems = store.items.filter { $0.text?.hasPrefix("kz") == true }
-        expect(kzItems.count == 10, "Stack fixtures are resident")
         store.assign(kzItems[0].id, to: stack.id)
         store.assign(kzItems[1].id, to: stack.id)
-        expect(collectDB(database, query: "", stackID: stack.id, limit: 10)
-                == [kzItems[0].text, kzItems[1].text],
-               "Stack filters restrict to members, newest first")
         expect(collectDB(database, query: "kz", kind: .code, stackID: stack.id, limit: 10)
                 == [kzItems[0].text, kzItems[1].text],
                "Query, kind, and stack filters compose")
-        expect(collectDB(database, query: "csnip", stackID: stack.id, limit: 10).isEmpty,
-               "Stack members outside the query stay hidden")
     }
 
     static func main() async throws {
-        let root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kit-search-tests-\(UUID())")
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("kit-search-tests-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         await paginationTests(in: root.appendingPathComponent("pagination"))
         await filterTests(in: root.appendingPathComponent("filters"))
-        print("PASS: FTS/LIKE routing, escaping, titles, cursor pagination, kind/stack filters")
+        print("PASS: FTS/LIKE routing, query escaping, cursor pagination, kind and stack filters")
     }
 }

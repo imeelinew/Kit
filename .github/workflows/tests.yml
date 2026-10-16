@@ -39,5 +39,5 @@ jobs:
       - name: Pinned images
         run: ./scripts/test-pinned-images.sh
       # Builds the full app, so it runs last: fast failures above surface first.
-      - name: Undo, list, animation, and previews
+      - name: Undo, previews, classifier, and image decoding
         run: ./scripts/test-clipboard-list.sh

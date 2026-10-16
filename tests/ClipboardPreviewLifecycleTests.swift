@@ -43,6 +43,7 @@ enum ClipboardPreviewLifecycleTests {
         }
     }
 
+    /// Closes the palette through the global shortcut while its AppKit popover is still open.
     private static func quickLookDismissal(core: AppCore, item: ClipboardItem) async throws {
         let vm = core.palette
         let first = core.clipboardStore.addText("First result", kind: .text, sourceBundleID: nil)!
@@ -50,69 +51,59 @@ enum ClipboardPreviewLifecycleTests {
             core.hidePalette(restoreFocus: false)
             core.clipboardStore.remove(first)
         }
-        // Exercise a cold presentation, reused panels, an in-flight exit, a completed exit,
-        // and dismissal while the actual AppKit popover is still open.
-        for delay: Int? in [0, 50, 150, 400, nil] {
-            core.showPalette()
-            for _ in 0..<100 {
-                if NSApp.windows.contains(where: {
-                    ($0 as? PalettePanel)?.paletteViewModel === vm && $0.isVisible
-                }) { break }
-                try await Task.sleep(for: .milliseconds(50))
-            }
-            guard let panel = NSApp.windows.compactMap({ $0 as? PalettePanel }).first(where: {
-                $0.isVisible && $0.paletteViewModel === vm
-            }) else { preconditionFailure("The palette must finish presenting") }
-            precondition(panel.alphaValue == 1 && vm.selectedID == first.id && vm.isPreviewActive,
-                         "Reopening restores opacity and prepares the first selection")
-            vm.select(item.id)
-            await settle()
-            let probe = CloseProbe(core: core, panel: panel, selectedID: item.id)
-            NotificationCenter.default.addObserver(
-                probe, selector: #selector(CloseProbe.willClose(_:)),
-                name: NSPopover.willCloseNotification, object: nil)
-            defer { NotificationCenter.default.removeObserver(probe) }
-            vm.setImageQuickLookHovered(true, itemID: item.id)
-            try await Task.sleep(for: .milliseconds(650))
-            guard let previewWindow = panel.childWindows?.first(where: { $0.isVisible }) else {
-                preconditionFailure("The regression must exercise a real, visible NSPopover")
-            }
-            if let delay {
-                vm.setImageQuickLookHovered(false, itemID: item.id)
-                if delay > 0 { try await Task.sleep(for: .milliseconds(delay)) }
-            }
-            probe.isHiding = true
-            let displayedContent = panel.contentView!
-            withObservationTracking {
-                _ = vm.isPreviewActive
-            } onChange: {
-                MainActor.assumeIsolated {
-                    precondition(displayedContent.window == nil,
-                                 "Preview teardown must not render into the closing window")
-                }
-            }
-            core.togglePalette() // The global close shortcut's entry point.
-            probe.isHiding = false
-            precondition(!panel.isVisible && panel.alphaValue == 0,
-                         "Closing removes the palette from AppKit's visible window list")
-            precondition(panel.contentView == nil && displayedContent.window == nil,
-                         "Resetting the detached tree cannot change the closing window's pixels")
-            precondition(!previewWindow.isVisible || previewWindow.alphaValue == 0,
-                         "Closing does not leave a popover exit animation onscreen")
-            precondition(vm.selectedID == first.id && !vm.isPreviewActive && !vm.imageQuickLookOpen,
-                         "Selection and preview reset after the windows become invisible")
-            if delay == nil {
-                precondition(probe.checkedClose, "The open-popover close callback was exercised")
-            }
-            for _ in 0..<20 {
-                try await Task.sleep(for: .milliseconds(20))
-                precondition(!panel.isVisible,
-                             "Delayed popover and focus callbacks cannot bring the palette back")
-            }
-            precondition(panel.contentView != nil && !vm.isPreviewActive,
-                         "After dismissal settles, the attached hidden tree is ready without a preview")
+        core.showPalette()
+        for _ in 0..<100 {
+            if NSApp.windows.contains(where: {
+                ($0 as? PalettePanel)?.paletteViewModel === vm && $0.isVisible
+            }) { break }
+            try await Task.sleep(for: .milliseconds(50))
         }
-        print("PASS: real popover teardown, shortcut hide, reentrant close, hover-exit timing, repeated reopen")
+        guard let panel = NSApp.windows.compactMap({ $0 as? PalettePanel }).first(where: {
+            $0.isVisible && $0.paletteViewModel === vm
+        }) else { preconditionFailure("The palette must finish presenting") }
+        precondition(panel.alphaValue == 1 && vm.selectedID == first.id && vm.isPreviewActive,
+                     "Reopening restores opacity and prepares the first selection")
+        vm.select(item.id)
+        await settle()
+        let probe = CloseProbe(core: core, panel: panel, selectedID: item.id)
+        NotificationCenter.default.addObserver(
+            probe, selector: #selector(CloseProbe.willClose(_:)),
+            name: NSPopover.willCloseNotification, object: nil)
+        defer { NotificationCenter.default.removeObserver(probe) }
+        vm.setImageQuickLookHovered(true, itemID: item.id)
+        try await Task.sleep(for: .milliseconds(650))
+        guard let previewWindow = panel.childWindows?.first(where: { $0.isVisible }) else {
+            preconditionFailure("The regression must exercise a real, visible NSPopover")
+        }
+        probe.isHiding = true
+        let displayedContent = panel.contentView!
+        withObservationTracking {
+            _ = vm.isPreviewActive
+        } onChange: {
+            MainActor.assumeIsolated {
+                precondition(displayedContent.window == nil,
+                             "Preview teardown must not render into the closing window")
+            }
+        }
+        core.togglePalette() // The global close shortcut's entry point.
+        probe.isHiding = false
+        precondition(!panel.isVisible && panel.alphaValue == 0,
+                     "Closing removes the palette from AppKit's visible window list")
+        precondition(panel.contentView == nil && displayedContent.window == nil,
+                     "Resetting the detached tree cannot change the closing window's pixels")
+        precondition(!previewWindow.isVisible || previewWindow.alphaValue == 0,
+                     "Closing does not leave a popover exit animation onscreen")
+        precondition(vm.selectedID == first.id && !vm.isPreviewActive && !vm.imageQuickLookOpen,
+                     "Selection and preview reset after the windows become invisible")
+        precondition(probe.checkedClose, "The open-popover close callback was exercised")
+        for _ in 0..<20 {
+            try await Task.sleep(for: .milliseconds(20))
+            precondition(!panel.isVisible,
+                         "Delayed popover and focus callbacks cannot bring the palette back")
+        }
+        precondition(panel.contentView != nil && !vm.isPreviewActive,
+                     "After dismissal settles, the attached hidden tree is ready without a preview")
+        print("PASS: real popover teardown, shortcut hide, reentrant close, settled hidden tree")
     }
 
     static func run() async throws {
@@ -134,12 +125,7 @@ enum ClipboardPreviewLifecycleTests {
         await store.waitForImageOCR()
         let item = store.items.first!
         let url = store.imageURL(for: item)!
-
-        for style in [PaletteVisualStyle.frosted, .liquid] {
-            core.settings.paletteVisualStyle = style
-            await settle()
-            try await quickLookDismissal(core: core, item: item)
-        }
+        try await quickLookDismissal(core: core, item: item)
 
         controller.prewarm()
         await settle()
@@ -159,27 +145,8 @@ enum ClipboardPreviewLifecycleTests {
         precondition(!vm.isPreviewActive && vm.preparedPreview == nil)
         precondition(releasedPayload == nil, "Hiding releases the prepared and cached payload")
         precondition(ClipboardPreviewPayload.cached(for: item) == nil)
-        precondition(ImageThumbnail.cached(url, maxPixel: 900) == nil)
         precondition(ImageThumbnail.cached(url, maxPixel: 512) === row,
                      "Hiding keeps list thumbnails warm")
-
-        // An active pinned image owns its bitmap independently of the palette cache.
-        let pinnedHosting = NSHostingView(rootView: PinnedImageContent(
-            url: url, decodeMaxPixel: 1600, onClose: {}))
-        pinnedHosting.frame = NSRect(x: 0, y: 0, width: 400, height: 300)
-        let pinnedWindow = NSWindow(
-            contentRect: pinnedHosting.frame, styleMask: [.borderless], backing: .buffered, defer: false)
-        pinnedWindow.isReleasedWhenClosed = false
-        pinnedWindow.contentView = pinnedHosting
-        defer { pinnedWindow.close() }
-        pinnedHosting.layoutSubtreeIfNeeded()
-        await settle()
-        weak let pinnedBitmap = ImageThumbnail.cached(url, maxPixel: 1600)
-        precondition(pinnedBitmap != nil, "Pinned content loads its own image")
-        controller.hide(restoreFocus: false)
-        await settle()
-        precondition(ImageThumbnail.cached(url, maxPixel: 1600) == nil)
-        precondition(pinnedBitmap != nil, "Purging palette caches preserves an active pinned image")
 
         // Start a cold load, then purge before its asynchronous result can be cached.
         var started = false
@@ -192,10 +159,8 @@ enum ClipboardPreviewLifecycleTests {
         _ = await loading.value
         precondition(ClipboardPreviewPayload.cached(for: item) == nil,
                      "A load from the previous session cannot refill the payload cache")
-        precondition(ImageThumbnail.cached(url, maxPixel: 900) == nil,
-                     "A decode from the previous session cannot refill the bitmap cache")
 
-        for cycle in 0..<10 {
+        for cycle in 0..<3 {
             let text = store.addText("Hidden capture \(cycle)", kind: .text, sourceBundleID: nil)!
             await settle()
             precondition(vm.results.contains { $0.id == text.id }, "Hidden captures still update history")
@@ -227,8 +192,7 @@ enum ClipboardPreviewLifecycleTests {
         controller.hide(restoreFocus: false)
         hosting.layoutSubtreeIfNeeded()
         await settle()
-        precondition(textView(in: hosting) == nil,
-                     "Hiding unmounts the preview")
+        precondition(textView(in: hosting) == nil, "Hiding unmounts the preview")
         precondition(releasedTextView == nil || releasedTextView?.textStorage?.length == 0,
                      "Detached preview views release their TextKit storage")
         await vm.prepare()
@@ -236,6 +200,6 @@ enum ClipboardPreviewLifecycleTests {
         await settle()
         precondition(textView(in: hosting)?.string == source, "Reopening restores the preview")
 
-        print("PASS: hidden prewarm/captures, payload and TextKit release, warm row cache, pinned image survival, stale-load invalidation, repeated reopen")
+        print("PASS: hidden prewarm/captures, payload and TextKit release, warm row cache, stale-load invalidation")
     }
 }

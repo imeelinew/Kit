@@ -3,42 +3,31 @@ import Foundation
 /// Exercises the production transfer boundary without sending keys or touching the pasteboard.
 @main
 struct PasteTransactionTests {
+    /// Full success-path effect order, with the trailing usage event that only a delivered paste records
+    static let order = ["permission", "prepare", "hide", "target", "write", "deliver", "usage"]
+
     @MainActor
     static func checkFailure(at failedStage: String?) async {
         var events: [String] = []
         let succeeded = await PasteTransaction.run(
-            permission: {
-                events.append("permission")
-                return failedStage != "permission"
-            },
+            permission: { events.append("permission"); return failedStage != "permission" },
             prepare: { () -> String? in
                 events.append("prepare")
                 return failedStage == "prepare" ? nil : "saved image or text"
             },
             willDeliver: { events.append("hide") },
-            targetReady: {
-                events.append("target")
-                return failedStage != "target"
-            },
+            targetReady: { events.append("target"); return failedStage != "target" },
             write: { payload in
                 precondition(payload == "saved image or text")
                 events.append("write")
                 return failedStage != "write"
             },
-            deliver: {
-                events.append("deliver")
-                return failedStage != "deliver"
-            },
+            deliver: { events.append("deliver"); return failedStage != "deliver" },
             didDeliver: { events.append("usage") })
-        let sequence = ["permission", "prepare", "hide", "target", "write", "deliver", "usage"]
-        let expected: [String]
-        if let failedStage, let index = sequence.firstIndex(of: failedStage) {
-            expected = Array(sequence[...index])
-        } else {
-            expected = sequence
-        }
-        precondition(events == expected, "Unexpected transfer effects: \(events)")
-        precondition(succeeded == (failedStage == nil))
+
+        let failed = failedStage.flatMap(order.firstIndex(of:))
+        let expected = failed.map { Array(order[...$0]) } ?? order
+        precondition(events == expected && succeeded == (failedStage == nil), "Unexpected transfer effects: \(events)")
     }
 
     @MainActor
@@ -47,35 +36,24 @@ struct PasteTransactionTests {
         let task = Task { @MainActor in
             await PasteTransaction.run(
                 permission: { true },
-                prepare: { () -> String? in
+                prepare: {
                     events.append("prepare")
-                    if stage == "prepare" {
-                        withUnsafeCurrentTask { $0?.cancel() }
-                    }
+                    if stage == "prepare" { withUnsafeCurrentTask { $0?.cancel() } }
                     return "saved image or text"
                 },
                 willDeliver: { events.append("hide") },
                 targetReady: {
                     events.append("target")
-                    if stage == "target" {
-                        withUnsafeCurrentTask { $0?.cancel() }
-                    }
+                    if stage == "target" { withUnsafeCurrentTask { $0?.cancel() } }
                     return true
                 },
-                write: { _ in
-                    events.append("write")
-                    return true
-                },
-                deliver: {
-                    events.append("deliver")
-                    return true
-                },
+                write: { _ in events.append("write"); return true },
+                deliver: { events.append("deliver"); return true },
                 didDeliver: { events.append("usage") })
         }
         let succeeded = await task.value
-        precondition(!succeeded)
         let expected = stage == "prepare" ? ["prepare"] : ["prepare", "hide", "target"]
-        precondition(events == expected, "Cancelled transfer must not write or deliver")
+        precondition(!succeeded && events == expected, "Cancelled transfer must not write or deliver")
     }
 
     static func main() async {

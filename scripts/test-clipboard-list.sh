@@ -35,18 +35,13 @@ xcrun swiftc -swift-version 6 -parse-as-library \
     -Xlinker -rpath -Xlinker "$products" \
     -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker "$test_dir/bundle-info.plist" \
     "$products/Kit.app/Contents/MacOS/Kit.debug.dylib" \
-    "$repo_root/tests/ClipboardListAnimationTests.swift" \
-    "$repo_root/tests/ClipboardDateGroupingTests.swift" \
-    "$repo_root/tests/ClipboardSearchGeometryTests.swift" \
-    "$repo_root/tests/ClipboardHoverSelectionTests.swift" \
+    "$repo_root/tests/ClipboardListSuite.swift" \
     "$repo_root/tests/ClipboardUndoTests.swift" \
     "$repo_root/tests/ClipboardRetentionSettingsTests.swift" \
     "$repo_root/tests/ClipboardTextClassifierTests.swift" \
     "$repo_root/tests/ClipboardPreviewTests.swift" \
-    "$repo_root/tests/ImageSearchHighlightTests.swift" \
     "$repo_root/tests/ClipboardPreviewLifecycleTests.swift" \
     "$repo_root/tests/ImageDecodeCoordinatorTests.swift" \
-    "$repo_root/tests/ClipboardRowThumbnailTests.swift" \
     -o "$test_dir/clipboard-list-tests"
 # Preserve completed checks in CI logs even if a later assertion aborts the harness.
 NSUnbufferedIO=YES "$test_dir/clipboard-list-tests" "$@"

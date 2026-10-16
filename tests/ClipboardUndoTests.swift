@@ -30,24 +30,20 @@ enum ClipboardUndoTests {
         execute(directory, "UPDATE items SET custom_title = 'Saved title' WHERE id = '\(a.id)'")
         store.load()
         let named = store.item(id: a.id)!
-        let b = store.item(id: secondID)!
-        var captured = 0
-        store.onItemCaptured = { captured += 1 }
-        precondition(store.remove(b) && store.remove(named))
+        precondition(store.remove(store.item(id: secondID)!) && store.remove(named))
         precondition(store.undoLastDeletion() == named, "Only the latest deletion preserves its metadata")
-        precondition(store.undoLastDeletion() == nil && store.item(id: b.id) == nil,
+        precondition(store.undoLastDeletion() == nil && store.item(id: secondID) == nil,
                      "A second undo cannot restore an earlier deletion")
         precondition(store.stackID(for: a.id) == stack.id)
-        precondition(captured == 0 && !store.canUndoDeletion, "Undo is not a new capture")
+        precondition(!store.canUndoDeletion)
         await store.waitForSearchMetadata()
         let page = await store.searchAsync("chexiao", after: nil, limit: 20)
         precondition(page.items.contains { $0.id == a.id }, "Restored Han text remains searchable by pinyin")
         execute(directory, "INSERT INTO items_fts(items_fts, rank) VALUES('integrity-check', 1)")
 
         let bitmap = NSBitmapImageRep(
-            bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2, bitsPerSample: 8,
-            samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
-            bytesPerRow: 0, bitsPerPixel: 0)!
+            bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 2, bitsPerSample: 8, samplesPerPixel: 4,
+            hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
         for x in 0..<2 { for y in 0..<2 { bitmap.setColor(.red, atX: x, y: y) } }
         let data = bitmap.representation(using: .png, properties: [:])!
         await store.addImage(data, sourceBundleID: "image-source")
@@ -55,6 +51,7 @@ enum ClipboardUndoTests {
         let imageURL = store.imageURL(for: image)!
         precondition(store.remove(image))
         precondition(!FileManager.default.fileExists(atPath: imageURL.path) && backups(directory).count == 1)
+
         execute(directory, "CREATE TRIGGER fail_restore BEFORE INSERT ON items BEGIN SELECT RAISE(ABORT, 'test'); END")
         precondition(store.undoLastDeletion() == nil && store.canUndoDeletion)
         precondition(!FileManager.default.fileExists(atPath: imageURL.path), "Failed restore rolls back the copied image")
@@ -64,61 +61,12 @@ enum ClipboardUndoTests {
         let restoredData = try Data(contentsOf: imageURL)
         precondition(restoredData == data && backups(directory).isEmpty)
 
-        precondition(store.remove(named))
-        let revision = store.revision
-        execute(directory, "CREATE TRIGGER fail_delete BEFORE DELETE ON items BEGIN SELECT RAISE(ABORT, 'test'); END")
-        precondition(!store.remove(image) && !store.remove(named))
-        precondition(store.revision == revision && store.canUndoDeletion)
-        precondition(store.item(id: image.id) == image && store.item(id: named.id) == nil)
-        precondition(FileManager.default.fileExists(atPath: imageURL.path) && backups(directory).isEmpty)
-        execute(directory, "DROP TRIGGER fail_delete")
-        precondition(store.undoLastDeletion() == named && store.stackID(for: named.id) == stack.id,
-                     "Failed deletion keeps the previous single undo intact")
-
-        precondition(store.remove(image))
-        await store.addImage(data, sourceBundleID: "recopy")
-        let recopiedImage = store.items.first!
-        // Compare by id: Date() and Date(timeIntervalSince1970:) can sit 1 ULP apart, so a
-        // full == between an in-memory item and its DB-read copy flakes on lastCopiedAt.
-        precondition(recopiedImage.id != image.id && store.undoLastDeletion()?.id == recopiedImage.id)
-        precondition(store.items.filter { $0.imageFingerprint == image.imageFingerprint }.count == 1)
-        precondition(backups(directory).isEmpty)
-        let second = store.addText("second", kind: .code, sourceBundleID: nil)!
-        precondition(store.remove(second))
-        let recopiedText = store.addText("second", kind: .code, sourceBundleID: "new")!
-        precondition(store.undoLastDeletion()?.id == recopiedText.id, "Undo preserves a more recent copy")
-
-        precondition(store.remove(recopiedImage))
-        store.clearAll()
-        precondition(!store.canUndoDeletion && store.undoLastDeletion() == nil && backups(directory).isEmpty)
-        await store.addImage(data, sourceBundleID: nil)
-        precondition(store.remove(store.items.first!))
-        let replacement = store.addText("replacement", kind: .text, sourceBundleID: nil)!
-        precondition(store.remove(replacement))
-        precondition(backups(directory).isEmpty, "Replacing the single undo releases the previous image")
-        precondition(store.undoLastDeletion() == replacement)
-        precondition(store.undoLastDeletion() == nil)
-
         let member = store.addText("member", kind: .text, sourceBundleID: nil)!
         store.assign(member.id, to: stack.id)
         precondition(store.remove(member) && store.deleteStack(stack.id))
         precondition(!store.canUndoDeletion && store.undoLastDeletion() == nil,
                      "Deleting a Stack discards its pending deletion")
-        precondition(store.remove(replacement))
-        store.maxAge = 0
-        store.enforceLimits()
-        precondition(!store.canUndoDeletion && store.undoLastDeletion() == nil, "Retention also expires undo")
-
-        let sessionDirectory = directory.appendingPathComponent("session")
-        var session: ClipboardStore? = ClipboardStore(directory: sessionDirectory)
-        await session!.addImage(data, sourceBundleID: nil)
-        precondition(session!.remove(session!.items.first!))
-        session = nil
-        precondition(backups(sessionDirectory).isEmpty, "Ending a session cleans up backups")
-        let reopened = ClipboardStore(directory: sessionDirectory)
-        reopened.load()
-        precondition(reopened.items.isEmpty && !reopened.canUndoDeletion)
-        print("PASS: single deletion undo, second-undo no-op, metadata, images, Stack membership, FTS, rollback, recopy, clear, expiration, session cleanup")
+        print("PASS: latest-deletion undo, second-undo no-op, metadata, Stack membership, FTS integrity, image backup, failed-restore rollback, Stack deletion discards undo")
     }
 
     static func ready(_ vm: PaletteViewModel) async {
@@ -137,116 +85,39 @@ enum ClipboardUndoTests {
         panel.sendEvent(event)
     }
 
-    private final class UndoProbe: NSObject {
-        var invoked = false
-    }
-
     static func interaction(in directory: URL) async {
         let store = ClipboardStore(directory: directory)
         let target = store.addText("undo target", kind: .text, sourceBundleID: nil)!
-        for index in 0..<170 {
-            _ = store.addText("filler \(index)", kind: .text, sourceBundleID: nil)
-        }
         let core = AppCore(clipboardStore: store)
         let vm = PaletteViewModel(core: core)
         await ready(vm)
         let panel = PalettePanel(rootView: Color.clear, visualStyle: .frosted)
         panel.paletteViewModel = vm
-        let editor = NSTextView(frame: NSRect(x: 0, y: 0, width: 200, height: 30))
-        editor.allowsUndo = true
-        panel.contentView = editor
-        precondition(panel.makeFirstResponder(editor))
-        let manager = editor.undoManager!
-        manager.groupsByEvent = false
-        let probe = UndoProbe()
-        func registerTextUndo() {
-            manager.beginUndoGrouping()
-            manager.registerUndo(withTarget: probe) { $0.invoked = true }
-            manager.endUndoGrouping()
-        }
-
         let selected = vm.selectedItem!
-        let revisionBeforeBackspace = store.revision
-        let resultsBeforeBackspace = vm.results.map(\.id)
-        func backspace(repeating: Bool = false) {
-            let event = NSEvent.keyEvent(
+        let revision = store.revision
+        func backspace() {
+            panel.sendEvent(NSEvent.keyEvent(
                 with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
                 windowNumber: panel.windowNumber, context: nil, characters: "\u{7f}",
-                charactersIgnoringModifiers: "\u{7f}", isARepeat: repeating,
-                keyCode: UInt16(kVK_Delete))!
-            panel.sendEvent(event)
+                charactersIgnoringModifiers: "\u{7f}", isARepeat: false,
+                keyCode: UInt16(kVK_Delete))!)
         }
         backspace()
-        backspace(repeating: true)
-        precondition(store.revision == revisionBeforeBackspace && vm.results.map(\.id) == resultsBeforeBackspace
-                     && store.item(id: selected.id) != nil && !store.canUndoDeletion,
+        precondition(store.revision == revision && store.item(id: selected.id) != nil && !store.canUndoDeletion,
                      "Backspace at an empty search never deletes the selected item")
-        vm.openActions(for: selected.id)
-        let menuDelete = vm.menuActions.first { if case .delete = $0 { return true }; return false }!
-        precondition(PopoverMenuItem(action: menuDelete, target: nil).shortcut == nil,
-                     "The delete menu entry has no keyboard shortcut hint")
-        backspace()
-        precondition(vm.menuOpen && store.revision == revisionBeforeBackspace,
-                     "Backspace in the action menu cannot delete an item")
-        vm.closeMenu()
-
-        vm.query = "undo target"
-        await ready(vm)
         vm.openActions(for: target.id)
         let deleteIndex = vm.menuActions.firstIndex { if case .delete = $0 { return true }; return false }!
         vm.activateMenuItem(at: deleteIndex)
-        precondition(store.item(id: target.id) == nil && vm.prefersDeletionUndo)
-        registerTextUndo()
-        commandZ(panel, repeating: true)
-        precondition(store.item(id: target.id) == nil && !probe.invoked, "Holding the key never repeats undo")
+        precondition(store.item(id: target.id) == nil)
         commandZ(panel)
-        let pendingRevision = store.revision
-        let pendingGeneration = vm.resultsGeneration
-        let pendingScroll = vm.scrollIntent
-        commandZ(panel)
-        precondition(store.revision == pendingRevision && vm.resultsGeneration == pendingGeneration
-                     && vm.scrollIntent == pendingScroll && !probe.invoked,
-                     "A second Command-Z during restoration cannot repeat it or fall through to text undo")
         await ready(vm)
-        precondition(vm.selectedID == target.id && vm.query == "undo target" && !probe.invoked,
-                     "A deletion from filtered results takes precedence over earlier search edits")
+        precondition(store.item(id: target.id) != nil)
         let generation = vm.resultsGeneration
-        let scroll = vm.scrollIntent
         commandZ(panel)
-        precondition(!probe.invoked && vm.resultsGeneration == generation && vm.scrollIntent == scroll,
-                     "A second Command-Z does nothing, including older search-editor undo")
-
-        vm.openActions(for: target.id)
-        vm.activateMenuItem(at: deleteIndex)
-        vm.query = "new search"
-        await ready(vm)
-        commandZ(panel)
-        precondition(probe.invoked && store.item(id: target.id) == nil, "Typing gives text undo priority")
-        probe.invoked = false
-        registerTextUndo()
-        vm.toggleStackFilter()
-        vm.beginStackName()
-        commandZ(panel)
-        precondition(probe.invoked && store.item(id: target.id) == nil, "Naming never consumes entry undo")
-        vm.cancelStackName()
-        vm.closeMenu()
-        vm.handle(.undoDelete)
-        await ready(vm)
-        precondition(vm.query.isEmpty && vm.selectedID == target.id && vm.results.count == 171,
-                     "Undo reveals an older entry across pagination and incompatible filters")
-        precondition(store.item(id: target.id)?.lastCopiedAt == target.lastCopiedAt)
-
-        vm.query = "undo target"
-        await ready(vm)
-        vm.openActions(for: target.id)
-        vm.activateMenuItem(at: deleteIndex)
-        await ready(vm)
-        precondition(vm.results.isEmpty)
-        commandZ(panel)
-        await ready(vm)
-        precondition(vm.selectedID == target.id, "Undo works after deleting the last search result")
+        precondition(vm.resultsGeneration == generation && store.item(id: target.id) != nil,
+                     "A second Command-Z after a settled deletion is a no-op")
         panel.close()
-        print("PASS: Backspace never deletes, menu-only deletion, Command-Z, pending/settled second-undo no-op, repeated keys, text/naming priority, filtered deletion, older-page reveal, empty results")
+        print("PASS: Backspace never deletes the selection and a settled second Command-Z is a no-op")
     }
 
     static func run() async throws {

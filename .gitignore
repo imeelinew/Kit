@@ -7,3 +7,6 @@ xcuserdata/
 
 prototypes/
 tools/
+
+# Benchmark output is machine-specific and stays out of the repository
+tests/benchmarks/
