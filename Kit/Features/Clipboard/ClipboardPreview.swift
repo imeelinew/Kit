@@ -94,6 +94,7 @@ struct ClipboardPreview: View {
     @State private var imageHighlights: ImageSearchHighlightPayload?
     @State private var informationScrollbar = ThinScrollbarMetrics()
     @State private var informationScrollActivity = UUID()
+    @State private var informationScrollPosition = ScrollPosition(y: 0)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -123,6 +124,7 @@ struct ClipboardPreview: View {
                                 information
                             }
                             .scrollIndicators(.hidden)
+                            .scrollPosition($informationScrollPosition)
                             .contentMargins(.trailing, 16, for: .scrollContent)
                             .onScrollGeometryChange(for: ThinScrollbarMetrics.self) { geometry in
                                 ThinScrollbarMetrics(
@@ -138,7 +140,12 @@ struct ClipboardPreview: View {
                             }
                             .thinScrollbar(
                                 metrics: informationScrollbar,
-                                scrollToken: informationScrollActivity)
+                                scrollToken: informationScrollActivity
+                            ) { fraction in
+                                informationScrollPosition.scrollTo(
+                                    y: fraction * max(0,
+                                        informationScrollbar.content - informationScrollbar.viewport))
+                            }
                         }
                         .padding(.top, 12)
                         .frame(height: min(information.contentHeight, geometry.size.height / 2))

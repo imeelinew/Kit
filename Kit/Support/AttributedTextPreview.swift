@@ -52,6 +52,7 @@ struct AttributedTextPreview: View {
     private let preview: AttributedTextPreviewRepresentable
     @State private var scrollbar = ThinScrollbarMetrics()
     @State private var scrollActivity = UUID()
+    @State private var scrollbarTarget = NativeScrollbarTarget()
 
     init(attributed: AttributedString, contentID: PreviewContentID, fontSize: CGFloat? = nil) {
         preview = AttributedTextPreviewRepresentable(
@@ -65,16 +66,20 @@ struct AttributedTextPreview: View {
 
     var body: some View {
         var preview = self.preview
+        preview.scrollbarTarget = scrollbarTarget
         preview.onScrollChange = { metrics, moved in
             scrollbar = metrics
             if moved { scrollActivity = UUID() }
         }
-        return preview.thinScrollbar(metrics: scrollbar, scrollToken: scrollActivity)
+        return preview.thinScrollbar(metrics: scrollbar, scrollToken: scrollActivity) {
+            scrollbarTarget.scroll(toFraction: $0)
+        }
     }
 }
 
 private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
     var onScrollChange: ((ThinScrollbarMetrics, Bool) -> Void)?
+    var scrollbarTarget: NativeScrollbarTarget?
 
     private enum Storage {
         case swiftUI(AttributedString)
@@ -121,7 +126,9 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> PreviewTextScrollView {
-        PreviewTextScrollView()
+        let scrollView = PreviewTextScrollView()
+        scrollbarTarget?.scrollView = scrollView
+        return scrollView
     }
 
     static func dismantleNSView(_ scrollView: PreviewTextScrollView, coordinator: Coordinator) {
@@ -132,6 +139,7 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: PreviewTextScrollView, context: Context) {
+        scrollbarTarget?.scrollView = scrollView
         scrollView.onScrollChange = onScrollChange
         let environment = context.environment
         let appKit: Bool

@@ -10,10 +10,11 @@ struct ThinScrollbarMetrics: Equatable {
     var scrollable: Bool { content > viewport + 1 }
 }
 
-/// A thin auto-hiding SwiftUI overlay scrollbar (hairline thumb while scrolling plus a hover-reveal rail), with all pointer handling isolated in the AppKit `ScrollbarInteraction` view to sidestep SwiftUI/AppKit event-routing gaps.
+/// Shared scrollbar appearance and interaction, each owner supplies its own scroll destination
 struct ThinScrollbar: ViewModifier {
     var externalMetrics: ThinScrollbarMetrics
     var externalScrollToken: UUID
+    var onScrollToFraction: @MainActor (CGFloat) -> Void
 
     // Interaction signals — kept separate so each source of "show the bar" is independent.
     @State private var isScrolling = false
@@ -21,7 +22,7 @@ struct ThinScrollbar: ViewModifier {
     /// Mirrors the AppKit-side thumb drag (`ScrollbarInteraction` owns the actual drag state).
     @State private var isDragging = false
 
-    @State private var metrics = ThinScrollbarMetrics()
+    private var metrics: ThinScrollbarMetrics { externalMetrics }
     /// Instantaneous "pointer is in the trailing hover zone" mirror, for edge-transition detection.
     @State private var inZone = false
     @State private var scrollStop: Task<Void, Never>?
@@ -43,14 +44,12 @@ struct ThinScrollbar: ViewModifier {
 
     func body(content: Content) -> some View {
         content.scrollIndicators(.hidden)
-            .onAppear { metrics = externalMetrics }
-            .onChange(of: externalMetrics) { _, new in metrics = new }
             .onChange(of: externalScrollToken) {
                 beganScrolling()
                 scheduleScrollStop()
             }
             .overlay(alignment: .topTrailing) { bar }
-            // One tracking view over the whole trailing strip owns all pointer handling: transparent except over the thumb, where it takes the drag and forwards wheel events, and never flickers the rail the way a content-level hover did.
+            // The trailing strip handles dragging, wheel events pass through to the content
             .overlay {
                 ScrollbarInteraction(
                     edgeWidth: hoverZone,
@@ -60,8 +59,17 @@ struct ThinScrollbar: ViewModifier {
                     thumbGrabbable: metrics.scrollable && visible,
                     railActive: metrics.scrollable && expanded,
                     onZoneChange: updateZone,
-                    onDragChange: dragChanged
+                    onDragChange: dragChanged,
+                    onScrollToFraction: onScrollToFraction
                 )
+            }
+            .onDisappear {
+                scrollStop?.cancel()
+                hoverExit?.cancel()
+                isScrolling = false
+                isHoveringTrack = false
+                isDragging = false
+                inZone = false
             }
     }
 
@@ -85,7 +93,7 @@ struct ThinScrollbar: ViewModifier {
             }
             .frame(width: expandedWidth)
             .padding(.trailing, inset)
-            // Purely visual; ScrollbarInteraction above owns clicks, drags and wheel routing.
+            // Purely visual, ScrollbarInteraction owns clicks and drags
             .allowsHitTesting(false)
         }
     }
@@ -162,12 +170,17 @@ struct ThinScrollbar: ViewModifier {
 
 extension View {
     /// AppKit scroll views report geometry and activity through their representable coordinator.
-    func thinScrollbar(metrics: ThinScrollbarMetrics, scrollToken: UUID) -> some View {
-        modifier(ThinScrollbar(externalMetrics: metrics, externalScrollToken: scrollToken))
+    func thinScrollbar(
+        metrics: ThinScrollbarMetrics, scrollToken: UUID,
+        onScrollToFraction: @escaping @MainActor (CGFloat) -> Void
+    ) -> some View {
+        modifier(ThinScrollbar(
+            externalMetrics: metrics, externalScrollToken: scrollToken,
+            onScrollToFraction: onScrollToFraction))
     }
 }
 
-/// The single AppKit view (a sibling of the backing `NSScrollView`) that owns hover tracking, thumb drag/track-click, and wheel forwarding, driving the clip view directly since SwiftUI's scroll APIs and responder chain don't reach it reliably.
+/// Pointer interaction reports a normalized position to its owner, never searches the window for a scroll view
 private struct ScrollbarInteraction: NSViewRepresentable {
     let edgeWidth: CGFloat
     let inset: CGFloat
@@ -177,9 +190,12 @@ private struct ScrollbarInteraction: NSViewRepresentable {
     let railActive: Bool
     let onZoneChange: @MainActor (Bool) -> Void
     let onDragChange: @MainActor (Bool) -> Void
+    let onScrollToFraction: @MainActor (CGFloat) -> Void
 
     func makeNSView(context: Context) -> NSView {
-        InteractionView(onZoneChange: onZoneChange, onDragChange: onDragChange)
+        InteractionView(
+            onZoneChange: onZoneChange, onDragChange: onDragChange,
+            onScrollToFraction: onScrollToFraction)
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
@@ -192,6 +208,7 @@ private struct ScrollbarInteraction: NSViewRepresentable {
         view.railActive = railActive
         view.onZoneChange = onZoneChange
         view.onDragChange = onDragChange
+        view.onScrollToFraction = onScrollToFraction
     }
 
     private final class InteractionView: NSView {
@@ -203,18 +220,19 @@ private struct ScrollbarInteraction: NSViewRepresentable {
         var railActive = false
         var onZoneChange: @MainActor (Bool) -> Void
         var onDragChange: @MainActor (Bool) -> Void
+        var onScrollToFraction: @MainActor (CGFloat) -> Void
 
         private var lastInZone = false
-        /// Pointer y + content offset captured at `mouseDown`; non-nil only while dragging the thumb.
-        private var dragStart: (pointerY: CGFloat, offset: CGFloat)?
-        private weak var scrollView: NSScrollView?
+        private var dragStart: (pointerY: CGFloat, fraction: CGFloat)?
 
         init(
             onZoneChange: @escaping @MainActor (Bool) -> Void,
-            onDragChange: @escaping @MainActor (Bool) -> Void
+            onDragChange: @escaping @MainActor (Bool) -> Void,
+            onScrollToFraction: @escaping @MainActor (CGFloat) -> Void
         ) {
             self.onZoneChange = onZoneChange
             self.onDragChange = onDragChange
+            self.onScrollToFraction = onScrollToFraction
             super.init(frame: .zero)
         }
 
@@ -228,8 +246,9 @@ private struct ScrollbarInteraction: NSViewRepresentable {
 
         /// Opaque over the thumb's grab strip (and the whole trailing strip while the rail is expanded), transparent elsewhere so content clicks and wheel events fall through.
         override func hitTest(_ point: NSPoint) -> NSView? {
-            guard let superview else { return nil }
+            guard NSApp.currentEvent?.type != .scrollWheel, let superview else { return nil }
             let p = convert(point, from: superview)
+            guard bounds.contains(p) else { return nil }
             if grabRect.contains(p) { return self }
             if railActive && p.x >= bounds.width - edgeWidth { return self }
             return nil
@@ -242,40 +261,26 @@ private struct ScrollbarInteraction: NSViewRepresentable {
                 x: bounds.width - edgeWidth, y: thumbY, width: edgeWidth, height: thumbHeight)
         }
 
-        // MARK: Wheel routing
-
-        /// Wheel events only reach us over the bar; hand them to the sibling scroll view the responder chain would otherwise bypass.
-        override func scrollWheel(with event: NSEvent) {
-            if let target = targetScrollView() {
-                target.scrollWheel(with: event)
-            } else {
-                super.scrollWheel(with: event)
-            }
-        }
-
-        // MARK: Thumb drag & track click
+        // MARK: Thumb drag and track click
 
         override func mouseDown(with event: NSEvent) {
-            guard let target = targetScrollView() else { return }
+            guard trackTravel > 0 else { return }
             let p = convert(event.locationInWindow, from: nil)
-            // Track click outside the thumb's span jumps the thumb to center on the pointer, then continues as a drag.
+            var fraction = (thumbY - inset) / trackTravel
             if !(thumbY...(thumbY + thumbHeight)).contains(p.y) {
-                jumpThumb(toPointerY: p.y, in: target)
+                fraction = (p.y - thumbHeight / 2 - inset) / trackTravel
             }
-            dragStart = (p.y, target.contentView.bounds.origin.y)
+            fraction = min(1, max(0, fraction))
+            dragStart = (p.y, fraction)
             onDragChange(true)
+            onScrollToFraction(fraction)
         }
 
         override func mouseDragged(with event: NSEvent) {
-            guard let dragStart, let target = targetScrollView() else { return }
-            let (minOffset, maxOffset) = offsetRange(of: target.contentView)
-            let travel = trackTravel
-            guard maxOffset > minOffset, travel > 0 else { return }
+            guard let dragStart, trackTravel > 0 else { return }
             let p = convert(event.locationInWindow, from: nil)
-            // Map thumb travel back to content offset, anchored at mouse-down so clamped over-drags don't drift.
-            let offset =
-                dragStart.offset + (p.y - dragStart.pointerY) / travel * (maxOffset - minOffset)
-            scroll(target, toOffset: min(maxOffset, max(minOffset, offset)))
+            let fraction = dragStart.fraction + (p.y - dragStart.pointerY) / trackTravel
+            onScrollToFraction(min(1, max(0, fraction)))
         }
 
         override func mouseUp(with event: NSEvent) {
@@ -284,61 +289,7 @@ private struct ScrollbarInteraction: NSViewRepresentable {
             onDragChange(false)
         }
 
-        /// Thumb travel in track points: the rail's height minus the thumb.
-        private var trackTravel: CGFloat { (bounds.height - inset * 2) - thumbHeight }
-
-        /// Scroll so the thumb's center lands on the given pointer y (clamped to the track).
-        private func jumpThumb(toPointerY y: CGFloat, in target: NSScrollView) {
-            let (minOffset, maxOffset) = offsetRange(of: target.contentView)
-            let travel = trackTravel
-            guard maxOffset > minOffset, travel > 0 else { return }
-            let thumbTop = min(inset + travel, max(inset, y - thumbHeight / 2))
-            let fraction = (thumbTop - inset) / travel
-            scroll(target, toOffset: minOffset + fraction * (maxOffset - minOffset))
-        }
-
-        /// The clip view's legal `bounds.origin.y` range via AppKit's own constraint logic, which keeps the drag inset-correct where a raw `[0, content − viewport]` clamp isn't.
-        private func offsetRange(of clip: NSClipView) -> (min: CGFloat, max: CGFloat) {
-            var probe = clip.bounds
-            probe.origin.y = -1_000_000_000
-            let minY = clip.constrainBoundsRect(probe).origin.y
-            probe.origin.y = 1_000_000_000
-            let maxY = clip.constrainBoundsRect(probe).origin.y
-            return (minY, maxY)
-        }
-
-        private func scroll(_ target: NSScrollView, toOffset y: CGFloat) {
-            let clip = target.contentView
-            var origin = clip.bounds.origin
-            origin.y = y
-            clip.scroll(to: origin)
-            target.reflectScrolledClipView(clip)
-        }
-
-        /// The backing `NSScrollView`, found by walking up to the nearest scroll view in a sibling subtree (since `enclosingScrollView` can't reach a sibling) and cached weakly.
-        private func targetScrollView() -> NSScrollView? {
-            if let scrollView, scrollView.window === window { return scrollView }
-            var branch: NSView = self
-            var node = superview
-            while let ancestor = node {
-                if let found = Self.firstScrollView(under: ancestor, excluding: branch) {
-                    scrollView = found
-                    return found
-                }
-                branch = ancestor
-                node = ancestor.superview
-            }
-            return nil
-        }
-
-        private static func firstScrollView(under view: NSView, excluding: NSView?) -> NSScrollView?
-        {
-            for sub in view.subviews where sub !== excluding {
-                if let scroll = sub as? NSScrollView { return scroll }
-                if let scroll = firstScrollView(under: sub, excluding: nil) { return scroll }
-            }
-            return nil
-        }
+        private var trackTravel: CGFloat { max(0, bounds.height - inset * 2 - thumbHeight) }
 
         // MARK: Hover tracking
 
@@ -371,5 +322,25 @@ private struct ScrollbarInteraction: NSViewRepresentable {
             lastInZone = inZone
             onZoneChange(inZone)
         }
+    }
+}
+
+/// An explicitly bound AppKit scroll destination, one instance per scrollable region
+@MainActor
+final class NativeScrollbarTarget {
+    weak var scrollView: NSScrollView?
+
+    func scroll(toFraction fraction: CGFloat) {
+        guard let scrollView, scrollView.window != nil else { return }
+        let clip = scrollView.contentView
+        var probe = clip.bounds
+        probe.origin.y = -1_000_000_000
+        let minimum = clip.constrainBoundsRect(probe).origin.y
+        probe.origin.y = 1_000_000_000
+        let maximum = clip.constrainBoundsRect(probe).origin.y
+        var origin = clip.bounds.origin
+        origin.y = minimum + min(1, max(0, fraction)) * (maximum - minimum)
+        clip.scroll(to: origin)
+        scrollView.reflectScrolledClipView(clip)
     }
 }

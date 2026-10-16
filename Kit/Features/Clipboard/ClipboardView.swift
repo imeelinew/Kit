@@ -20,6 +20,7 @@ struct ClipboardList: View {
     let onLoadMore: () -> Void
     @State private var geometry = ClipboardTableGeometry()
     @State private var scrollActivity = UUID()
+    @State private var scrollbarTarget = NativeScrollbarTarget()
 
     var body: some View {
         ClipboardTableRepresentable(
@@ -38,10 +39,13 @@ struct ClipboardList: View {
             onActions: onActions,
             onLoadMore: onLoadMore,
             onGeometryChange: { geometry = $0 },
-            onScrollActivity: { scrollActivity = UUID() }
+            onScrollActivity: { scrollActivity = UUID() },
+            scrollbarTarget: scrollbarTarget
         )
         .edgeDissolve(state: geometry.dissolve)
-        .thinScrollbar(metrics: geometry.scrollbar, scrollToken: scrollActivity)
+        .thinScrollbar(metrics: geometry.scrollbar, scrollToken: scrollActivity) {
+            scrollbarTarget.scroll(toFraction: $0)
+        }
     }
 }
 
@@ -87,11 +91,14 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
     let onLoadMore: () -> Void
     let onGeometryChange: (ClipboardTableGeometry) -> Void
     let onScrollActivity: () -> Void
+    let scrollbarTarget: NativeScrollbarTarget
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> ClipboardTableContainerView {
-        context.coordinator.makeContainerView()
+        let container = context.coordinator.makeContainerView()
+        scrollbarTarget.scrollView = container.scrollView
+        return container
     }
 
     static func dismantleNSView(_ nsView: ClipboardTableContainerView, coordinator: Coordinator) {
@@ -99,6 +106,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
     }
 
     func updateNSView(_ containerView: ClipboardTableContainerView, context: Context) {
+        scrollbarTarget.scrollView = containerView.scrollView
         context.coordinator.update(
             results: results,
             resultsGeneration: resultsGeneration,
