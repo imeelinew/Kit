@@ -19,7 +19,8 @@ enum ImageThumbnail {
     }
 
     /// `NSCache` is thread-safe but not annotated `Sendable`, so cross-thread use (a detached decode populating what the main actor reads) needs the guarantee asserted once here.
-    private final class ImageCache: NSCache<NSString, NSImage>, @unchecked Sendable {
+    private final class ImageCache: @unchecked Sendable {
+        let values = NSCache<NSString, NSImage>()
         private let mutationLock = NSLock()
         private var generation: UInt64 = 0
 
@@ -30,14 +31,14 @@ enum ImageThumbnail {
         func insert(_ image: NSImage, forKey key: NSString, cost: Int, generation: UInt64) {
             mutationLock.withLock {
                 guard generation == self.generation else { return }
-                setObject(image, forKey: key, cost: cost)
+                values.setObject(image, forKey: key, cost: cost)
             }
         }
 
         func purge() {
             mutationLock.withLock {
                 generation &+= 1
-                removeAllObjects()
+                values.removeAllObjects()
             }
         }
     }
@@ -45,14 +46,14 @@ enum ImageThumbnail {
     /// Small row thumbnails (≤ `rowThreshold` px), byte-bounded and kept warm across palette dismissals so re-opening draws instantly.
     private static let rowCache: ImageCache = {
         let cache = ImageCache()
-        cache.totalCostLimit = 8 * 1024 * 1024
+        cache.values.totalCostLimit = 8 * 1024 * 1024
         return cache
     }()
 
     /// Large previews (> `rowThreshold` px), byte-bounded (not object-count, which leaked) and purged on palette close so browsing memory stays flat.
     private static let previewCache: ImageCache = {
         let cache = ImageCache()
-        cache.totalCostLimit = 48 * 1024 * 1024
+        cache.values.totalCostLimit = 48 * 1024 * 1024
         return cache
     }()
 
@@ -303,7 +304,7 @@ enum ImageThumbnail {
 
     /// Cache-only lookup (never touches disk) so views render an already-decoded thumbnail on the same frame.
     static func cached(_ url: URL, maxPixel: CGFloat) -> NSImage? {
-        pick(CGFloat(Int(maxPixel))).object(forKey: cacheKey(url, maxPixel))
+        pick(CGFloat(Int(maxPixel))).values.object(forKey: cacheKey(url, maxPixel))
     }
 
     /// Decodes off the main thread and returns the decode directly, not a cache re-read — a purge or eviction mid-decode must not strand a thumbnail on its placeholder.

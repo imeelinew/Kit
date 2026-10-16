@@ -42,8 +42,20 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
 
     /// Build the hosting tree while the app is idle, before the first shortcut.
     func prewarm() {
+        guard !isVisible, !isPresenting else { return }
+        // Register preview fonts while idle instead of on the first shortcut
+        _ = ClipboardPreviewFont.regular(
+            ofSize: NSFont.preferredFont(forTextStyle: .subheadline).pointSize)
+        if let path = PasteTarget(app: NSWorkspace.shared.frontmostApplication)?.iconPath {
+            _ = IconCache.icon(forFile: path)
+        }
         let panel = ensurePanel()
+        // Initialize the backing surface without activating or displaying the panel
+        panel.alphaValue = 0
+        panel.orderFront(nil)
         panel.contentView?.layoutSubtreeIfNeeded()
+        panel.displayIfNeeded()
+        panel.orderOut(nil)
     }
 
     func show() {
@@ -133,6 +145,17 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         ClipboardPreviewPayload.purge()
         ImageSearchHighlightPayload.purge()
         ImageThumbnail.purgePreviews()
+        // Let orderOut and popover teardown finish before reattaching the empty hidden tree
+        let request = presentationID
+        DispatchQueue.main.async { [weak self, weak panel] in
+            guard let self, let panel, self.panel === panel,
+                presentationID == request, !isVisible, !isPresenting,
+                let contentView = detachedContentView
+            else { return }
+            panel.contentView = contentView
+            detachedContentView = nil
+            contentView.layoutSubtreeIfNeeded()
+        }
         if restoreFocus { restorePreviousFocus() }
     }
 

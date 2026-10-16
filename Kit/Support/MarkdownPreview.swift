@@ -30,11 +30,14 @@ private enum MarkdownPreviewCache {
         init(markdown: NSAttributedString?) { self.markdown = markdown }
     }
 
-    final class Store: NSCache<Key, Entry>, @unchecked Sendable {}
+    // NSCache synchronizes access, entries are immutable after insertion
+    final class Store: @unchecked Sendable {
+        let values = NSCache<Key, Entry>()
+    }
 
     static let shared: Store = {
         let cache = Store()
-        cache.totalCostLimit = 16 * 1024 * 1024
+        cache.values.totalCostLimit = 16 * 1024 * 1024
         return cache
     }()
 }
@@ -55,7 +58,7 @@ struct MarkdownPreview: View {
             return rendered
         }
         // Reopening a cached preview should never briefly show the raw Markdown.
-        return MarkdownPreviewCache.shared.object(
+        return MarkdownPreviewCache.shared.values.object(
             forKey: MarkdownPreviewCache.Key(source: source, fontSize: fontSize)
         ).map { Self.renderedContent(markdown: $0.markdown) }
     }
@@ -76,11 +79,11 @@ struct MarkdownPreview: View {
     ) -> Rendered {
         let key = MarkdownPreviewCache.Key(source: source, fontSize: fontSize)
         let markdown: NSAttributedString?
-        if let cached = MarkdownPreviewCache.shared.object(forKey: key) {
+        if let cached = MarkdownPreviewCache.shared.values.object(forKey: key) {
             markdown = cached.markdown
         } else {
             markdown = MarkdownAttributedRenderer.render(source, basePointSize: fontSize)
-            MarkdownPreviewCache.shared.setObject(
+            MarkdownPreviewCache.shared.values.setObject(
                 MarkdownPreviewCache.Entry(markdown: markdown), forKey: key,
                 cost: max(source.utf8.count, markdown?.length ?? 0))
         }

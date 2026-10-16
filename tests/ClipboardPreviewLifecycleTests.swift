@@ -109,6 +109,8 @@ enum ClipboardPreviewLifecycleTests {
                 precondition(!panel.isVisible,
                              "Delayed popover and focus callbacks cannot bring the palette back")
             }
+            precondition(panel.contentView != nil && !vm.isPreviewActive,
+                         "After dismissal settles, the attached hidden tree is ready without a preview")
         }
         print("PASS: real popover teardown, shortcut hide, reentrant close, hover-exit timing, repeated reopen")
     }

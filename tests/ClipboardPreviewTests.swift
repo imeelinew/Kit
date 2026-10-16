@@ -100,6 +100,26 @@ struct ClipboardPreviewTests {
 
     @MainActor
     static func run() async {
+        // A long document must have a usable viewport without typesetting its entire history
+        let viewport = PreviewTextScrollView(frame: NSRect(x: 0, y: 0, width: 420, height: 200))
+        let longText = String(repeating: "A clipboard line with 中文 and 👩‍💻\n", count: 20_000)
+        viewport.textView.textStorage?.setAttributedString(NSAttributedString(
+            string: longText, attributes: [.font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)]))
+        viewport.updateDocumentGeometry()
+        let manager = viewport.textView.layoutManager!
+        let laidOut = manager.firstUnlaidCharacterIndex()
+        precondition(laidOut > 0 && laidOut < viewport.textView.textStorage!.length,
+                     "The first preview frame lays out visible lines without blocking on the full document")
+        precondition(viewport.textView.frame.height > viewport.contentSize.height,
+                     "TextKit estimates scrollable document geometry before full layout")
+        manager.ensureLayout(for: viewport.textView.textContainer!)
+        viewport.updateDocumentGeometry()
+        let end = NSPoint(x: 0, y: max(0, viewport.textView.frame.height - viewport.contentSize.height))
+        viewport.contentView.scroll(to: end)
+        viewport.updateDocumentGeometry()
+        precondition(viewport.contentView.bounds.maxY >= viewport.textView.intrinsicContentSize.height,
+                     "The final line can scroll above the bottom fade")
+
         let sample = ClipboardItem(text: "CLIPTEST-UTF16 👩‍💻", kind: .text, sourceBundleID: nil)
         let samplePayload = await ClipboardPreviewPayload.load(for: sample, imageURL: nil)
         precondition(samplePayload.details.characters == 20 && samplePayload.details.words == 2,
@@ -171,6 +191,10 @@ struct ClipboardPreviewTests {
         await settle()
         let codeText = textView(in: renderHosting)!
         precondition(codeText.string == renderFixture.source)
+        let codeFont = codeText.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+        precondition(codeFont?.fontName == ClipboardPreviewFont.regular(
+            ofSize: NSFont.preferredFont(forTextStyle: .subheadline).pointSize).fontName,
+                     "Native code highlighting preserves the monospaced preview font")
         precondition(codeText.textStorage?.attribute(.backgroundColor, at: 4, effectiveRange: nil) != nil,
                      "Async code rendering must keep only the latest source and search")
         renderFixture.markdown = true

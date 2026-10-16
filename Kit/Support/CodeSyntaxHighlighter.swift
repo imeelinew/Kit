@@ -148,29 +148,33 @@ struct CodePreview: View {
 
     private struct Rendered: @unchecked Sendable {
         let id: RenderID
-        let value: AttributedString
+        let value: NSAttributedString
     }
 
     var body: some View {
         let id = RenderID(code: code, query: query)
+        let font = ClipboardPreviewFont.regular(
+            ofSize: fontSize ?? NSFont.preferredFont(forTextStyle: .subheadline).pointSize)
         let value = highlighted?.id == id ? highlighted?.value : nil
         Group {
             if code.utf8.count > CodeSyntaxHighlighter.maximumHighlightedBytes {
                 ClipboardTextPreview(text: code, query: query, fontSize: fontSize).equatable()
             } else {
                 AttributedTextPreview(
-                    attributed: value ?? AttributedString(code),
+                    nsAttributed: value ?? NSAttributedString(string: code, attributes: [.font: font]),
                     contentID: PreviewContentID(source: code, query: query, rendered: value != nil),
                     fontSize: fontSize)
             }
         }
         .task(id: id) {
+            let font = ClipboardPreviewFont.regular(
+                ofSize: fontSize ?? NSFont.preferredFont(forTextStyle: .subheadline).pointSize)
             highlighted = nil
             guard code.utf8.count <= CodeSyntaxHighlighter.maximumHighlightedBytes else { return }
             let task = Task.detached(priority: .userInitiated) {
-                var attributed = CodeSyntaxHighlighter.highlight(code)
-                SearchHighlight.apply(to: &attributed, source: code, query: query)
-                return Rendered(id: id, value: attributed)
+                let attributed = CodeSyntaxHighlighter.highlight(
+                    code, attributes: [.font: font, .foregroundColor: NSColor.labelColor])
+                return Rendered(id: id, value: SearchHighlight.applying(to: attributed, query: query))
             }
             let rendered = await withTaskCancellationHandler {
                 await task.value

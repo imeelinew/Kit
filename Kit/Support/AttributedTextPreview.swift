@@ -28,14 +28,27 @@ enum ClipboardPreviewFont {
         return withChineseFallback(font)
     }
 
+    // NSCache serializes access, the immutable fonts can also be shared with Markdown rendering
+    private final class FallbackFontCache: @unchecked Sendable {
+        let values = NSCache<NSFont, NSFont>()
+
+        init() { values.countLimit = 32 }
+    }
+
+    private static let fallbackFonts = FallbackFontCache()
+
     static func withChineseFallback(_ font: NSFont) -> NSFont {
         guard let chineseFontName else { return font }
+        if let cached = fallbackFonts.values.object(forKey: font) { return cached }
         let chineseDescriptor = NSFontDescriptor(name: chineseFontName, size: font.pointSize)
         let existing = font.fontDescriptor.object(forKey: .cascadeList) as? [NSFontDescriptor] ?? []
+        if existing.contains(where: { $0.postscriptName == chineseFontName }) { return font }
         let descriptor = font.fontDescriptor.addingAttributes([
             .cascadeList: [chineseDescriptor] + existing
         ])
-        return NSFont(descriptor: descriptor, size: font.pointSize) ?? font
+        let result = NSFont(descriptor: descriptor, size: font.pointSize) ?? font
+        fallbackFonts.values.setObject(result, forKey: font)
+        return result
     }
 }
 
@@ -287,6 +300,7 @@ final class PreviewTextScrollView: NSScrollView {
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
+        textView.layoutManager?.allowsNonContiguousLayout = true
         textView.textContainer?.widthTracksTextView = false
         textView.textContainer?.lineFragmentPadding = 0
         textView.textContainerInset = .zero
@@ -326,9 +340,15 @@ final class PreviewTextScrollView: NSScrollView {
         let width = contentSize.width
         guard width > 0, let textContainer = textView.textContainer else { return }
 
-        textContainer.containerSize = NSSize(
+        let containerSize = NSSize(
             width: max(1, width - PreviewTextView.trailingGutter), height: CGFloat.greatestFiniteMagnitude)
-        textView.layoutManager?.ensureLayout(for: textContainer)
+        if textContainer.containerSize != containerSize {
+            textContainer.containerSize = containerSize
+        }
+        // Lay out the viewport before presentation, TextKit estimates the remaining document
+        textView.layoutManager?.ensureLayout(
+            forBoundingRect: contentView.bounds.insetBy(dx: 0, dy: -Self.fadeHeight),
+            in: textContainer)
         let contentHeight = textView.intrinsicContentSize.height
         // The final line can scroll above the fade instead of remaining hidden underneath it
         let overflows = contentHeight > contentSize.height
@@ -402,7 +422,6 @@ final class PreviewTextView: NSTextView {
         guard let layoutManager, let textContainer else {
             return NSSize(width: NSView.noIntrinsicMetric, height: 0)
         }
-        layoutManager.ensureLayout(for: textContainer)
         let used = layoutManager.usedRect(for: textContainer)
         return NSSize(width: NSView.noIntrinsicMetric, height: ceil(used.height))
     }

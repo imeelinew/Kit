@@ -1,18 +1,21 @@
 import AppKit
 
 enum IconCache {
-    private final class Cache: NSCache<NSString, NSImage>, @unchecked Sendable {}
+    // NSCache synchronizes access, cached images are immutable after insertion
+    private final class Cache: @unchecked Sendable {
+        let values = NSCache<NSString, NSImage>()
+    }
 
     private static let displayPixel: CGFloat = 48
 
     private static let cache: Cache = {
         let cache = Cache()
-        cache.totalCostLimit = 32 * 1024 * 1024
+        cache.values.totalCostLimit = 32 * 1024 * 1024
         return cache
     }()
 
     static func cached(forFile path: String) -> NSImage? {
-        cache.object(forKey: path as NSString)
+        cache.values.object(forKey: path as NSString)
     }
 
     private struct Decoded: @unchecked Sendable { let image: NSImage? }
@@ -34,9 +37,9 @@ enum IconCache {
 
     static func icon(forFile path: String) -> NSImage {
         let key = path as NSString
-        if let cached = cache.object(forKey: key) { return cached }
+        if let cached = cache.values.object(forKey: key) { return cached }
         let (icon, cost) = downsampled(NSWorkspace.shared.icon(forFile: path))
-        cache.setObject(icon, forKey: key, cost: cost)
+        cache.values.setObject(icon, forKey: key, cost: cost)
         return icon
     }
 
