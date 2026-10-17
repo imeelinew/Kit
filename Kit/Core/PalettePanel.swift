@@ -135,6 +135,11 @@ final class PalettePanel: NSPanel {
             return paletteViewModel.handle(.clearQuery)
         }
 
+        // The action menu's Delete row: fixed at Control-Backspace, not user-recordable.
+        if modifiers == .control, keyCode == kVK_Delete {
+            return handleOnce(.delete, event: event)
+        }
+
         if PaletteShortcut.actions.matches(shortcut) {
             return handleOnce(.toggleActions, event: event)
         }

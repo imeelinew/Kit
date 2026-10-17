@@ -75,6 +75,7 @@ struct PopoverMenuItem {
             title = "Delete Entry"
             icon = .symbol("trash")
             isDestructive = true
+            shortcut = "⌃⌫"
         case .addToStack:
             title = "Add to Stack"
             icon = nil

@@ -48,6 +48,7 @@ enum PaletteCommand: Equatable {
     case activate
     case pasteKeepingOpen
     case copy
+    case delete
     case undoDelete
     case cancel
     case toggleActions
@@ -507,6 +508,11 @@ final class PaletteViewModel {
             guard searchReady, let item = actionTarget else { return true }
             overlay = .none
             core.copyToClipboard(item)
+        case .delete:
+            guard searchReady, !isNamingStack, let item = actionTarget else { return true }
+            overlay = .none
+            menuSelection = 0
+            perform(.delete(item))
         case .undoDelete:
             guard !isNamingStack else { return true }
             undoDeletion()
