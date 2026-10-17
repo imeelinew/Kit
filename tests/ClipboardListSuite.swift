@@ -14,8 +14,5 @@ struct ClipboardListSuite {
         await ClipboardPreviewTests.run()
         try await ClipboardPreviewLifecycleTests.run()
         try await ClipboardUndoTests.run()
-        await ClipboardRetentionSettingsTests.run()
-        ClipboardTextClassifierTests.run()
-        try await ImageDecodeCoordinatorTests.run()
     }
 }

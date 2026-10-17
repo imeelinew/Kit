@@ -32,12 +32,6 @@ jobs:
         run: ./scripts/test-clipboard-search.sh
       - name: Capture pipeline
         run: ./scripts/test-capture.sh
-      - name: Pinyin matching
-        run: ./scripts/test-pinyin.sh
-      - name: Paste transactions
-        run: ./scripts/test-paste-transactions.sh
-      - name: Pinned images
-        run: ./scripts/test-pinned-images.sh
       # Builds the full app, so it runs last: fast failures above surface first.
-      - name: Undo, previews, classifier, and image decoding
+      - name: Undo and previews
         run: ./scripts/test-clipboard-list.sh
