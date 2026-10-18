@@ -149,8 +149,10 @@ final class MenuBarController: NSObject {
             keyEquivalent: ","
         )
         settingsItem.target = self
+        settingsItem.image = NSImage(systemSymbolName: "gear", accessibilityDescription: nil)
         if #available(macOS 27.0, *) {
-            settingsItem.preferredImageVisibility = .hidden
+            // AppKit hides menu images automatically unless visibility is explicit
+            settingsItem.preferredImageVisibility = .visible
         }
         menu.addItem(settingsItem)
 
