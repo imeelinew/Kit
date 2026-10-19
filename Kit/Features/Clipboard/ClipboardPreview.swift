@@ -148,7 +148,7 @@ struct ClipboardPreview: View {
                             }
                         }
                         .padding(.top, 12)
-                        .frame(height: min(information.contentHeight, geometry.size.height / 2))
+                        .frame(height: min(information.contentHeight, geometry.size.height * 0.4))
                     }
                 }
                 .padding(.horizontal, 20)

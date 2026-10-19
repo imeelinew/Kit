@@ -276,7 +276,7 @@ final class PreviewTextScrollView: NSScrollView {
     private var styleObserver: NotificationToken?
     private var boundsObserver: NotificationToken?
     private let bottomMask = CAGradientLayer()
-    private static let fadeHeight: CGFloat = 32
+    private static let fadeHeight: CGFloat = 16
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
