@@ -10,45 +10,10 @@ enum ClipboardPreviewFont {
         CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
     }()
 
-    private static let chineseFontName: String? = {
-        guard let url = Bundle.main.url(forResource: "LXGWNeoXiHei", withExtension: "ttf")
-        else { return nil }
-        CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
-        guard let descriptors = CTFontManagerCreateFontDescriptorsFromURL(url as CFURL)
-            as? [CTFontDescriptor], let descriptor = descriptors.first,
-            let name = CTFontDescriptorCopyAttribute(descriptor, kCTFontNameAttribute) as? String
-        else { return nil }
-        return name
-    }()
-
     static func regular(ofSize size: CGFloat) -> NSFont {
         _ = registration
-        let font = NSFont(name: "JetBrainsMono-Regular", size: size)
+        return NSFont(name: "JetBrainsMono-Regular", size: size)
             ?? NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
-        return withChineseFallback(font)
-    }
-
-    // NSCache serializes access, the immutable fonts can also be shared with Markdown rendering
-    private final class FallbackFontCache: @unchecked Sendable {
-        let values = NSCache<NSFont, NSFont>()
-
-        init() { values.countLimit = 32 }
-    }
-
-    private static let fallbackFonts = FallbackFontCache()
-
-    static func withChineseFallback(_ font: NSFont) -> NSFont {
-        guard let chineseFontName else { return font }
-        if let cached = fallbackFonts.values.object(forKey: font) { return cached }
-        let chineseDescriptor = NSFontDescriptor(name: chineseFontName, size: font.pointSize)
-        let existing = font.fontDescriptor.object(forKey: .cascadeList) as? [NSFontDescriptor] ?? []
-        if existing.contains(where: { $0.postscriptName == chineseFontName }) { return font }
-        let descriptor = font.fontDescriptor.addingAttributes([
-            .cascadeList: [chineseDescriptor] + existing
-        ])
-        let result = NSFont(descriptor: descriptor, size: font.pointSize) ?? font
-        fallbackFonts.values.setObject(result, forKey: font)
-        return result
     }
 }
 
@@ -144,6 +109,14 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
         return scrollView
     }
 
+    func sizeThatFits(
+        _ proposal: ProposedViewSize, nsView: PreviewTextScrollView, context: Context
+    ) -> CGSize? {
+        guard let width = proposal.width, let height = proposal.height,
+            width > 0, height > 0 else { return nil }
+        return CGSize(width: width, height: nsView.contentHeight(width: width, limit: height))
+    }
+
     static func dismantleNSView(_ scrollView: PreviewTextScrollView, coordinator: Coordinator) {
         // SwiftUI can retain detached AppKit views for reuse; release their heavy text immediately.
         scrollView.textView.textStorage?.setAttributedString(NSAttributedString(string: ""))
@@ -222,9 +195,9 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
         }
 
         mutable.enumerateAttribute(.font, in: full) { value, range, _ in
-            let original = value as? NSFont ?? font
-            mutable.addAttribute(
-                .font, value: ClipboardPreviewFont.withChineseFallback(original), range: range)
+            if value == nil {
+                mutable.addAttribute(.font, value: font, range: range)
+            }
         }
         mutable.enumerateAttribute(.foregroundColor, in: full) { value, range, _ in
             if value == nil {
@@ -248,9 +221,9 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
         let font = fontSize.map { NSFont.systemFont(ofSize: $0) }
             ?? NSFont.preferredFont(forTextStyle: .subheadline)
         mutable.enumerateAttribute(.font, in: full) { value, range, _ in
-            let original = value as? NSFont ?? font
-            mutable.addAttribute(
-                .font, value: ClipboardPreviewFont.withChineseFallback(original), range: range)
+            if value == nil {
+                mutable.addAttribute(.font, value: font, range: range)
+            }
         }
         mutable.enumerateAttribute(.foregroundColor, in: full) { value, range, _ in
             if value == nil {
@@ -334,6 +307,21 @@ final class PreviewTextScrollView: NSScrollView {
     override func layout() {
         super.layout()
         updateDocumentGeometry()
+    }
+
+    func contentHeight(width: CGFloat, limit: CGFloat) -> CGFloat {
+        guard let textContainer = textView.textContainer else { return limit }
+        let size = NSSize(
+            width: max(1, width - PreviewTextView.trailingGutter),
+            height: CGFloat.greatestFiniteMagnitude)
+        if textContainer.containerSize != size {
+            textContainer.containerSize = size
+        }
+        // Measure only the proposed viewport so long documents keep incremental layout
+        textView.layoutManager?.ensureLayout(
+            forBoundingRect: NSRect(x: 0, y: 0, width: width, height: limit),
+            in: textContainer)
+        return min(limit, textView.intrinsicContentSize.height)
     }
 
     func updateDocumentGeometry() {

@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		CB1200000000000000000003 /* LXGWNeoXiHei-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = CB1200000000000000000004 /* LXGWNeoXiHei-LICENSE.txt */; };
-		CB1200000000000000000001 /* LXGWNeoXiHei.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CB1200000000000000000002 /* LXGWNeoXiHei.ttf */; };
 		CB1100000000000000000001 /* JetBrainsMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CB1100000000000000000002 /* JetBrainsMono-Regular.ttf */; };
 		CB1100000000000000000003 /* JetBrainsMono-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = CB1100000000000000000004 /* JetBrainsMono-LICENSE.txt */; };
 		CB1000000000000000000001 /* ClipboardRowThumbnailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1000000000000000000002 /* ClipboardRowThumbnailCache.swift */; };
@@ -87,8 +85,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		CB1200000000000000000004 /* LXGWNeoXiHei-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "LXGWNeoXiHei-LICENSE.txt"; sourceTree = "<group>"; };
-		CB1200000000000000000002 /* LXGWNeoXiHei.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "LXGWNeoXiHei.ttf"; sourceTree = "<group>"; };
 		CB1100000000000000000002 /* JetBrainsMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Regular.ttf"; sourceTree = "<group>"; };
 		CB1100000000000000000004 /* JetBrainsMono-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "JetBrainsMono-LICENSE.txt"; sourceTree = "<group>"; };
 		CB1000000000000000000002 /* ClipboardRowThumbnailCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardRowThumbnailCache.swift; sourceTree = "<group>"; };
@@ -267,8 +263,6 @@
 				B8B134FA6B0C91BE3263830E /* README.md */,
 				6127F340C801F2F566147DE2 /* SymbolsNerdFontMono-Regular.ttf */,
 				CB1100000000000000000002 /* JetBrainsMono-Regular.ttf */,
-				CB1200000000000000000004 /* LXGWNeoXiHei-LICENSE.txt */,
-				CB1200000000000000000002 /* LXGWNeoXiHei.ttf */,
 				CB1100000000000000000004 /* JetBrainsMono-LICENSE.txt */,
 			);
 			path = Fonts;
@@ -433,8 +427,6 @@
 				BB41B0000000000000000008 /* copy-sound-low-knock.mp3 in Resources */,
 				548476F13FAEFBC9FE5F0632 /* SymbolsNerdFontMono-Regular.ttf in Resources */,
 				CB1100000000000000000001 /* JetBrainsMono-Regular.ttf in Resources */,
-				CB1200000000000000000003 /* LXGWNeoXiHei-LICENSE.txt in Resources */,
-				CB1200000000000000000001 /* LXGWNeoXiHei.ttf in Resources */,
 				CB1100000000000000000003 /* JetBrainsMono-LICENSE.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

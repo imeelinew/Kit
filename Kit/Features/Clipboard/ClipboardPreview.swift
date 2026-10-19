@@ -103,14 +103,14 @@ struct ClipboardPreview: View {
                 let payload = (vm.preparedPreview?.itemID == item.id ? vm.preparedPreview : nil)
                     ?? ClipboardPreviewPayload.cached(for: item)
                     ?? (loadedPayload?.itemID == item.id ? loadedPayload : nil)
-                GeometryReader { geometry in
+                GeometryReader { _ in
                     let information = ClipboardInfoSection(
                         item: item, details: payload?.details ?? .init(), store: store,
                         settings: settings)
-                    VStack(alignment: .leading, spacing: 0) {
+                    ClipboardPreviewLayout(informationHeight: information.contentHeight) {
                         content(for: item, payload: payload)
                             .padding(.vertical, item.kind == .image ? 0 : 12)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            .frame(maxWidth: .infinity, alignment: .top)
                             .id(item.kind)
                             .transition(.opacity)
                             .animation(reduceMotion ? nil : Theme.Motion.content, value: item.kind)
@@ -148,7 +148,6 @@ struct ClipboardPreview: View {
                             }
                         }
                         .padding(.top, 12)
-                        .frame(height: min(information.contentHeight, geometry.size.height * 0.4))
                     }
                 }
                 .padding(.horizontal, 20)
@@ -244,6 +243,29 @@ struct ClipboardPreview: View {
                 .allowsHitTesting(false)
             }
         }
+    }
+}
+
+struct ClipboardPreviewLayout: Layout {
+    var informationHeight: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 2 else { return }
+        let contentHeight = subviews[0].sizeThatFits(
+            ProposedViewSize(width: bounds.width, height: bounds.height * 0.6)).height
+        let informationHeight = min(
+            informationHeight, max(bounds.height * 0.4, bounds.height - contentHeight))
+        let previewHeight = bounds.height - informationHeight
+        subviews[0].place(
+            at: bounds.origin, anchor: .topLeading,
+            proposal: ProposedViewSize(width: bounds.width, height: previewHeight))
+        subviews[1].place(
+            at: CGPoint(x: bounds.minX, y: bounds.minY + previewHeight), anchor: .topLeading,
+            proposal: ProposedViewSize(width: bounds.width, height: informationHeight))
     }
 }
 
