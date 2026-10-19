@@ -6,6 +6,7 @@ struct ClipboardList: View {
     let results: [ClipboardItem]
     let resultsGeneration: UInt64
     var resultsKindFilter: ClipboardKindFilter = .all
+    var resultsStackFilter: ClipboardStack.ID? = nil
     var dateGrouping: ClipboardDateGrouping? = nil
     let hasMoreResults: Bool
     let selectedID: ClipboardItem.ID?
@@ -27,6 +28,7 @@ struct ClipboardList: View {
             results: results,
             resultsGeneration: resultsGeneration,
             resultsKindFilter: resultsKindFilter,
+            resultsStackFilter: resultsStackFilter,
             dateGrouping: dateGrouping,
             hasMoreResults: hasMoreResults,
             selectedID: selectedID,
@@ -78,6 +80,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
     let results: [ClipboardItem]
     let resultsGeneration: UInt64
     var resultsKindFilter: ClipboardKindFilter = .all
+    var resultsStackFilter: ClipboardStack.ID? = nil
     var dateGrouping: ClipboardDateGrouping?
     let hasMoreResults: Bool
     let selectedID: ClipboardItem.ID?
@@ -111,6 +114,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             results: results,
             resultsGeneration: resultsGeneration,
             resultsKindFilter: resultsKindFilter,
+            resultsStackFilter: resultsStackFilter,
             dateGrouping: dateGrouping,
             hasMoreResults: hasMoreResults,
             selectedID: selectedID,
@@ -138,6 +142,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private weak var store: ClipboardStore?
         private var onSelect: ((ClipboardItem) -> Void)?
         private var lastResultsKindFilter: ClipboardKindFilter?
+        private var lastResultsStackFilter: ClipboardStack.ID?
         private var onActivate: ((ClipboardItem) -> Void)?
         private var onActions: ((ClipboardItem) -> Void)?
         private var onLoadMore: (() -> Void)?
@@ -238,7 +243,8 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
 
         func update(
             results: [ClipboardItem], resultsGeneration: UInt64,
-            resultsKindFilter: ClipboardKindFilter, dateGrouping: ClipboardDateGrouping?,
+            resultsKindFilter: ClipboardKindFilter, resultsStackFilter: ClipboardStack.ID?,
+            dateGrouping: ClipboardDateGrouping?,
             hasMoreResults: Bool,
             selectedID: ClipboardItem.ID?, query: String,
             scroll: ScrollIntent, hoverEnabled: Bool, locale: Locale, store: ClipboardStore,
@@ -274,8 +280,11 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 || lastHasMoreResults != hasMoreResults || dateChanged
             let appearanceChanged = self.query != query || self.locale != locale || dateChanged
             if self.query != query { queryChangedSinceResults = true }
-            let typeChanged = lastResultsKindFilter.map { $0 != resultsKindFilter } ?? false
+            let filterChanged = lastResultsKindFilter != nil
+                && (lastResultsKindFilter != resultsKindFilter
+                    || lastResultsStackFilter != resultsStackFilter)
             lastResultsKindFilter = resultsKindFilter
+            lastResultsStackFilter = resultsStackFilter
             let previousRows = rows
             if contentChanged {
                 rebuildRows(results, hasMoreResults: hasMoreResults)
@@ -292,7 +301,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 // Suppress AppKit's intermediate selections until the model is restored.
                 tableView.clearHover()
                 applyingSelection = true
-                if typeChanged {
+                if filterChanged {
                     // Fade the entire viewport, including large replacements and empty results.
                     if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
                         let container = hostedContainerView

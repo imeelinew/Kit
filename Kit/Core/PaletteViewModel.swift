@@ -163,6 +163,7 @@ final class PaletteViewModel {
     }
     private(set) var results: [ClipboardItem] = []
     private(set) var resultsKindFilter: ClipboardKindFilter = .all
+    private(set) var resultsStackFilter: ClipboardStack.ID?
     private(set) var resultsGeneration: UInt64 = 0
     var hasMoreResults: Bool { nextCursor != nil }
     private(set) var selectedID: ClipboardItem.ID? {
@@ -892,6 +893,7 @@ final class PaletteViewModel {
         let priorID = selectedID
         let priorIndex = selectionIndex
         resultsKindFilter = kindFilter
+        resultsStackFilter = stackFilter
         results = newResults
         resultsGeneration &+= 1
         searchReady = true

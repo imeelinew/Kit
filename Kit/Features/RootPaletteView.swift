@@ -72,6 +72,7 @@ struct RootPaletteView: View {
                         results: clips,
                         resultsGeneration: vm.resultsGeneration,
                         resultsKindFilter: vm.resultsKindFilter,
+                        resultsStackFilter: vm.resultsStackFilter,
                         hasMoreResults: vm.hasMoreResults,
                         selectedID: vm.selectedID,
                         query: vm.query,
