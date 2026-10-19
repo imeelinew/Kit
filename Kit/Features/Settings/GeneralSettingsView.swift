@@ -2,10 +2,15 @@ import AppKit
 import SwiftUI
 
 struct GeneralSettingsView: View {
+    @ObservedObject private var updateService = AppCore.shared.updateService
     @ObservedObject private var settings = AppCore.shared.settings
 
     var body: some View {
         PreferencesForm {
+            Section("Startup") {
+                Toggle("Launch at Login", isOn: $settings.launchAtLogin)
+            }
+
             Section("Language") {
                 Picker("App Language", selection: $settings.language) {
                     ForEach(AppLanguage.allCases) { language in
@@ -15,14 +20,20 @@ struct GeneralSettingsView: View {
                 .pickerStyle(.menu)
             }
 
-            Section("Startup") {
-                Toggle("Launch at Login", isOn: $settings.launchAtLogin)
-            }
-
             Section("Input Method") {
                 Toggle(
                     "Switch to English When Opening",
                     isOn: $settings.switchToEnglishInputOnOpen
+                )
+            }
+
+            Section("Updates") {
+                Toggle(
+                    "Automatically Check for Updates",
+                    isOn: Binding(
+                        get: { updateService.automaticallyChecksForUpdates },
+                        set: { updateService.setAutomaticallyChecksForUpdates($0) }
+                    )
                 )
             }
         }
@@ -49,9 +60,7 @@ struct AppearanceSettingsView: View {
                     .fixedSize()
                     .accessibilityLabel("Theme")
                 }
-            }
 
-            Section("Visual Style") {
                 PreferencesRow(label: "Visual Style") {
                     Picker("Visual Style", selection: $settings.paletteVisualStyle) {
                         ForEach(PaletteVisualStyle.allCases) { style in
@@ -69,6 +78,10 @@ struct AppearanceSettingsView: View {
                 Toggle("Show Menu Bar Icon", isOn: $settings.showMenuBarIcon)
                 Toggle("Icon Animation", isOn: $settings.animateMenuBarIconOnCopy)
                     .disabled(!settings.showMenuBarIcon)
+            }
+
+            Section("Content Preview") {
+                Toggle("Render Markdown", isOn: $settings.renderMarkdown)
             }
 
             Section("Pinned Cards") {
@@ -122,7 +135,6 @@ struct SoundSettingsView: View {
 
 struct AboutSettingsView: View {
     @Environment(\.locale) private var locale
-    @ObservedObject private var updateService = AppCore.shared.updateService
     private static let repositoryURL = URL(string: "https://github.com/imeelinew/Kit")!
     private static let acknowledgments: [(name: String, url: URL)] = [
         (
@@ -183,16 +195,6 @@ struct AboutSettingsView: View {
 
                     Spacer(minLength: 0)
                 }
-            }
-
-            Section("Updates") {
-                Toggle(
-                    "Automatically Check for Updates",
-                    isOn: Binding(
-                        get: { updateService.automaticallyChecksForUpdates },
-                        set: { updateService.setAutomaticallyChecksForUpdates($0) }
-                    )
-                )
             }
 
             Section("Repository") {

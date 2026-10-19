@@ -13,8 +13,6 @@ struct ClipboardSettingsView: View {
     @State private var retentionConfirmation: RetentionConfirmation?
     @State private var confirmingRetentionChange = false
     @State private var retentionChangeFailed = false
-    @State private var confirmingClear = false
-    @State private var confirmingClearImageIndex = false
     @State private var confirmingRebuildImageIndex = false
     @State private var imageCountForRebuild = 0
 
@@ -47,19 +45,9 @@ struct ClipboardSettingsView: View {
 
             LLMClassificationSettingsSection()
 
-            Section("Image Text Recognition") {
-                Toggle("Search Text in Images", isOn: $settings.imageTextSearchEnabled)
-            }
-
-            Section("Content Preview") {
-                Toggle("Render Markdown", isOn: $settings.renderMarkdown)
-            }
-
             Section("Clipboard History") {
                 Toggle("Update history after action", isOn: $settings.updateHistoryAfterAction)
-            }
 
-            Section("History Retention") {
                 PreferencesRow(label: "Keep history for") {
                     Picker("Keep history for", selection: Binding(
                         get: { settings.clipboardRetention },
@@ -92,13 +80,21 @@ struct ClipboardSettingsView: View {
                         confirmingRetentionChange = true
                     }
                 }
+
+                PreferencesRow(label: "Clear history") {
+                    Button("Clear…", action: clearHistory)
+                        .foregroundStyle(.red)
+                        .controlSize(.regular)
+                }
             }
 
-            Section("Danger Zone") {
+            Section("Image Text Recognition") {
+                Toggle("Search Text in Images", isOn: $settings.imageTextSearchEnabled)
+
                 PreferencesRow(label: "Image Text Index") {
                     switch store.imageTextIndexState {
                     case .indexed:
-                        Button("Clear…") { confirmingClearImageIndex = true }
+                        Button("Clear…", action: clearImageTextIndex)
                             .foregroundStyle(.red)
                             .accessibilityLabel("Clear Index")
                     case .none:
@@ -110,11 +106,6 @@ struct ClipboardSettingsView: View {
                         Button("Indexing…") {}
                             .disabled(true)
                     }
-                }
-                PreferencesRow(label: "Clear history") {
-                    Button("Clear…") { confirmingClear = true }
-                        .foregroundStyle(.red)
-                        .controlSize(.regular)
                 }
             }
         }
@@ -130,30 +121,6 @@ struct ClipboardSettingsView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("History and the retention setting haven't changed, try again")
-        }
-        .confirmationDialog(
-            "Clear clipboard history?",
-            isPresented: $confirmingClear,
-            titleVisibility: .visible
-        ) {
-            Button("Clear History", role: .destructive) {
-                store.clearAll()
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This can't be undone")
-        }
-        .confirmationDialog(
-            "Clear the image text index?",
-            isPresented: $confirmingClearImageIndex,
-            titleVisibility: .visible
-        ) {
-            Button("Clear Index", role: .destructive) {
-                if !store.clearImageTextIndex() { NSSound.beep() }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Images stay in your history, but you won't be able to find them by their text")
         }
         .confirmationDialog(
             "Rebuild the image text index?",
@@ -172,6 +139,36 @@ struct ClipboardSettingsView: View {
                 locale: settings.language.locale,
                 imageCountForRebuild))
         }
+    }
+
+    private func clearHistory() {
+        guard confirmClear(
+            title: "Clear clipboard history?",
+            message: "This can't be undone",
+            buttonTitle: "Clear History"
+        ) else { return }
+        store.clearAll()
+    }
+
+    private func clearImageTextIndex() {
+        guard confirmClear(
+            title: "Clear the image text index?",
+            message: "Images stay in your history, but you won't be able to find them by their text",
+            buttonTitle: "Clear Index"
+        ) else { return }
+        if !store.clearImageTextIndex() { NSSound.beep() }
+    }
+
+    private func confirmClear(title: String, message: String, buttonTitle: String) -> Bool {
+        let locale = settings.language.locale
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = AppLocalization.string(title, locale: locale)
+        alert.informativeText = AppLocalization.string(message, locale: locale)
+        alert.addButton(withTitle: AppLocalization.string(buttonTitle, locale: locale))
+        alert.addButton(withTitle: AppLocalization.string("Cancel", locale: locale))
+        alert.buttons.first?.hasDestructiveAction = true
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     private func addExcludedApp() {

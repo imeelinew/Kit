@@ -1,5 +1,5 @@
 enum SettingsTab: Int, CaseIterable, Hashable, Identifiable {
-    case general, appearance, sound, clipboard, shortcuts, about
+    case general, appearance, clipboard, sound, shortcuts, about
 
     var id: Int { rawValue }
 

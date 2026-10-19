@@ -111,14 +111,17 @@ struct ShortcutsSettingsView: View {
             }
 
             Section("Palette") {
-                shortcutRow("Actions", shortcut: .actions)
-                shortcutRow("Copy to Clipboard", shortcut: .copyToClipboard)
-                shortcutRow("Pin to Screen", shortcut: .pinToScreen)
-                shortcutRow("Show in Finder", shortcut: .showInFinder)
                 shortcutRow("Show Next Type", shortcut: .showNextType)
                 shortcutRow("Show Previous Type", shortcut: .showPreviousType)
                 shortcutRow("Show Next Stack", shortcut: .showNextStack)
                 shortcutRow("Show Previous Stack", shortcut: .showPreviousStack)
+            }
+
+            Section("Actions") {
+                shortcutRow("Actions", shortcut: .actions)
+                shortcutRow("Copy to Clipboard", shortcut: .copyToClipboard)
+                shortcutRow("Pin to Screen", shortcut: .pinToScreen)
+                shortcutRow("Show in Finder", shortcut: .showInFinder)
             }
         }
     }
