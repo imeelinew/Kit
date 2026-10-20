@@ -38,8 +38,6 @@ enum Theme {
     enum Size {
         static let panelWidth: CGFloat = 750
         static let panelHeight: CGFloat = 475
-        /// Fraction of the active screen's visible height between the top of the visible area and the palette's top edge; the window grows downward from this edge (Spotlight-style upper placement).
-        static let paletteTopMarginFraction: CGFloat = 0.18
         static let headerHeight: CGFloat = 44
         /// Vertical breathing room above the search row — constant across compact/expanded so the bar never shifts when typing flips the state; also the compact bar's symmetric top/bottom slack.
         static let headerPadding: CGFloat = 10

@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CB1200000000000000000001 /* PaletteSnapGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1200000000000000000002 /* PaletteSnapGeometry.swift */; };
+		CB1200000000000000000003 /* PaletteWindowDrag.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1200000000000000000004 /* PaletteWindowDrag.swift */; };
 		CB1100000000000000000001 /* JetBrainsMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CB1100000000000000000002 /* JetBrainsMono-Regular.ttf */; };
 		CB1100000000000000000003 /* JetBrainsMono-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = CB1100000000000000000004 /* JetBrainsMono-LICENSE.txt */; };
 		CB1000000000000000000001 /* ClipboardRowThumbnailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1000000000000000000002 /* ClipboardRowThumbnailCache.swift */; };
@@ -85,6 +87,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		CB1200000000000000000002 /* PaletteSnapGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteSnapGeometry.swift; sourceTree = "<group>"; };
+		CB1200000000000000000004 /* PaletteWindowDrag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteWindowDrag.swift; sourceTree = "<group>"; };
 		CB1100000000000000000002 /* JetBrainsMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Regular.ttf"; sourceTree = "<group>"; };
 		CB1100000000000000000004 /* JetBrainsMono-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "JetBrainsMono-LICENSE.txt"; sourceTree = "<group>"; };
 		CB1000000000000000000002 /* ClipboardRowThumbnailCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardRowThumbnailCache.swift; sourceTree = "<group>"; };
@@ -217,6 +221,8 @@
 				BB41A0000000000000000001 /* MenuBarController.swift */,
 				F56E6A15E84064E62E40BD93 /* NotificationToken.swift */,
 				123A20E6FCB60D259A0CC145 /* PalettePanel.swift */,
+				CB1200000000000000000002 /* PaletteSnapGeometry.swift */,
+				CB1200000000000000000004 /* PaletteWindowDrag.swift */,
 				11927303CFC909AE918568B6 /* PaletteViewModel.swift */,
 				CA2000000000000000000002 /* Pinyin.swift */,
 				8738F70AF4AB873CA45EE200 /* PaletteWindowController.swift */,
@@ -477,6 +483,8 @@
 				5F74A5E6F4687BA1EDA15D8F /* NerdSymbolsFont.swift in Sources */,
 				9D0896797DC58B6F1EFD765F /* NotificationToken.swift in Sources */,
 				07650D1993A6D4C0D5B7ACD8 /* PalettePanel.swift in Sources */,
+				CB1200000000000000000001 /* PaletteSnapGeometry.swift in Sources */,
+				CB1200000000000000000003 /* PaletteWindowDrag.swift in Sources */,
 				F2793D8EFF543BEDD5DF57C1 /* PaletteViewModel.swift in Sources */,
 				CA2000000000000000000001 /* Pinyin.swift in Sources */,
 				765DF848224FB5BC506F2CDC /* PaletteWindowController.swift in Sources */,

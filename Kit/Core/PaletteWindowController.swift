@@ -217,15 +217,9 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
 
     private func positionedFrame() -> NSRect? {
         guard let screen = targetScreen() else { return nil }
-        let visible = screen.visibleFrame
-        let width = min(Theme.Size.panelWidth, max(1, visible.width - 32))
-        let height = min(Theme.Size.panelHeight, max(1, visible.height - 32))
-        let topEdge = visible.maxY - visible.height * Theme.Size.paletteTopMarginFraction
-        return NSRect(
-            x: visible.midX - width / 2,
-            y: topEdge - height,
-            width: width,
-            height: height)
+        return PaletteSnapGeometry(screenFrame: screen.frame, visibleFrame: screen.visibleFrame)
+            .defaultFrame(preferredSize: CGSize(
+                width: Theme.Size.panelWidth, height: Theme.Size.panelHeight))
     }
 
     private func targetScreen() -> NSScreen? {

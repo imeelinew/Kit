@@ -67,6 +67,7 @@ final class PalettePanel: NSPanel {
 
     private weak var searchField: NSTextField?
     private var pendingSearchFocusRequest: UUID?
+    private var windowDrag: PaletteWindowDrag?
 
     private static let relevantModifiers: NSEvent.ModifierFlags = [
         .command, .option, .control, .shift,
@@ -80,6 +81,24 @@ final class PalettePanel: NSPanel {
     }
 
     override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown, isWindowDragRegion(event.locationInWindow),
+            paletteViewModel?.menuOpen != true
+        {
+            windowDrag = PaletteWindowDrag(
+                window: self, pointer: convertPoint(toScreen: event.locationInWindow))
+            return
+        }
+        if let windowDrag {
+            if event.type == .leftMouseDragged {
+                windowDrag.update(pointer: convertPoint(toScreen: event.locationInWindow))
+                return
+            }
+            if event.type == .leftMouseUp {
+                windowDrag.end()
+                self.windowDrag = nil
+                return
+            }
+        }
         if event.type == .keyDown { beginKeyboardSelection() }
         if event.type == .keyDown, route(event) { return }
         super.sendEvent(event)
@@ -88,6 +107,19 @@ final class PalettePanel: NSPanel {
         if event.type == .mouseMoved {
             hoverSelectionHandler?.mouseMoved(with: event)
         }
+    }
+
+    override func orderOut(_ sender: Any?) {
+        windowDrag?.end()
+        windowDrag = nil
+        super.orderOut(sender)
+    }
+
+    private func isWindowDragRegion(_ point: CGPoint) -> Bool {
+        // Keep search editing and filter controls outside the window drag surface
+        let headerBottom = frame.height - Theme.Size.headerHeight - Theme.Size.headerPadding
+        return point.y >= frame.height - Theme.Size.headerPadding
+            || (point.y >= headerBottom && (point.x < 16 || point.x > frame.width - 16))
     }
 
     private func route(_ event: NSEvent) -> Bool {
