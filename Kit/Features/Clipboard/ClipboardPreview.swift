@@ -114,11 +114,11 @@ struct ClipboardPreview: View {
                             .id(item.kind)
                             .transition(.opacity)
                             .animation(reduceMotion ? nil : Theme.Motion.content, value: item.kind)
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 0) {
                             Text("Information")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.primary)
-                                .frame(height: 18)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                .frame(height: 28)
                                 .padding(.horizontal, 8)
                             ScrollView(.vertical) {
                                 information
@@ -308,7 +308,7 @@ private struct ClipboardInfoSection: View {
     }()
 
     var contentHeight: CGFloat {
-        12 + 18 + 10 + CGFloat(rows.count) * 28
+        12 + 28 + CGFloat(rows.count) * 28
     }
 
     var body: some View {
