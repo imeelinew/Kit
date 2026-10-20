@@ -294,11 +294,44 @@ private struct PopoverMenuRow: View {
         }
         .buttonStyle(.plain)
         .onHover { if $0 { onHover() } }
+        .modifier(MenuRowHoverHaptics())
         .overlay {
             if let onRightClick {
                 MenuRightClickHandler(action: onRightClick)
             }
         }
+    }
+}
+
+private struct MenuRowHoverHaptics: ViewModifier {
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var didTick = false
+    @State private var lastPointerLocation = NSEvent.mouseLocation
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                didTick = false
+                lastPointerLocation = NSEvent.mouseLocation
+            }
+            .onContinuousHover(coordinateSpace: .local) { phase in
+                let location = NSEvent.mouseLocation
+                switch phase {
+                case .active:
+                    // Opening a menu under a stationary pointer must not trigger feedback
+                    guard !didTick, isEnabled, location != lastPointerLocation,
+                        let event = NSApp.currentEvent,
+                        event.type == .mouseMoved || event.type == .mouseEntered,
+                        let panel = event.window as? PalettePanel,
+                        panel.allowsHoverSelection
+                    else { return }
+                    didTick = true
+                    PaletteHaptics.tick()
+                case .ended:
+                    didTick = false
+                    lastPointerLocation = location
+                }
+            }
     }
 }
 
