@@ -80,8 +80,13 @@ struct PopoverMenuItem {
             icon = .symbol("trash")
             isDestructive = true
             shortcut = "⌃⌫"
-        case .addToStack:
-            title = "Add to Stack"
+        case .addToStack(let item):
+            let currentStack = AppCore.shared.clipboardStore.stackID(for: item.id)
+            title = currentStack == nil ? "Add to Stack" : "Move to Another Stack"
+            icon = nil
+            isEnabled = AppCore.shared.clipboardStore.stacks.contains { $0.id != currentStack }
+        case .removeFromStack:
+            title = "Remove from Stack"
             icon = nil
         case .assignToStack(let item, let stack):
             title = "Add to Stack"

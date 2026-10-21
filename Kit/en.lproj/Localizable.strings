@@ -5,6 +5,8 @@
 "Add" = "Add";
 "Add Application…" = "Add Application…";
 "Add to Stack" = "Add to Stack";
+"Move to Another Stack" = "Move to Another Stack";
+"Remove from Stack" = "Remove from Stack";
 "All Types" = "All Types";
 "API Key" = "API Key";
 "App Language" = "App Language";

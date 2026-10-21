@@ -5,6 +5,8 @@
 "Add" = "添加";
 "Add Application…" = "添加应用…";
 "Add to Stack" = "添加到 Stack";
+"Move to Another Stack" = "切换到其他 Stack";
+"Remove from Stack" = "移出 Stack";
 "All Types" = "全部类型";
 "API Key" = "API 密钥";
 "App Language" = "应用语言";

@@ -74,6 +74,7 @@ enum PaletteMenuAction: Equatable {
     case delete(ClipboardItem)
     case addToStack(ClipboardItem)
     case assignToStack(ClipboardItem, ClipboardStack)
+    case removeFromStack(ClipboardItem)
     case setKindFilter(ClipboardKindFilter)
     /// `nil` is the clipboard, which shows every item.
     case setStackFilter(ClipboardStack?)
@@ -277,6 +278,9 @@ final class PaletteViewModel {
             if !core.clipboardStore.stacks.isEmpty {
                 actions.append(.addToStack(item))
             }
+            if core.clipboardStore.stackID(for: item.id) != nil {
+                actions.append(.removeFromStack(item))
+            }
             actions.append(.delete(item))
             return actions
         case .typeFilter:
@@ -288,7 +292,9 @@ final class PaletteViewModel {
             return actions
         case .addToStack(let id):
             guard let item = item(withID: id) else { return [] }
-            return core.clipboardStore.stacks.map { .assignToStack(item, $0) }
+            let currentStack = core.clipboardStore.stackID(for: id)
+            return core.clipboardStore.stacks.filter { $0.id != currentStack }
+                .map { .assignToStack(item, $0) }
         case .stackActions(let id):
             guard let stack = core.clipboardStore.stacks.first(where: { $0.id == id }) else {
                 return []
@@ -473,6 +479,8 @@ final class PaletteViewModel {
             return
         }
         if case .addToStack(let item) = actions[index] {
+            let currentStack = core.clipboardStore.stackID(for: item.id)
+            guard core.clipboardStore.stacks.contains(where: { $0.id != currentStack }) else { return }
             overlay = .addToStack(item.id)
             menuSelection = 0
             return
@@ -625,6 +633,8 @@ final class PaletteViewModel {
             menuSelection = 0
         case .assignToStack(let item, let stack):
             core.clipboardStore.assign(item.id, to: stack.id)
+        case .removeFromStack(let item):
+            if !core.clipboardStore.removeFromStack(item.id) { NSSound.beep() }
         case .delete(let item):
             let removedIndex = selectionIndex
             imageQuickLookOpen = false

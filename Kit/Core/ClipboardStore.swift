@@ -535,6 +535,14 @@ final class ClipboardStore: ObservableObject {
         revision &+= 1
     }
 
+    func removeFromStack(_ itemID: ClipboardItem.ID) -> Bool {
+        guard stackMembership[itemID] != nil else { return true }
+        guard deleteMembership(itemID) else { return false }
+        stackMembership.removeValue(forKey: itemID)
+        revision &+= 1
+        return true
+    }
+
     func createStack(name: String) -> ClipboardStack? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let stmt = insertStackStmt else { return nil }
