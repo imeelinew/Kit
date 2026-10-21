@@ -92,9 +92,6 @@ struct ClipboardPreview: View {
 
     @State private var loadedPayload: ClipboardPreviewPayload?
     @State private var imageHighlights: ImageSearchHighlightPayload?
-    @State private var informationScrollbar = ThinScrollbarMetrics()
-    @State private var informationScrollActivity = UUID()
-    @State private var informationScrollPosition = ScrollPosition(y: 0)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -120,31 +117,8 @@ struct ClipboardPreview: View {
                                 .foregroundStyle(.secondary)
                                 .frame(height: 28)
                                 .padding(.horizontal, 8)
-                            ScrollView(.vertical) {
+                            PreviewInformationScroll(contentHeight: information.contentHeight - 40) {
                                 information
-                            }
-                            .scrollIndicators(.hidden)
-                            .scrollPosition($informationScrollPosition)
-                            .contentMargins(.trailing, 16, for: .scrollContent)
-                            .onScrollGeometryChange(for: ThinScrollbarMetrics.self) { geometry in
-                                ThinScrollbarMetrics(
-                                    offset: geometry.contentOffset.y,
-                                    insetTop: geometry.contentInsets.top,
-                                    content: geometry.contentSize.height,
-                                    viewport: geometry.containerSize.height)
-                            } action: { old, new in
-                                informationScrollbar = new
-                                if old.offset != new.offset {
-                                    informationScrollActivity = UUID()
-                                }
-                            }
-                            .thinScrollbar(
-                                metrics: informationScrollbar,
-                                scrollToken: informationScrollActivity
-                            ) { fraction in
-                                informationScrollPosition.scrollTo(
-                                    y: fraction * max(0,
-                                        informationScrollbar.content - informationScrollbar.viewport))
                             }
                         }
                         .padding(.top, 12)
@@ -244,6 +218,55 @@ struct ClipboardPreview: View {
             }
         }
     }
+}
+
+/// Information rows keep their existing renderer inside the shared AppKit scroll view
+private struct PreviewInformationScroll<Content: View>: NSViewRepresentable {
+    let contentHeight: CGFloat
+    @ViewBuilder var content: Content
+
+    func makeNSView(context: Context) -> PreviewInformationScrollView {
+        PreviewInformationScrollView()
+    }
+
+    func updateNSView(_ scrollView: PreviewInformationScrollView, context: Context) {
+        scrollView.update(content: AnyView(content.environment(\.locale, context.environment.locale)),
+                          height: contentHeight)
+    }
+}
+
+private final class PreviewInformationScrollView: KitScrollView {
+    private let hosting = NSHostingController(rootView: AnyView(EmptyView()))
+    private let document = PreviewInformationDocument()
+    private var rowsHeight: CGFloat = 0
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        hosting.sizingOptions = []
+        hosting.safeAreaRegions = []
+        document.addSubview(hosting.view)
+        installDocumentView(document)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    func update(content: AnyView, height: CGFloat) {
+        hosting.rootView = content
+        rowsHeight = height
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        document.frame = NSRect(x: 0, y: 0, width: contentSize.width, height: rowsHeight)
+        hosting.view.frame = NSRect(x: 0, y: 0, width: max(0, contentSize.width - 16), height: rowsHeight)
+        updateScrollAppearance()
+    }
+}
+
+private final class PreviewInformationDocument: NSView {
+    override var isFlipped: Bool { true }
 }
 
 struct ClipboardPreviewLayout: Layout {

@@ -19,9 +19,6 @@ struct ClipboardList: View {
     let onActivate: (ClipboardItem) -> Void
     let onActions: (ClipboardItem) -> Void
     let onLoadMore: () -> Void
-    @State private var geometry = ClipboardTableGeometry()
-    @State private var scrollActivity = UUID()
-    @State private var scrollbarTarget = NativeScrollbarTarget()
 
     var body: some View {
         ClipboardTableRepresentable(
@@ -39,21 +36,15 @@ struct ClipboardList: View {
             onSelect: onSelect,
             onActivate: onActivate,
             onActions: onActions,
-            onLoadMore: onLoadMore,
-            onGeometryChange: { geometry = $0 },
-            onScrollActivity: { scrollActivity = UUID() },
-            scrollbarTarget: scrollbarTarget
+            onLoadMore: onLoadMore
         )
-        .edgeDissolve(state: geometry.dissolve)
-        .thinScrollbar(metrics: geometry.scrollbar, scrollToken: scrollActivity) {
-            scrollbarTarget.scroll(toFraction: $0)
-        }
     }
 }
 
 private struct ClipboardTableGeometry: Equatable {
-    var scrollbar = ThinScrollbarMetrics()
-    var dissolve = EdgeDissolveScrollState()
+    var offset: CGFloat = 0
+    var content: CGFloat = 0
+    var viewport: CGFloat = 0
 }
 
 private enum ClipboardTableRow: Equatable {
@@ -92,15 +83,11 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
     let onActivate: (ClipboardItem) -> Void
     let onActions: (ClipboardItem) -> Void
     let onLoadMore: () -> Void
-    let onGeometryChange: (ClipboardTableGeometry) -> Void
-    let onScrollActivity: () -> Void
-    let scrollbarTarget: NativeScrollbarTarget
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> ClipboardTableContainerView {
         let container = context.coordinator.makeContainerView()
-        scrollbarTarget.scrollView = container.scrollView
         return container
     }
 
@@ -109,7 +96,6 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
     }
 
     func updateNSView(_ containerView: ClipboardTableContainerView, context: Context) {
-        scrollbarTarget.scrollView = containerView.scrollView
         context.coordinator.update(
             results: results,
             resultsGeneration: resultsGeneration,
@@ -126,9 +112,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             onSelect: onSelect,
             onActivate: onActivate,
             onActions: onActions,
-            onLoadMore: onLoadMore,
-            onGeometryChange: onGeometryChange,
-            onScrollActivity: onScrollActivity
+            onLoadMore: onLoadMore
         )
     }
 
@@ -146,8 +130,6 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private var onActivate: ((ClipboardItem) -> Void)?
         private var onActions: ((ClipboardItem) -> Void)?
         private var onLoadMore: (() -> Void)?
-        private var onGeometryChange: ((ClipboardTableGeometry) -> Void)?
-        private var onScrollActivity: (() -> Void)?
         private var boundsToken: NotificationToken?
         private weak var hostedContainerView: ClipboardTableContainerView?
         private var lastScroll: ScrollIntent?
@@ -206,6 +188,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             tableView.addTableColumn(column)
 
             let scrollView = ClipboardTableScrollView()
+            scrollView.edgeDissolve = .palette
             scrollView.drawsBackground = false
             scrollView.borderType = .noBorder
             scrollView.hasVerticalScroller = false
@@ -221,7 +204,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 right: 0
             )
             scrollView.contentView.drawsBackground = false
-            scrollView.documentView = tableView
+            scrollView.installDocumentView(tableView)
             scrollView.onGeometryChange = { [weak self] scrolling in
                 self?.reportGeometry(scrolling: scrolling)
             }
@@ -251,9 +234,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             onSelect: @escaping (ClipboardItem) -> Void,
             onActivate: @escaping (ClipboardItem) -> Void,
             onActions: @escaping (ClipboardItem) -> Void,
-            onLoadMore: @escaping () -> Void,
-            onGeometryChange: @escaping (ClipboardTableGeometry) -> Void,
-            onScrollActivity: @escaping () -> Void
+            onLoadMore: @escaping () -> Void
         ) {
             guard let tableView = tableView else { return }
             if !hoverEnabled {
@@ -264,8 +245,6 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             self.onActivate = onActivate
             self.onActions = onActions
             self.onLoadMore = onLoadMore
-            self.onGeometryChange = onGeometryChange
-            self.onScrollActivity = onScrollActivity
 
             let resultsChanged = lastResultsGeneration != resultsGeneration
             let grouping = dateGrouping ?? .current
@@ -704,21 +683,9 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 maxOffset,
                 max(0, scrollView.contentView.bounds.minY + scrollView.contentInsets.top)
             )
-            let geometry = ClipboardTableGeometry(
-                scrollbar: ThinScrollbarMetrics(
-                    offset: offset, insetTop: 0, content: content, viewport: viewport),
-                dissolve: EdgeDissolveScrollState(
-                    top: offset, bottom: max(0, maxOffset - offset),
-                    canScroll: content > viewport + 1)
-            )
+            let geometry = ClipboardTableGeometry(offset: offset, content: content, viewport: viewport)
             guard geometry != lastGeometry || scrolling else { return }
             lastGeometry = geometry
-            let geometryCallback = onGeometryChange
-            let activityCallback = scrolling ? onScrollActivity : nil
-            DispatchQueue.main.async {
-                geometryCallback?(geometry)
-                activityCallback?()
-            }
             if !rows.isEmpty, maxOffset - offset < viewport {
                 onLoadMore?()
             }
@@ -833,7 +800,7 @@ private final class ClipboardTableContainerView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 }
 
-private final class ClipboardTableScrollView: NSScrollView {
+private final class ClipboardTableScrollView: KitScrollView {
     var onGeometryChange: ((Bool) -> Void)?
 
     override func layout() {

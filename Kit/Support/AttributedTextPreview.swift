@@ -28,9 +28,6 @@ struct PreviewContentID: Hashable {
 /// entirely AppKit so large previews do not need a SwiftUI `ScrollView` around `NSTextView`.
 struct AttributedTextPreview: View {
     private let preview: AttributedTextPreviewRepresentable
-    @State private var scrollbar = ThinScrollbarMetrics()
-    @State private var scrollActivity = UUID()
-    @State private var scrollbarTarget = NativeScrollbarTarget()
 
     init(attributed: AttributedString, contentID: PreviewContentID, fontSize: CGFloat? = nil) {
         preview = AttributedTextPreviewRepresentable(
@@ -42,23 +39,10 @@ struct AttributedTextPreview: View {
             nsAttributed: nsAttributed, contentID: contentID, fontSize: fontSize)
     }
 
-    var body: some View {
-        var preview = self.preview
-        preview.scrollbarTarget = scrollbarTarget
-        preview.onScrollChange = { metrics, moved in
-            scrollbar = metrics
-            if moved { scrollActivity = UUID() }
-        }
-        return preview.thinScrollbar(metrics: scrollbar, scrollToken: scrollActivity) {
-            scrollbarTarget.scroll(toFraction: $0)
-        }
-    }
+    var body: some View { preview }
 }
 
 private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
-    var onScrollChange: ((ThinScrollbarMetrics, Bool) -> Void)?
-    var scrollbarTarget: NativeScrollbarTarget?
-
     private enum Storage {
         case swiftUI(AttributedString)
         case appKit(NSAttributedString)
@@ -105,7 +89,6 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
 
     func makeNSView(context: Context) -> PreviewTextScrollView {
         let scrollView = PreviewTextScrollView()
-        scrollbarTarget?.scrollView = scrollView
         return scrollView
     }
 
@@ -121,12 +104,9 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
         // SwiftUI can retain detached AppKit views for reuse; release their heavy text immediately.
         scrollView.textView.textStorage?.setAttributedString(NSAttributedString(string: ""))
         coordinator.lastInput = nil
-        scrollView.onScrollChange = nil
     }
 
     func updateNSView(_ scrollView: PreviewTextScrollView, context: Context) {
-        scrollbarTarget?.scrollView = scrollView
-        scrollView.onScrollChange = onScrollChange
         let environment = context.environment
         let appKit: Bool
         switch storage {
@@ -242,17 +222,13 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
     }
 }
 
-final class PreviewTextScrollView: NSScrollView {
+final class PreviewTextScrollView: KitScrollView {
     let textView = PreviewTextView()
-    var onScrollChange: ((ThinScrollbarMetrics, Bool) -> Void)?
-    private var lastScrollbar = ThinScrollbarMetrics()
-    private var styleObserver: NotificationToken?
-    private var boundsObserver: NotificationToken?
-    private let bottomMask = CAGradientLayer()
     private static let fadeHeight: CGFloat = 16
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
+        edgeDissolve = .bottom(Self.fadeHeight)
 
         drawsBackground = false
         borderType = .noBorder
@@ -279,30 +255,11 @@ final class PreviewTextScrollView: NSScrollView {
         textView.textContainerInset = .zero
         textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        documentView = textView
-        let token = NotificationCenter.default.addObserver(
-            forName: NSView.boundsDidChangeNotification, object: contentView, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.updateBottomMask()
-                self?.reportScrollGeometry()
-            }
-        }
-        boundsObserver = NotificationToken(token, center: .default)
+        installDocumentView(textView)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        guard window != nil else {
-            styleObserver = nil
-            return
-        }
-        observeScrollerStyleChanges()
-        applyOverlayScrollerStyle()
-    }
 
     override func layout() {
         super.layout()
@@ -345,62 +302,9 @@ final class PreviewTextScrollView: NSScrollView {
         if textView.frame.size != size {
             textView.setFrameSize(size)
         }
-        updateBottomMask()
-        reportScrollGeometry()
+        updateScrollAppearance()
     }
 
-    private func updateBottomMask() {
-        let bounds = contentView.bounds
-        let textHeight = textView.intrinsicContentSize.height
-        guard bounds.height > 0, textHeight > bounds.height else {
-            contentView.layer?.mask = nil
-            return
-        }
-        let fade = min(Self.fadeHeight, bounds.height)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        bottomMask.frame = bounds
-        bottomMask.startPoint = CGPoint(x: 0.5, y: contentView.isFlipped ? 0 : 1)
-        bottomMask.endPoint = CGPoint(x: 0.5, y: contentView.isFlipped ? 1 : 0)
-        bottomMask.colors = [NSColor.black.cgColor, NSColor.black.cgColor, NSColor.clear.cgColor]
-        bottomMask.locations = [0, NSNumber(value: 1 - fade / bounds.height), 1]
-        contentView.layer?.mask = bottomMask
-        CATransaction.commit()
-    }
-
-    private func reportScrollGeometry() {
-        let metrics = ThinScrollbarMetrics(
-            offset: contentView.bounds.origin.y,
-            content: textView.frame.height, viewport: contentView.bounds.height)
-        guard metrics != lastScrollbar else { return }
-        let moved = metrics.offset != lastScrollbar.offset
-        lastScrollbar = metrics
-        // TextKit can report during representable updates, publish after the current layout pass
-        DispatchQueue.main.async { [weak self] in
-            self?.onScrollChange?(metrics, moved)
-        }
-    }
-
-    private func observeScrollerStyleChanges() {
-        guard styleObserver == nil else { return }
-        let token = NotificationCenter.default.addObserver(
-            forName: NSScroller.preferredScrollerStyleDidChangeNotification,
-            object: nil, queue: .main
-        ) { [weak self] _ in
-            DispatchQueue.main.async { self?.applyOverlayScrollerStyle() }
-        }
-        styleObserver = NotificationToken(token, center: .default)
-    }
-
-    private func applyOverlayScrollerStyle() {
-        guard scrollerStyle != .overlay || !autohidesScrollers || hasVerticalScroller else {
-            return
-        }
-        scrollerStyle = .overlay
-        autohidesScrollers = true
-        hasVerticalScroller = false
-        tile()
-    }
 }
 
 final class PreviewTextView: NSTextView {
