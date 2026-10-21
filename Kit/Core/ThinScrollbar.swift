@@ -93,7 +93,7 @@ class KitScrollView: NSScrollView {
         let moved = previousOffset.map { $0 != offset } ?? false
         previousOffset = offset
         indicator.update(content: content, viewport: viewport, offset: offset, moved: moved)
-        edgeDissolve.apply(to: contentView, mask: edgeMask, content: content, offset: offset)
+        edgeDissolve.apply(to: contentView, mask: edgeMask, content: content)
     }
 
     func scroll(toFraction fraction: CGFloat) {

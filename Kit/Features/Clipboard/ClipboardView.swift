@@ -188,7 +188,6 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             tableView.addTableColumn(column)
 
             let scrollView = ClipboardTableScrollView()
-            scrollView.edgeDissolve = .palette
             scrollView.drawsBackground = false
             scrollView.borderType = .noBorder
             scrollView.hasVerticalScroller = false
