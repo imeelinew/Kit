@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import SwiftUI
 
 /// A complete preview is published together, so image decoding and metadata cannot resize
@@ -95,44 +96,20 @@ struct ClipboardPreview: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ZStack {
-            if let item {
-                let payload = (vm.preparedPreview?.itemID == item.id ? vm.preparedPreview : nil)
-                    ?? ClipboardPreviewPayload.cached(for: item)
-                    ?? (loadedPayload?.itemID == item.id ? loadedPayload : nil)
-                GeometryReader { _ in
-                    let information = ClipboardInfoSection(
-                        item: item, details: payload?.details ?? .init(), store: store,
-                        settings: settings)
-                    ClipboardPreviewLayout(informationHeight: information.contentHeight) {
-                        content(for: item, payload: payload)
-                            .padding(.vertical, item.kind == .image ? 0 : 12)
-                            .frame(maxWidth: .infinity, alignment: .top)
-                            .id(item.kind)
-                            .transition(.opacity)
-                            .animation(reduceMotion ? nil : Theme.Motion.content, value: item.kind)
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text("Information")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                                .frame(height: 28)
-                                .padding(.horizontal, 8)
-                            PreviewInformationScroll(contentHeight: information.contentHeight - 40) {
-                                information
-                            }
-                        }
-                        .padding(.top, 12)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .id(item.id)
-                .transition(.opacity)
-            } else {
-                Color.clear
-            }
+        let payload = item.flatMap { item in
+            (vm.preparedPreview?.itemID == item.id ? vm.preparedPreview : nil)
+                ?? ClipboardPreviewPayload.cached(for: item)
+                ?? (loadedPayload?.itemID == item.id ? loadedPayload : nil)
         }
+        let information = item.map {
+            ClipboardInfoSection(item: $0, details: payload?.details ?? .init(), store: store, settings: settings)
+        }
+        ClipboardPreviewContainer(
+            itemID: item?.id, kind: item?.kind, informationHeight: information?.contentHeight ?? 0,
+            reduceMotion: reduceMotion,
+            content: Group { if let item { content(for: item, payload: payload) } },
+            information: Group { if let information { information } })
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(reduceMotion ? nil : Theme.Motion.menu, value: item?.id)
         .task(id: item?.id) {
             guard let item else {
                 loadedPayload = nil
@@ -220,18 +197,181 @@ struct ClipboardPreview: View {
     }
 }
 
-/// Information rows keep their existing renderer inside the shared AppKit scroll view
-private struct PreviewInformationScroll<Content: View>: NSViewRepresentable {
-    let contentHeight: CGFloat
-    @ViewBuilder var content: Content
+/// AppKit owns pane geometry and transitions while the existing renderers stay hosted
+private struct ClipboardPreviewContainer<Content: View, Information: View>: NSViewRepresentable {
+    let itemID: ClipboardItem.ID?
+    let kind: ClipboardItem.Kind?
+    let informationHeight: CGFloat
+    let reduceMotion: Bool
+    let content: Content
+    let information: Information
 
-    func makeNSView(context: Context) -> PreviewInformationScrollView {
-        PreviewInformationScrollView()
+    func makeNSView(context: Context) -> ClipboardPreviewContainerView { ClipboardPreviewContainerView() }
+
+    func updateNSView(_ view: ClipboardPreviewContainerView, context: Context) {
+        let environment = context.environment
+        view.update(
+            itemID: itemID, kind: kind, informationHeight: informationHeight,
+            reduceMotion: reduceMotion, locale: environment.locale,
+            content: AnyView(content.environment(\.locale, environment.locale)),
+            information: AnyView(information.environment(\.locale, environment.locale)))
     }
 
-    func updateNSView(_ scrollView: PreviewInformationScrollView, context: Context) {
-        scrollView.update(content: AnyView(content.environment(\.locale, context.environment.locale)),
-                          height: contentHeight)
+    static func dismantleNSView(_ view: ClipboardPreviewContainerView, coordinator: ()) {
+        view.clear()
+    }
+}
+
+private final class ClipboardPreviewContainerView: NSView {
+    private var current: ClipboardPreviewPane?
+    private var retiring: [ClipboardPreviewPane] = []
+    override var isFlipped: Bool { true }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    func update(
+        itemID: ClipboardItem.ID?, kind: ClipboardItem.Kind?, informationHeight: CGFloat,
+        reduceMotion: Bool, locale: Locale, content: AnyView, information: AnyView
+    ) {
+        let changed = current?.itemID != itemID
+        if changed, let old = current {
+            current = nil
+            retiring.append(old)
+        }
+        if let itemID, let kind {
+            if current == nil {
+                let pane = ClipboardPreviewPane(itemID: itemID, kind: kind)
+                pane.frame = bounds
+                addSubview(pane)
+                current = pane
+            }
+            current?.update(kind: kind, informationHeight: informationHeight,
+                            reduceMotion: reduceMotion, locale: locale,
+                            content: content, information: information)
+        }
+        needsLayout = true
+        layoutSubtreeIfNeeded()
+        guard changed else { return }
+        let outgoing = retiring
+        let incoming = current
+        incoming?.alphaValue = 0
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = reduceMotion ? 0 : Theme.Motion.menuDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            incoming?.animator().alphaValue = 1
+            outgoing.forEach { $0.animator().alphaValue = 0 }
+        } completionHandler: { [weak self] in
+            MainActor.assumeIsolated {
+                outgoing.forEach { $0.clear(); $0.removeFromSuperview() }
+                self?.retiring.removeAll { pane in outgoing.contains { $0 === pane } }
+            }
+        }
+    }
+
+    override func layout() {
+        super.layout()
+        current?.frame = bounds
+    }
+
+    func clear() {
+        ([current].compactMap { $0 } + retiring).forEach {
+            $0.clear()
+            $0.removeFromSuperview()
+        }
+        current = nil
+        retiring.removeAll()
+    }
+}
+
+private final class ClipboardPreviewPane: NSView {
+    let itemID: ClipboardItem.ID
+    private var kind: ClipboardItem.Kind
+    private var content = NSHostingController(rootView: AnyView(EmptyView()))
+    private let information = PreviewInformationScrollView()
+    private let title = NSTextField(labelWithString: "")
+    private var informationHeight: CGFloat = 0
+    override var isFlipped: Bool { true }
+
+    init(itemID: ClipboardItem.ID, kind: ClipboardItem.Kind) {
+        self.itemID = itemID
+        self.kind = kind
+        super.init(frame: .zero)
+        wantsLayer = true
+        prepare(content)
+        addSubview(content.view)
+        title.font = .systemFont(ofSize: 11)
+        title.textColor = .secondaryLabelColor
+        addSubview(title)
+        addSubview(information)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func prepare(_ hosting: NSHostingController<AnyView>) {
+        hosting.sizingOptions = []
+        hosting.safeAreaRegions = []
+    }
+
+    func update(kind: ClipboardItem.Kind, informationHeight: CGFloat, reduceMotion: Bool,
+                locale: Locale, content root: AnyView, information: AnyView) {
+        let changedKind = self.kind != kind
+        if changedKind {
+            let old = content
+            let replacement = NSHostingController(rootView: root)
+            prepare(replacement)
+            replacement.view.frame = old.view.frame
+            addSubview(replacement.view, positioned: .above, relativeTo: old.view)
+            content = replacement
+            replacement.view.alphaValue = 0
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = reduceMotion ? 0 : Theme.Motion.contentDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                replacement.view.animator().alphaValue = 1
+                old.view.animator().alphaValue = 0
+            } completionHandler: {
+                MainActor.assumeIsolated {
+                    old.rootView = AnyView(EmptyView())
+                    old.view.removeFromSuperview()
+                }
+            }
+        } else {
+            content.rootView = root
+        }
+        self.kind = kind
+        self.informationHeight = informationHeight
+        title.stringValue = AppLocalization.string("Information", locale: locale)
+        self.information.update(content: information, height: max(0, informationHeight - 40))
+        needsLayout = true
+    }
+
+    override func layout() {
+        super.layout()
+        let width = max(0, bounds.width - 40)
+        let padding: CGFloat = kind == .image ? 0 : 12
+        // Preserve the original layout proposal and information cap exactly
+        let measured = content.sizeThatFits(in: CGSize(
+            width: width, height: max(0, bounds.height * 0.6 - padding * 2))).height + padding * 2
+        let infoHeight = min(informationHeight, max(bounds.height * 0.4, bounds.height - measured))
+        let previewHeight = max(0, bounds.height - infoHeight)
+        let available = max(0, previewHeight - padding * 2)
+        let fitted = content.sizeThatFits(in: CGSize(width: width, height: available))
+        content.view.frame = NSRect(x: 20, y: padding, width: width, height: min(available, fitted.height))
+        title.frame = NSRect(x: 28, y: previewHeight + 12 + (28 - title.intrinsicContentSize.height) / 2,
+                             width: max(0, width - 16), height: title.intrinsicContentSize.height)
+        information.frame = NSRect(x: 20, y: previewHeight + 40,
+                                    width: width, height: max(0, infoHeight - 40))
+    }
+
+    func clear() {
+        content.rootView = AnyView(EmptyView())
+        information.update(content: AnyView(EmptyView()), height: 0)
     }
 }
 
@@ -267,29 +407,6 @@ private final class PreviewInformationScrollView: KitScrollView {
 
 private final class PreviewInformationDocument: NSView {
     override var isFlipped: Bool { true }
-}
-
-struct ClipboardPreviewLayout: Layout {
-    var informationHeight: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        proposal.replacingUnspecifiedDimensions()
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        guard subviews.count == 2 else { return }
-        let contentHeight = subviews[0].sizeThatFits(
-            ProposedViewSize(width: bounds.width, height: bounds.height * 0.6)).height
-        let informationHeight = min(
-            informationHeight, max(bounds.height * 0.4, bounds.height - contentHeight))
-        let previewHeight = bounds.height - informationHeight
-        subviews[0].place(
-            at: bounds.origin, anchor: .topLeading,
-            proposal: ProposedViewSize(width: bounds.width, height: previewHeight))
-        subviews[1].place(
-            at: CGPoint(x: bounds.minX, y: bounds.minY + previewHeight), anchor: .topLeading,
-            proposal: ProposedViewSize(width: bounds.width, height: informationHeight))
-    }
 }
 
 /// Selection, footer and metadata changes must not reformat unchanged preview text.
