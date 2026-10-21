@@ -146,6 +146,9 @@ struct PaletteMenuOverlay: NSViewRepresentable {
 final class PaletteMenuOverlayView: NSView {
     private var menuView: NativePopoverMenu?
     private var placement: Int?
+    private var presentedOverlay: PaletteOverlay = .none
+    private var presentationPending = false
+    private var presentationScheduled = false
     private var stackControlWidth: CGFloat = 0
     private var onClose: (() -> Void)?
     private var open = false
@@ -183,17 +186,26 @@ final class PaletteMenuOverlayView: NSView {
         case .typeFilter: nextPlacement = 2
         case .stackFilter, .stackActions: nextPlacement = 3
         }
-        let changed = nextPlacement != placement
+        let changed = overlay != presentedOverlay
         if changed, let old = menuView {
             menuView = nil
-            animate(old, appearing: false, placement: placement ?? 0)
+            if presentationPending {
+                old.removeFromSuperview()
+            } else {
+                PaletteMenuTransition.animate(
+                    old, appearing: false, placement: placement ?? 0, reduceMotion: reduceMotion)
+            }
+            presentationPending = false
         }
+        presentedOverlay = overlay
         placement = nextPlacement
-        guard let nextPlacement else { return }
+        guard nextPlacement != nil else { return }
         if menuView == nil {
             let menuView = NativePopoverMenu()
+            menuView.alphaValue = reduceMotion ? 1 : 0
             addSubview(menuView)
             self.menuView = menuView
+            presentationPending = true
         }
         menuView?.update(
             items: items, selection: selection, namingRow: namingRow, namingEdit: namingEdit,
@@ -201,7 +213,12 @@ final class PaletteMenuOverlayView: NSView {
             onRightClick: nextPlacement == 3 ? onRightClick : nil, onNameChange: onNameChange)
         needsLayout = true
         layoutSubtreeIfNeeded()
-        if changed, let menuView { animate(menuView, appearing: true, placement: nextPlacement) }
+        schedulePresentation()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        schedulePresentation()
     }
 
     override func layout() {
@@ -215,6 +232,25 @@ final class PaletteMenuOverlayView: NSView {
             x: placement == 0 ? 8 : bounds.width - Theme.Size.menuWidth - (placement == 1 ? 8 : trailing),
             y: placement < 2 ? bounds.height - height - 8 : top,
             width: Theme.Size.menuWidth, height: height)
+        schedulePresentation()
+    }
+
+    private func schedulePresentation() {
+        guard presentationPending, !presentationScheduled, window != nil else { return }
+        presentationScheduled = true
+        // Representable updates can precede window attachment and the first layer layout
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            defer { presentationScheduled = false }
+            guard presentationPending, let menuView, let placement, menuView.window != nil else { return }
+            needsLayout = true
+            layoutSubtreeIfNeeded()
+            menuView.layoutSubtreeIfNeeded()
+            guard !menuView.bounds.isEmpty else { return }
+            presentationPending = false
+            PaletteMenuTransition.animate(
+                menuView, appearing: true, placement: placement, reduceMotion: reduceMotion)
+        }
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -230,41 +266,51 @@ final class PaletteMenuOverlayView: NSView {
     override func mouseDown(with event: NSEvent) { onClose?() }
     override func rightMouseDown(with event: NSEvent) { onClose?() }
 
-    private func animate(_ menuView: NativePopoverMenu, appearing: Bool, placement: Int) {
-        guard window != nil, !reduceMotion else {
-            if !appearing { menuView.removeFromSuperview() }
+}
+
+/// Every overlay menu uses the same reversible opacity and scale transition
+@MainActor
+private enum PaletteMenuTransition {
+    static func animate(_ view: NSView, appearing: Bool, placement: Int, reduceMotion: Bool) {
+        guard view.window != nil, !reduceMotion, let layer = view.layer else {
+            view.alphaValue = appearing ? 1 : 0
+            if !appearing { view.removeFromSuperview() }
             return
         }
-        let duration = Theme.Motion.menuDuration
-        let scale: CGFloat = reduceMotion ? 1 : 0.96
-        if let layer = menuView.layer {
-            let anchor = CGPoint(x: placement == 0 ? 0 : menuView.bounds.width,
-                                 y: placement < 2 ? menuView.bounds.height : 0)
-            let pivot = CGPoint(x: anchor.x - layer.anchorPoint.x * menuView.bounds.width,
-                                y: anchor.y - layer.anchorPoint.y * menuView.bounds.height)
-            var small = CATransform3DMakeTranslation(pivot.x * (1 - scale), pivot.y * (1 - scale), 0)
-            small = CATransform3DScale(small, scale, scale, 1)
-            let animation = CABasicAnimation(keyPath: "transform")
-            animation.fromValue = NSValue(caTransform3D: appearing ? small : CATransform3DIdentity)
-            animation.toValue = NSValue(caTransform3D: appearing ? CATransform3DIdentity : small)
-            animation.duration = duration
-            animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            if !appearing {
-                animation.fillMode = .forwards
-                animation.isRemovedOnCompletion = false
+        let scale = Theme.Motion.menuScale
+        let anchor = CGPoint(x: placement == 0 ? 0 : view.bounds.width,
+                             y: placement < 2 ? view.bounds.height : 0)
+        let pivot = CGPoint(x: anchor.x - layer.anchorPoint.x * view.bounds.width,
+                            y: anchor.y - layer.anchorPoint.y * view.bounds.height)
+        var small = CATransform3DMakeTranslation(pivot.x * (1 - scale), pivot.y * (1 - scale), 0)
+        small = CATransform3DScale(small, scale, scale, 1)
+        let presentation = layer.presentation()
+        let opacity = CABasicAnimation(keyPath: "opacity")
+        opacity.fromValue = appearing ? 0 : (presentation?.opacity ?? 1)
+        opacity.toValue = appearing ? 1 : 0
+        let transform = CABasicAnimation(keyPath: "transform")
+        transform.fromValue = NSValue(caTransform3D:
+            appearing ? small : (presentation?.transform ?? CATransform3DIdentity))
+        transform.toValue = NSValue(caTransform3D: appearing ? CATransform3DIdentity : small)
+        let transition = CAAnimationGroup()
+        opacity.duration = Theme.Motion.menuDuration
+        transform.duration = Theme.Motion.menuDuration
+        transition.animations = [opacity, transform]
+        transition.duration = Theme.Motion.menuDuration
+        transition.timingFunction = CAMediaTimingFunction(name: .easeOut)
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        CATransaction.setCompletionBlock {
+            DispatchQueue.main.async {
+                if !appearing { view.removeFromSuperview() }
             }
-            layer.add(animation, forKey: "menuViewTransition")
         }
-        menuView.alphaValue = appearing ? 0 : 1
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = duration
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            menuView.animator().alphaValue = appearing ? 1 : 0
-        } completionHandler: {
-            MainActor.assumeIsolated {
-                if !appearing { menuView.removeFromSuperview() }
-            }
-        }
+        // Final model values prevent a flash when the explicit animation is removed
+        view.alphaValue = appearing ? 1 : 0
+        layer.transform = appearing ? CATransform3DIdentity : small
+        layer.add(transition, forKey: "paletteMenuTransition")
+        CATransaction.commit()
     }
 }
 
@@ -286,6 +332,7 @@ private final class NativePopoverMenu: NSGlassEffectView {
         super.init(frame: frame)
         style = .regular
         cornerRadius = Theme.Radius.menuPanel
+        wantsLayer = true
         contentView = rowsView
         setAccessibilityElement(true)
         setAccessibilityRole(.menu)
