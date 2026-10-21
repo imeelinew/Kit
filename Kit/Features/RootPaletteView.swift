@@ -19,10 +19,6 @@ struct RootPaletteView: View {
     private var showAppMenu: Bool { vm.overlay == .appMenu }
     private var showTypeFilter: Bool { vm.overlay == .typeFilter }
     private var showStackFilter: Bool { vm.overlay == .stackFilter }
-    private var showStackActions: Bool {
-        if case .stackActions = vm.overlay { return true }
-        return false
-    }
 
     private var stackNamingRow: Int? {
         guard showStackFilter else { return nil }
@@ -37,10 +33,6 @@ struct RootPaletteView: View {
         case nil:
             return nil
         }
-    }
-    private var showAddToStack: Bool {
-        if case .addToStack = vm.overlay { return true }
-        return false
     }
 
     @State private var stackControlWidth: CGFloat = 0
@@ -110,73 +102,13 @@ struct RootPaletteView: View {
             bottomBar(showActionGroup: selected != nil)
         }
         .overlay {
-            Color.black.opacity(vm.menuOpen ? 0.001 : 0)
-                .contentShape(Rectangle())
-                .allowsHitTesting(vm.menuOpen)
-                .onTapGesture { vm.closeMenu() }
-                .overlay {
-                    if vm.menuOpen {
-                        MenuRightClickHandler { vm.closeMenu() }
-                    }
-                }
+            PaletteMenuOverlay(
+                overlay: vm.overlay, items: menuItems, selection: $vm.menuSelection,
+                stackControlWidth: stackControlWidth, namingRow: stackNamingRow,
+                namingEdit: vm.stackNameEdit, namingText: $vm.stackNameDraft,
+                reduceMotion: reduceMotion, onActivate: activateMenuItem,
+                onRightClick: { vm.openStackActions(at: $0) }, onClose: { vm.closeMenu() })
         }
-        .overlay(alignment: .bottomLeading) {
-            if showAppMenu {
-                PopoverMenu(
-                    items: menuItems,
-                    selection: $vm.menuSelection,
-                    onActivate: activateMenuItem
-                )
-                .padding(Self.menuInset)
-                .transition(menuTransition(.bottomLeading))
-            }
-        }
-        .overlay(alignment: .bottomTrailing) {
-            if showActions || showAddToStack {
-                PopoverMenu(
-                    items: menuItems,
-                    selection: $vm.menuSelection,
-                    onActivate: activateMenuItem
-                )
-                .padding(Self.menuInset)
-                .transition(menuTransition(.bottomTrailing))
-            }
-        }
-        .overlay(alignment: .topTrailing) {
-            if showTypeFilter {
-                PopoverMenu(
-                    items: menuItems,
-                    selection: $vm.menuSelection,
-                    onActivate: activateMenuItem
-                )
-                .padding(.top, Theme.Size.headerPadding + Theme.Size.headerHeight)
-                .padding(
-                    .trailing,
-                    Theme.Spacing.md * 2 + stackControlWidth + Theme.Spacing.md
-                )
-                .transition(menuTransition(.topTrailing))
-            }
-        }
-        .overlay(alignment: .topTrailing) {
-            if showStackFilter || showStackActions {
-                PopoverMenu(
-                    items: menuItems,
-                    selection: $vm.menuSelection,
-                    onActivate: activateMenuItem,
-                    onRightClick: { vm.openStackActions(at: $0) },
-                    namingText: stackNamingRow == nil ? nil : $vm.stackNameDraft,
-                    namingRow: stackNamingRow,
-                    namingSelectsAll: {
-                        if case .rename = vm.stackNameEdit { return true }
-                        return false
-                    }()
-                )
-                .padding(.top, Theme.Size.headerPadding + Theme.Size.headerHeight)
-                .padding(.trailing, Theme.Spacing.md * 2)
-                .transition(menuTransition(.topTrailing))
-            }
-        }
-        .animation(reduceMotion ? nil : Theme.Motion.menu, value: vm.overlay)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .environment(\.locale, settings.language.locale)
     }
@@ -297,8 +229,6 @@ struct RootPaletteView: View {
     private func activateMenuItem(_ index: Int) {
         vm.activateMenuItem(at: index)
     }
-
-    private static let menuInset: CGFloat = 8
 
     private var contentTransition: AnyTransition {
         // Scaling the native scroll view leaves fractional geometry that AppKit rounds
