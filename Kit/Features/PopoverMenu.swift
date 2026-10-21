@@ -153,6 +153,8 @@ final class PaletteMenuOverlayView: NSView {
     private var onClose: (() -> Void)?
     private var open = false
     private var reduceMotion = false
+    private var dismissalMonitor: Any?
+    private var dismissingButton: Int?
 
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
@@ -164,6 +166,10 @@ final class PaletteMenuOverlayView: NSView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
+
+    isolated deinit {
+        if let dismissalMonitor { NSEvent.removeMonitor(dismissalMonitor) }
+    }
 
     func update(
         overlay: PaletteOverlay, items: [PopoverMenuItem], selection: Int,
@@ -218,7 +224,50 @@ final class PaletteMenuOverlayView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        if let dismissalMonitor {
+            NSEvent.removeMonitor(dismissalMonitor)
+            self.dismissalMonitor = nil
+        }
+        dismissingButton = nil
+        if window != nil {
+            dismissalMonitor = NSEvent.addLocalMonitorForEvents(
+                matching: [.leftMouseDown, .rightMouseDown, .leftMouseUp, .rightMouseUp,
+                           .leftMouseDragged, .rightMouseDragged]
+            ) { [weak self] event in
+                let consumed = MainActor.assumeIsolated {
+                    self?.consumesDismissal(event) ?? false
+                }
+                return consumed ? nil : event
+            }
+        }
         schedulePresentation()
+    }
+
+    private func consumesDismissal(_ event: NSEvent) -> Bool {
+        guard let window, event.window === window else { return false }
+        if dismissingButton == event.buttonNumber {
+            switch event.type {
+            case .leftMouseUp, .rightMouseUp:
+                dismissingButton = nil
+                return true
+            case .leftMouseDragged, .rightMouseDragged:
+                return true
+            case .leftMouseDown, .rightMouseDown:
+                dismissingButton = nil
+            default:
+                break
+            }
+        }
+        guard open, event.type == .leftMouseDown || event.type == .rightMouseDown else {
+            return false
+        }
+        let point = convert(event.locationInWindow, from: nil)
+        guard bounds.contains(point), menuView?.frame.contains(point) != true else { return false }
+        // SwiftUI can retain the hovered button's hit target until the pointer moves
+        // Own the entire outside click before routing, including the release after closing
+        dismissingButton = event.buttonNumber
+        onClose?()
+        return true
     }
 
     override func layout() {
