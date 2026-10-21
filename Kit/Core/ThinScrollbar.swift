@@ -9,7 +9,7 @@ class KitScrollView: NSScrollView {
     private var boundsObserver: NotificationToken?
     private var documentObserver: NotificationToken?
     private var styleObserver: NotificationToken?
-    private var previousOffset: CGFloat?
+    private var previousGeometry: (content: CGFloat, viewport: CGSize, offset: CGFloat)?
 
     /// AppKit reads documentView from its concurrent scrolling queue
     /// Keep the inherited getter free of Swift actor isolation checks
@@ -53,7 +53,6 @@ class KitScrollView: NSScrollView {
 
     override func layout() {
         super.layout()
-        indicator.frame = bounds
         updateScrollAppearance()
     }
 
@@ -61,7 +60,7 @@ class KitScrollView: NSScrollView {
         super.viewDidMoveToWindow()
         if window == nil {
             styleObserver = nil
-            previousOffset = nil
+            previousGeometry = nil
             indicator.reset()
             return
         }
@@ -86,12 +85,17 @@ class KitScrollView: NSScrollView {
     }
 
     func updateScrollAppearance() {
-        let viewport = contentView.bounds.height
+        let viewportSize = contentView.bounds.size
+        let viewport = viewportSize.height
         let content = (documentView?.frame.height ?? 0) + contentInsets.top + contentInsets.bottom
         let maximum = max(0, content - viewport)
         let offset = min(maximum, max(0, contentView.bounds.minY + contentInsets.top))
-        let moved = previousOffset.map { $0 != offset } ?? false
-        previousOffset = offset
+        // Retiling can shift the clip origin without any scrolling, including on presentation
+        let moved = window?.isVisible == true && (previousGeometry.map {
+            $0.content == content && $0.viewport == viewportSize && $0.offset != offset
+        } ?? false)
+        previousGeometry = (content, viewportSize, offset)
+        indicator.frame = bounds
         indicator.update(content: content, viewport: viewport, offset: offset, moved: moved)
         edgeDissolve.apply(to: contentView, mask: edgeMask, content: content)
     }
@@ -211,6 +215,8 @@ private final class ThinScrollbarView: NSView {
         CATransaction.commit()
         guard let animation else { return }
         for (index, target) in targets.enumerated() {
+            // Visibility fades must not retain geometry from an earlier layout
+            if animation == .fade, target.0 != "opacity" { continue }
             let change: CABasicAnimation
             if animation == .morph {
                 let spring = CASpringAnimation(keyPath: target.0)
