@@ -1,5 +1,3 @@
-import AppKit
-import QuartzCore
 import SwiftUI
 
 /// A menu row's optional leading glyph: an SF Symbol, or a real app icon drawn from `IconCache`.
@@ -18,10 +16,9 @@ enum PopoverMenuIcon: Equatable {
 
 /// Display metadata derived from the same semantic action the palette state machine executes.
 struct PopoverMenuItem {
-    let title: String
+    let title: LocalizedStringKey
     /// User-entered stack names stay literal so they are not looked up as localization keys.
     var verbatimTitle: String? = nil
-    var pasteTargetName: String? = nil
     let icon: PopoverMenuIcon?
     var shortcut: String? = nil
     var isDestructive: Bool = false
@@ -53,8 +50,7 @@ struct PopoverMenuItem {
             shortcut = "⌘Q"
             isDestructive = true
         case .paste:
-            title = "Paste"
-            pasteTargetName = target?.name
+            title = target?.pasteTitle ?? "Paste"
             icon = PopoverMenuIcon.paste(target)
             shortcut = "↵"
             isEnabled = target != nil && AppCore.shared.hasPasteTarget
@@ -89,7 +85,7 @@ struct PopoverMenuItem {
             icon = nil
             isChecked = AppCore.shared.clipboardStore.stackID(for: item.id) == stack.id
         case .setKindFilter(let filter):
-            title = filter.kind?.typeLabel ?? "All Types"
+            title = filter.title
             icon = .symbol(filter.symbolName)
             isChecked = filter == kindFilter
         case .setStackFilter(let stack):
@@ -117,457 +113,275 @@ struct PopoverMenuItem {
     }
 }
 
-/// One bridge owns menu placement, dismissal, rows and naming inside the palette
-struct PaletteMenuOverlay: NSViewRepresentable {
-    let overlay: PaletteOverlay
+/// In-window overlay menu (not a system popover), anchored to a palette corner so it stays clipped inside the panel, with a stock Liquid Glass surface. Data-driven so `selection` can highlight a row for keyboard navigation; `onActivate(index)` is the single path fired by both a click and Return.
+struct PopoverMenu: View {
     let items: [PopoverMenuItem]
     @Binding var selection: Int
-    let stackControlWidth: CGFloat
-    let namingRow: Int?
-    let namingEdit: StackNameEdit?
-    @Binding var namingText: String
-    let reduceMotion: Bool
     let onActivate: (Int) -> Void
-    let onRightClick: (Int) -> Void
-    let onClose: () -> Void
+    var onRightClick: ((Int) -> Void)? = nil
+    var namingText: Binding<String>? = nil
+    var namingRow: Int? = nil
+    var namingSelectsAll = false
 
-    func makeNSView(context: Context) -> PaletteMenuOverlayView { PaletteMenuOverlayView() }
-
-    func updateNSView(_ view: PaletteMenuOverlayView, context: Context) {
-        view.update(
-            overlay: overlay, items: items, selection: selection,
-            stackControlWidth: stackControlWidth, namingRow: namingRow, namingEdit: namingEdit,
-            namingText: namingText, locale: context.environment.locale, reduceMotion: reduceMotion,
-            onSelect: { selection = $0 }, onActivate: onActivate,
-            onRightClick: onRightClick, onNameChange: { namingText = $0 }, onClose: onClose)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            // Index-as-id is stable because a menu's rows never reorder while it is open, and the index is what selection/activation address.
+            let reservesIconSpace = items.contains { $0.icon != nil }
+            ForEach(items.indices, id: \.self) { index in
+                if let namingText, index == namingRow {
+                    StackNameRow(text: namingText, selectAll: namingSelectsAll)
+                } else {
+                    PopoverMenuRow(
+                        item: items[index],
+                        selected: index == selection,
+                        reservesIconSpace: reservesIconSpace,
+                        onHover: { selection = index },
+                        onActivate: { onActivate(index) },
+                        onRightClick: onRightClick.map { handler in { handler(index) } }
+                    )
+                    .disabled(!items[index].isEnabled)
+                }
+            }
+        }
+        .padding(Theme.Spacing.sm)
+        .frame(width: Theme.Size.menuWidth)
+        // Tahoe glass carries its own elevation/shadow; a hand-tuned drop shadow on top reads heavy and non-native, so we let the glass own it.
+        .glassEffect(
+            .regular, in: RoundedRectangle(cornerRadius: Theme.Radius.menuPanel, style: .continuous)
+        )
     }
 }
 
-final class PaletteMenuOverlayView: NSView {
-    private var menuView: NativePopoverMenu?
-    private var placement: Int?
-    private var stackControlWidth: CGFloat = 0
-    private var onClose: (() -> Void)?
-    private var open = false
-    private var reduceMotion = false
+/// Replaces the「新建 Stack」row with a field. Return and Esc are handled by the palette panel.
+private struct StackNameRow: View {
+    @Binding var text: String
+    var selectAll: Bool
 
-    override var isFlipped: Bool { true }
-    override var mouseDownCanMoveWindow: Bool { false }
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        wantsLayer = true
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError() }
-
-    func update(
-        overlay: PaletteOverlay, items: [PopoverMenuItem], selection: Int,
-        stackControlWidth: CGFloat, namingRow: Int?, namingEdit: StackNameEdit?,
-        namingText: String, locale: Locale, reduceMotion: Bool,
-        onSelect: @escaping (Int) -> Void, onActivate: @escaping (Int) -> Void,
-        onRightClick: @escaping (Int) -> Void, onNameChange: @escaping (String) -> Void,
-        onClose: @escaping () -> Void
-    ) {
-        self.stackControlWidth = stackControlWidth
-        self.onClose = onClose
-        self.reduceMotion = reduceMotion
-        open = overlay.isOpen
-        layer?.backgroundColor = NSColor.black.withAlphaComponent(open ? 0.001 : 0).cgColor
-        let nextPlacement: Int?
-        switch overlay {
-        case .none: nextPlacement = nil
-        case .appMenu: nextPlacement = 0
-        case .actions, .addToStack: nextPlacement = 1
-        case .typeFilter: nextPlacement = 2
-        case .stackFilter, .stackActions: nextPlacement = 3
-        }
-        let changed = nextPlacement != placement
-        if changed, let old = menuView {
-            menuView = nil
-            animate(old, appearing: false, placement: placement ?? 0)
-        }
-        placement = nextPlacement
-        guard let nextPlacement else { return }
-        if menuView == nil {
-            let menuView = NativePopoverMenu()
-            addSubview(menuView)
-            self.menuView = menuView
-        }
-        menuView?.update(
-            items: items, selection: selection, namingRow: namingRow, namingEdit: namingEdit,
-            namingText: namingText, locale: locale, onSelect: onSelect, onActivate: onActivate,
-            onRightClick: nextPlacement == 3 ? onRightClick : nil, onNameChange: onNameChange)
-        needsLayout = true
-        layoutSubtreeIfNeeded()
-        if changed, let menuView { animate(menuView, appearing: true, placement: nextPlacement) }
-    }
-
-    override func layout() {
-        super.layout()
-        guard let menuView, let placement else { return }
-        let height = menuView.menuHeight
-        let top = Theme.Size.headerPadding + Theme.Size.headerHeight
-        let trailing = placement == 2
-            ? Theme.Spacing.md * 3 + stackControlWidth : Theme.Spacing.md * 2
-        menuView.frame = NSRect(
-            x: placement == 0 ? 8 : bounds.width - Theme.Size.menuWidth - (placement == 1 ? 8 : trailing),
-            y: placement < 2 ? bounds.height - height - 8 : top,
-            width: Theme.Size.menuWidth, height: height)
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        guard open, let superview else { return nil }
-        let local = convert(point, from: superview)
-        guard bounds.contains(local) else { return nil }
-        if let menuView, menuView.frame.contains(local) {
-            return menuView.hitTest(local) ?? menuView
-        }
-        return self
-    }
-
-    override func mouseDown(with event: NSEvent) { onClose?() }
-    override func rightMouseDown(with event: NSEvent) { onClose?() }
-
-    private func animate(_ menuView: NativePopoverMenu, appearing: Bool, placement: Int) {
-        guard window != nil, !reduceMotion else {
-            if !appearing { menuView.removeFromSuperview() }
-            return
-        }
-        let duration = Theme.Motion.menuDuration
-        let scale: CGFloat = reduceMotion ? 1 : 0.96
-        if let layer = menuView.layer {
-            let anchor = CGPoint(x: placement == 0 ? 0 : menuView.bounds.width,
-                                 y: placement < 2 ? menuView.bounds.height : 0)
-            let pivot = CGPoint(x: anchor.x - layer.anchorPoint.x * menuView.bounds.width,
-                                y: anchor.y - layer.anchorPoint.y * menuView.bounds.height)
-            var small = CATransform3DMakeTranslation(pivot.x * (1 - scale), pivot.y * (1 - scale), 0)
-            small = CATransform3DScale(small, scale, scale, 1)
-            let animation = CABasicAnimation(keyPath: "transform")
-            animation.fromValue = NSValue(caTransform3D: appearing ? small : CATransform3DIdentity)
-            animation.toValue = NSValue(caTransform3D: appearing ? CATransform3DIdentity : small)
-            animation.duration = duration
-            animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            if !appearing {
-                animation.fillMode = .forwards
-                animation.isRemovedOnCompletion = false
-            }
-            layer.add(animation, forKey: "menuViewTransition")
-        }
-        menuView.alphaValue = appearing ? 0 : 1
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = duration
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            menuView.animator().alphaValue = appearing ? 1 : 0
-        } completionHandler: {
-            MainActor.assumeIsolated {
-                if !appearing { menuView.removeFromSuperview() }
-            }
-        }
+    var body: some View {
+        StackNameField(text: $text, selectAll: selectAll)
+            .padding(.horizontal, Theme.Spacing.md)
+            .padding(.vertical, Theme.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-private final class NativePopoverMenu: NSGlassEffectView {
-    private let rowsView = FlippedMenuView()
-    private var rows: [NativeMenuRow] = []
-    private var nameRow: NativeStackNameRow?
-    private var namingEdit: StackNameEdit?
-    private var namingRow: Int?
-    override var isFlipped: Bool { true }
+private struct StackNameField: NSViewRepresentable {
+    @Binding var text: String
+    var selectAll: Bool
 
-    var menuHeight: CGFloat {
-        Theme.Spacing.sm * 2 + rows.enumerated().reduce(CGFloat.zero) { result, entry in
-            result + (entry.offset == namingRow ? NativeStackNameRow.rowHeight : entry.element.rowHeight)
-        } + CGFloat(max(0, rows.count - 1))
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text, selectAll: selectAll)
     }
 
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        style = .regular
-        cornerRadius = Theme.Radius.menuPanel
-        contentView = rowsView
-        setAccessibilityRole(.menu)
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError() }
-
-    func update(
-        items: [PopoverMenuItem], selection: Int, namingRow: Int?, namingEdit: StackNameEdit?,
-        namingText: String, locale: Locale, onSelect: @escaping (Int) -> Void,
-        onActivate: @escaping (Int) -> Void, onRightClick: ((Int) -> Void)?,
-        onNameChange: @escaping (String) -> Void
-    ) {
-        if rows.count != items.count {
-            rows.forEach { $0.removeFromSuperview() }
-            rows = items.map { _ in
-                let row = NativeMenuRow()
-                rowsView.addSubview(row)
-                return row
-            }
-        }
-        let reservesIcons = items.contains { $0.icon != nil }
-        for (index, item) in items.enumerated() {
-            let row = rows[index]
-            row.configure(item: item, locale: locale, reservesIcons: reservesIcons)
-            row.selected = index == selection
-            row.onHover = { onSelect(index) }
-            row.onActivate = { onActivate(index) }
-            row.onRightClick = onRightClick.map { handler in { handler(index) } }
-            row.isHidden = index == namingRow
-        }
-        if self.namingEdit != namingEdit || self.namingRow != namingRow {
-            nameRow?.removeFromSuperview()
-            nameRow = nil
-            if namingRow != nil {
-                let row = NativeStackNameRow()
-                rowsView.addSubview(row)
-                nameRow = row
-            }
-        }
-        self.namingEdit = namingEdit
-        self.namingRow = namingRow
-        nameRow?.update(text: namingText, edit: namingEdit, locale: locale, onChange: onNameChange)
-        needsLayout = true
-    }
-
-    override func layout() {
-        super.layout()
-        var y = Theme.Spacing.sm
-        for (index, row) in rows.enumerated() {
-            let height = index == namingRow ? NativeStackNameRow.rowHeight : row.rowHeight
-            let rect = NSRect(x: Theme.Spacing.sm, y: y,
-                              width: bounds.width - Theme.Spacing.sm * 2, height: height)
-            row.frame = rect
-            if index == namingRow { nameRow?.frame = rect }
-            y += height + 1
-        }
-    }
-}
-
-private final class FlippedMenuView: NSView {
-    override var isFlipped: Bool { true }
-    override var mouseDownCanMoveWindow: Bool { false }
-    override func mouseDown(with event: NSEvent) {}
-    override func rightMouseDown(with event: NSEvent) {}
-}
-
-private final class NativeStackNameRow: NSView, NSTextFieldDelegate {
-    private let field = NSTextField(string: "")
-    private var onChange: ((String) -> Void)?
-    private var didFocus = false
-    private var focusScheduled = false
-    static var rowHeight: CGFloat { ceil(NSFont.preferredFont(forTextStyle: .body).ascender - NSFont.preferredFont(forTextStyle: .body).descender + NSFont.preferredFont(forTextStyle: .body).leading) + 16 }
-    override var isFlipped: Bool { true }
-
-    override init(frame: NSRect) {
-        super.init(frame: frame)
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField(string: text)
         field.isBordered = false
         field.isBezeled = false
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = .preferredFont(forTextStyle: .body)
         field.textColor = .labelColor
-        field.delegate = self
+        field.delegate = context.coordinator
         field.cell?.sendsActionOnEndEditing = false
-        addSubview(field)
+        return field
     }
 
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError() }
-
-    func update(text: String, edit: StackNameEdit?, locale: Locale, onChange: @escaping (String) -> Void) {
-        self.onChange = onChange
-        field.placeholderString = AppLocalization.string("Name", locale: locale)
-        if (field.currentEditor() as? NSTextView)?.hasMarkedText() != true, field.stringValue != text {
+    func updateNSView(_ field: NSTextField, context: Context) {
+        context.coordinator.text = $text
+        field.placeholderString = AppLocalization.string("Name", locale: context.environment.locale)
+        if field.stringValue != text {
             field.stringValue = text
         }
-        guard !didFocus, !focusScheduled else { return }
-        focusScheduled = true
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            focusScheduled = false
-            guard !didFocus, let window, (window as? PalettePanel)?.paletteViewModel?.isNamingStack == true,
-                  window.makeFirstResponder(field) else { return }
-            didFocus = true
+        // The click that opens this field restores the search field after mouseUp.
+        // Take first responder on the next turn, once that restoration has finished.
+        guard !context.coordinator.didFocus, !context.coordinator.focusScheduled else { return }
+        context.coordinator.focusScheduled = true
+        DispatchQueue.main.async {
+            context.coordinator.focusScheduled = false
+            guard !context.coordinator.didFocus, let window = field.window else { return }
+            guard (window as? PalettePanel)?.paletteViewModel?.isNamingStack == true else { return }
+            guard window.makeFirstResponder(field) else { return }
+            context.coordinator.didFocus = true
             if let editor = window.fieldEditor(true, for: field) as? NSTextView {
                 editor.insertionPointColor = .textColor
-                if case .rename = edit { editor.selectAll(nil) }
+                if context.coordinator.selectAll {
+                    editor.selectAll(nil)
+                }
             }
         }
     }
 
-    override func layout() {
-        super.layout()
-        field.frame = bounds.insetBy(dx: 8, dy: 8)
-    }
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var text: Binding<String>
+        var selectAll: Bool
+        var didFocus = false
+        var focusScheduled = false
 
-    func controlTextDidChange(_ notification: Notification) { onChange?(field.stringValue) }
+        init(text: Binding<String>, selectAll: Bool) {
+            self.text = text
+            self.selectAll = selectAll
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            text.wrappedValue = field.stringValue
+        }
+    }
 }
 
-private final class NativeMenuRow: NSControl {
-    private var title = ""
-    private var icon: NSImage?
-    private var symbol = false
-    private var shortcut: [String] = []
-    private var checked = false
-    private var destructive = false
-    private var reservesIcons = false
-    var selected = false { didSet { if oldValue != selected { needsDisplay = true } } }
-    var onHover: (() -> Void)?
-    var onActivate: (() -> Void)?
-    var onRightClick: (() -> Void)?
-    private var didTick = false
-    private var lastPointerLocation = NSEvent.mouseLocation
-    private let rowFont = NSFont.preferredFont(forTextStyle: .body)
-    private let capFont = NSFont.preferredFont(forTextStyle: .caption1)
-    var rowHeight: CGFloat {
-        max(ceil(rowFont.ascender - rowFont.descender + rowFont.leading), reservesIcons ? Theme.Size.menuIcon : 0,
-            !shortcut.isEmpty ? Theme.Size.keyCap : 0) + Theme.Spacing.md * 2
-    }
-    override var isFlipped: Bool { true }
-    override var acceptsFirstResponder: Bool { false }
-    override var mouseDownCanMoveWindow: Bool { false }
+/// A single menu row: optional leading icon, label, and optional trailing shortcut glyph. Highlight is selection-driven (hover reports up so keyboard and mouse converge on one highlight), so there is never more than one active row.
+private struct PopoverMenuRow: View {
+    let item: PopoverMenuItem
+    let selected: Bool
+    /// When any row in the menu has an icon, empty rows keep a blank slot so labels stay column-aligned.
+    var reservesIconSpace: Bool = false
+    /// Fired when the cursor enters the row so the owner can move selection here — keyboard and mouse then share one highlight.
+    let onHover: () -> Void
+    let onActivate: () -> Void
+    var onRightClick: (() -> Void)? = nil
 
-    func configure(item: PopoverMenuItem, locale: Locale, reservesIcons: Bool) {
-        if let verbatim = item.verbatimTitle { title = verbatim }
-        else if let target = item.pasteTargetName {
-            title = String(format: AppLocalization.string("Paste to %@", locale: locale), target)
-        } else { title = AppLocalization.string(item.title, locale: locale) }
-        self.reservesIcons = reservesIcons
-        destructive = item.isDestructive
-        isEnabled = item.isEnabled
-        checked = item.isChecked
-        shortcut = item.shortcut.map { $0.map(String.init) } ?? []
-        switch item.icon {
-        case .symbol(let name):
-            let configuration = NSImage.SymbolConfiguration(pointSize: rowFont.pointSize, weight: .regular)
-                .applying(.init(hierarchicalColor: destructive ? .systemRed : .secondaryLabelColor))
-            icon = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
-                .withSymbolConfiguration(configuration)
-            symbol = true
-        case .file(let path): icon = IconCache.icon(forFile: path); symbol = false
-        case nil: icon = nil; symbol = false
+    var body: some View {
+        Button(action: onActivate) {
+            HStack(spacing: Theme.Spacing.sm) {
+                if let icon = item.icon {
+                    switch icon {
+                    case .symbol(let name):
+                        Image(systemName: name)
+                            .font(Theme.Typography.menuIcon)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(item.isDestructive ? Color.red : Color.secondary)
+                            .frame(width: Theme.Size.menuIcon, height: Theme.Size.menuIcon)
+                    case .file(let path):
+                        MenuFileIcon(path: path)
+                    }
+                } else if reservesIconSpace {
+                    Color.clear
+                        .frame(width: Theme.Size.menuIcon, height: Theme.Size.menuIcon)
+                }
+                Group {
+                    if let verbatimTitle = item.verbatimTitle {
+                        Text(verbatim: verbatimTitle)
+                    } else {
+                        Text(item.title)
+                    }
+                }
+                .font(Theme.Typography.menuRow)
+                .foregroundStyle(item.isDestructive ? Color.red : Color.primary)
+                Spacer(minLength: Theme.Spacing.sm)
+                if item.isChecked {
+                    Image(systemName: "checkmark")
+                        .font(Theme.Typography.menuIcon)
+                        .foregroundStyle(.secondary)
+                        .frame(width: Theme.Size.menuIcon, height: Theme.Size.menuIcon)
+                } else if let shortcut = item.shortcut {
+                    HStack(spacing: Theme.Spacing.xxs) {
+                        ForEach(Array(shortcut.enumerated()), id: \.offset) { _, glyph in
+                            KeyCapChip(text: String(glyph), style: .outline)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, Theme.Spacing.md)
+            .padding(.vertical, Theme.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: Theme.Radius.menuRow, style: .continuous)
+                    .fill(
+                        selected ? Theme.Colors.menuHover : Color.clear
+                    )
+            )
         }
-        setAccessibilityRole(.menuItem)
-        setAccessibilityLabel(title)
-        setAccessibilityValue(checked ? "✓" : nil)
-        setAccessibilityEnabled(isEnabled)
-        needsDisplay = true
+        .buttonStyle(.plain)
+        .onHover { if $0 { onHover() } }
+        .modifier(MenuRowHoverHaptics())
+        .overlay {
+            if let onRightClick {
+                MenuRightClickHandler(action: onRightClick)
+            }
+        }
+    }
+}
+
+private struct MenuRowHoverHaptics: ViewModifier {
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var didTick = false
+    @State private var lastPointerLocation = NSEvent.mouseLocation
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                didTick = false
+                lastPointerLocation = NSEvent.mouseLocation
+            }
+            .onContinuousHover(coordinateSpace: .local) { phase in
+                let location = NSEvent.mouseLocation
+                switch phase {
+                case .active:
+                    // Opening a menu under a stationary pointer must not trigger feedback
+                    guard !didTick, isEnabled, location != lastPointerLocation,
+                        let event = NSApp.currentEvent,
+                        event.type == .mouseMoved || event.type == .mouseEntered,
+                        let panel = event.window as? PalettePanel,
+                        panel.allowsHoverSelection
+                    else { return }
+                    didTick = true
+                    PaletteHaptics.tick()
+                case .ended:
+                    didTick = false
+                    lastPointerLocation = location
+                }
+            }
+    }
+}
+
+/// Lets a left click reach the SwiftUI button, and handles a right click itself.
+struct MenuRightClickHandler: NSViewRepresentable {
+    let action: () -> Void
+
+    func makeNSView(context: Context) -> RightClickView {
+        let view = RightClickView()
+        view.action = action
+        return view
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        if selected {
-            NSColor.labelColor.withAlphaComponent(0.10).setFill()
-            NSBezierPath(roundedRect: bounds, xRadius: Theme.Radius.menuRow, yRadius: Theme.Radius.menuRow).fill()
+    func updateNSView(_ view: RightClickView, context: Context) {
+        view.action = action
+    }
+
+    final class RightClickView: NSView {
+        var action: (() -> Void)?
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            guard bounds.contains(point) else { return nil }
+            let rightButton = NSEvent.pressedMouseButtons & (1 << 1) != 0
+            let controlClick = NSApp.currentEvent?.type == .leftMouseDown
+                && NSApp.currentEvent?.modifierFlags.contains(.control) == true
+            return rightButton || controlClick ? self : nil
         }
-        let opacity: CGFloat = isEnabled ? 1 : 0.5
-        if let icon {
-            let rect = NSRect(x: 8, y: (bounds.height - 20) / 2, width: 20, height: 20)
-            if symbol {
-                // Symbol images retain their configured hierarchy when drawn at their natural aspect ratio
-                let size = icon.size
-                let scale = min(1, rect.width / size.width, rect.height / size.height)
-                let fitted = NSRect(x: rect.midX - size.width * scale / 2, y: rect.midY - size.height * scale / 2,
-                                    width: size.width * scale, height: size.height * scale)
-                icon.draw(in: fitted, from: .zero, operation: .sourceOver, fraction: opacity,
-                          respectFlipped: true, hints: nil)
+
+        override func rightMouseDown(with event: NSEvent) {
+            action?()
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            if event.modifierFlags.contains(.control) {
+                action?()
             } else {
-                icon.draw(in: rect, from: .zero, operation: .sourceOver, fraction: opacity,
-                          respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
+                super.mouseDown(with: event)
             }
         }
-        var trailing = bounds.width - 8
-        if checked {
-            let image = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)?
-                .withSymbolConfiguration(.init(pointSize: rowFont.pointSize, weight: .regular)
-                    .applying(.init(hierarchicalColor: .secondaryLabelColor)))
-            if let image {
-                image.draw(in: NSRect(x: trailing - 10 - image.size.width / 2,
-                    y: (bounds.height - image.size.height) / 2, width: image.size.width, height: image.size.height),
-                    from: .zero, operation: .sourceOver, fraction: opacity, respectFlipped: true, hints: nil)
-            }
-            trailing -= 26
-        } else {
-            for glyph in shortcut.reversed() {
-                let attributes: [NSAttributedString.Key: Any] = [
-                    .font: capFont, .foregroundColor: NSColor.labelColor.withAlphaComponent(0.60 * opacity)]
-                let size = (glyph as NSString).size(withAttributes: attributes)
-                let width = max(18, size.width + 8)
-                let rect = NSRect(x: trailing - width, y: (bounds.height - 18) / 2, width: width, height: 18)
-                NSColor.labelColor.withAlphaComponent(0.20 * opacity).setStroke()
-                let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 5.5, yRadius: 5.5)
-                path.lineWidth = 1
-                path.stroke()
-                (glyph as NSString).draw(at: NSPoint(x: rect.midX - size.width / 2,
-                    y: rect.midY - size.height / 2 + (glyph == "↵" ? 1.1 : 0)), withAttributes: attributes)
-                trailing -= width + 2
-            }
-            if !shortcut.isEmpty { trailing -= 4 }
-        }
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineBreakMode = .byTruncatingTail
-        let leading: CGFloat = reservesIcons ? 34 : 8
-        let height = ceil(rowFont.ascender - rowFont.descender + rowFont.leading)
-        (title as NSString).draw(in: NSRect(x: leading, y: (bounds.height - height) / 2,
-            width: max(0, trailing - leading), height: height), withAttributes: [
-                .font: rowFont, .foregroundColor: (destructive ? NSColor.systemRed : .labelColor).withAlphaComponent(opacity),
-                .paragraphStyle: paragraph])
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        trackingAreas.forEach(removeTrackingArea)
-        addTrackingArea(NSTrackingArea(rect: .zero,
-            options: [.mouseMoved, .mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
-    }
-
-    override func mouseEntered(with event: NSEvent) { hover(event) }
-    override func mouseMoved(with event: NSEvent) { hover(event) }
-    override func mouseExited(with event: NSEvent) {
-        didTick = false
-        lastPointerLocation = NSEvent.mouseLocation
-    }
-
-    private func hover(_ event: NSEvent) {
-        guard isEnabled else { return }
-        onHover?()
-        let location = NSEvent.mouseLocation
-        guard !didTick, location != lastPointerLocation,
-              event.type == .mouseMoved || event.type == .mouseEntered,
-              let panel = event.window as? PalettePanel, panel.allowsHoverSelection else { return }
-        didTick = true
-        PaletteHaptics.tick()
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        guard isEnabled else { return }
-        if event.modifierFlags.contains(.control) { onRightClick?(); return }
-        guard let window else { return }
-        // Match a plain button by activating only when the pointer is released inside the row
-        while let next = window.nextEvent(matching: [.leftMouseUp, .leftMouseDragged]) {
-            if next.type == .leftMouseUp {
-                if bounds.contains(convert(next.locationInWindow, from: nil)) { onActivate?() }
-                return
-            }
-        }
-    }
-
-    override func rightMouseDown(with event: NSEvent) { if isEnabled { onRightClick?() } }
-    override func accessibilityPerformPress() -> Bool {
-        guard isEnabled else { return false }
-        onActivate?()
-        return true
     }
 }
 
-/// App icons outside the menu keep the existing SwiftUI bar rendering
+/// App icon for a menu row or bar control: renders directly from `IconCache`
+/// so the paste target paints deterministically on the very first frame without flicker or async cancellation.
 struct MenuFileIcon: View {
     let path: String
 
     var body: some View {
-        Image(nsImage: IconCache.icon(forFile: path))
+        let image = IconCache.icon(forFile: path)
+        Image(nsImage: image)
             .resizable()
             .interpolation(.high)
             .antialiased(true)
