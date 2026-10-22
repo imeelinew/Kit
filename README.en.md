@@ -36,7 +36,7 @@ Kit transforms clipboard history into an on-demand command palette, enabling sea
 - **Image Pinning & Full Preview**: Pin image clippings to the front of the screen as floating sticky notes, supporting small, medium, and large sizing with transparent checkerboard backgrounds, and hover over list items for instant full-size previews
 - **Stacks & Organization**: Organize frequent clippings into custom Stacks, with dedicated shortcuts to switch rapidly across groups and content type filters
 - **Privacy & Granular Control**: All history resides strictly in local SQLite storage without cloud dependencies, with customizable application exclusion lists (Keychain Access and Passwords excluded by default), retention policies, and temporary capture pausing
-- **Native macOS Craftsmanship**: Built purely with Swift and SwiftUI/AppKit, offering Light/Dark appearances, Frosted Glass and Liquid Glass visual materials, subtle keyboard sound effects, and trackpad haptic feedback
+- **Native macOS Craftsmanship**: Built purely with Swift and SwiftUI/AppKit and Liquid Glass, offering Light/Dark appearances, subtle keyboard sound effects, and trackpad haptic feedback
 
 ## Shortcuts
 

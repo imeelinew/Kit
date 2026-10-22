@@ -61,17 +61,6 @@ struct AppearanceSettingsView: View {
                     .accessibilityLabel("Theme")
                 }
 
-                PreferencesRow(label: "Visual Style") {
-                    Picker("Visual Style", selection: $settings.paletteVisualStyle) {
-                        ForEach(PaletteVisualStyle.allCases) { style in
-                            Text(LocalizedStringKey(style.title)).tag(style)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .fixedSize()
-                    .accessibilityLabel("Visual Style")
-                }
             }
 
             Section("Menu Bar") {

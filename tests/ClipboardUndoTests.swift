@@ -91,7 +91,7 @@ enum ClipboardUndoTests {
         let core = AppCore(clipboardStore: store)
         let vm = PaletteViewModel(core: core)
         await ready(vm)
-        let panel = PalettePanel(rootView: Color.clear, visualStyle: .frosted)
+        let panel = PalettePanel(rootView: Color.clear)
         panel.paletteViewModel = vm
         let selected = vm.selectedItem!
         let revision = store.revision

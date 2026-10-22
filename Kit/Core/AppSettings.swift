@@ -67,20 +67,6 @@ enum AppAppearance: String, CaseIterable, Identifiable {
     }
 }
 
-enum PaletteVisualStyle: String, CaseIterable, Identifiable {
-    case frosted
-    case liquid
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .frosted: return "Frosted Glass"
-        case .liquid: return "Liquid Glass"
-        }
-    }
-}
-
 enum PinnedImageSize: String, CaseIterable, Identifiable {
     case small
     case medium
@@ -152,7 +138,6 @@ final class AppSettings: ObservableObject {
         static let imageTextSearchEnabled = "imageTextSearchEnabled"
         static let language = "appLanguage"
         static let appearance = "appAppearance"
-        static let paletteVisualStyle = "paletteVisualStyle"
         static let pinnedImageSize = "pinnedImageSize"
         static let showMenuBarIcon = "showMenuBarIcon"
         static let animateMenuBarIconOnCopy = "animateMenuBarIconOnCopy"
@@ -217,10 +202,6 @@ final class AppSettings: ObservableObject {
             defaults.set(appearance.rawValue, forKey: Key.appearance)
             appearance.apply()
         }
-    }
-
-    @Published var paletteVisualStyle: PaletteVisualStyle {
-        didSet { defaults.set(paletteVisualStyle.rawValue, forKey: Key.paletteVisualStyle) }
     }
 
     @Published var pinnedImageSize: PinnedImageSize {
@@ -288,9 +269,6 @@ final class AppSettings: ObservableObject {
         appearance =
             defaults.string(forKey: Key.appearance).flatMap(AppAppearance.init(rawValue:))
             ?? .system
-        paletteVisualStyle =
-            defaults.string(forKey: Key.paletteVisualStyle)
-            .flatMap(PaletteVisualStyle.init(rawValue:)) ?? .liquid
         pinnedImageSize =
             defaults.string(forKey: Key.pinnedImageSize).flatMap(PinnedImageSize.init(rawValue:))
             ?? .medium
