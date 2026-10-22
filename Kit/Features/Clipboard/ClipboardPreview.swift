@@ -107,7 +107,9 @@ struct ClipboardPreview: View {
         ClipboardPreviewContainer(
             itemID: item?.id, kind: item?.kind, informationHeight: information?.contentHeight ?? 0,
             reduceMotion: reduceMotion,
-            content: Group { if let item { content(for: item, payload: payload) } },
+            content: { onLayoutChange in
+                Group { if let item { content(for: item, payload: payload, onLayoutChange: onLayoutChange) } }
+            },
             information: Group { if let information { information } })
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task(id: item?.id) {
@@ -139,13 +141,16 @@ struct ClipboardPreview: View {
     }
 
     @ViewBuilder
-    private func content(for item: ClipboardItem, payload: ClipboardPreviewPayload?) -> some View {
+    private func content(
+        for item: ClipboardItem, payload: ClipboardPreviewPayload?,
+        onLayoutChange: @escaping () -> Void
+    ) -> some View {
         switch item.kind {
         case .text, .path, .link:
             ClipboardTextPreview(text: item.text ?? "", query: query).equatable()
         case .markdown:
             if settings.renderMarkdown {
-                MarkdownPreview(source: item.text ?? "", query: query)
+                MarkdownPreview(source: item.text ?? "", query: query, onRender: onLayoutChange)
             } else {
                 ClipboardTextPreview(text: item.text ?? "", query: query).equatable()
             }
@@ -203,13 +208,17 @@ private struct ClipboardPreviewContainer<Content: View, Information: View>: NSVi
     let kind: ClipboardItem.Kind?
     let informationHeight: CGFloat
     let reduceMotion: Bool
-    let content: Content
+    let content: (@escaping () -> Void) -> Content
     let information: Information
 
     func makeNSView(context: Context) -> ClipboardPreviewContainerView { ClipboardPreviewContainerView() }
 
     func updateNSView(_ view: ClipboardPreviewContainerView, context: Context) {
         let environment = context.environment
+        let itemID = itemID
+        let content = content { [weak view] in
+            view?.invalidateContentLayout(for: itemID)
+        }
         view.update(
             itemID: itemID, kind: kind, informationHeight: informationHeight,
             reduceMotion: reduceMotion, locale: environment.locale,
@@ -277,6 +286,14 @@ private final class ClipboardPreviewContainerView: NSView {
     override func layout() {
         super.layout()
         current?.frame = bounds
+    }
+
+    func invalidateContentLayout(for itemID: ClipboardItem.ID?) {
+        // Wait for the hosted SwiftUI tree to apply its rendered content before measuring
+        DispatchQueue.main.async { [weak self] in
+            guard let current = self?.current, current.itemID == itemID else { return }
+            current.needsLayout = true
+        }
     }
 
     func clear() {

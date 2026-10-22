@@ -49,6 +49,7 @@ struct MarkdownPreview: View {
     let source: String
     var query: String = ""
     var fontSize: CGFloat? = nil
+    var onRender: (() -> Void)? = nil
 
     @State private var rendered: Rendered?
     @State private var renderedID: RenderID?
@@ -122,6 +123,7 @@ struct MarkdownPreview: View {
             guard !Task.isCancelled else { return }
             rendered = result
             renderedID = RenderID(source: source, fontSize: fontSize)
+            onRender?()
         }
     }
 
