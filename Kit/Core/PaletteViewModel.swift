@@ -130,12 +130,6 @@ enum PaletteHaptics {
         guard AppCore.shared.settings.hapticFeedbackEnabled else { return }
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
     }
-
-    /// Give immediate feedback when the hover preview begins appearing.
-    static func previewOpened() {
-        guard AppCore.shared.settings.hapticFeedbackEnabled else { return }
-        NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
-    }
 }
 
 /// The palette's single interaction state machine. AppKit keyboard events and SwiftUI mouse
@@ -181,15 +175,7 @@ final class PaletteViewModel {
     private(set) var searchReady = true
     private(set) var scrollIntent = ScrollIntent(kind: .top)
     var pasteTarget: PasteTarget?
-    var imageQuickLookOpen = false {
-        didSet {
-            // Dismissal also cancels a hover that has not reached its delay yet.
-            if !imageQuickLookOpen {
-                imageQuickLookHoverTask?.cancel()
-                imageQuickLookHoverTask = nil
-            }
-        }
-    }
+    var imageQuickLookOpen = false
     private(set) var overlay: PaletteOverlay = .none {
         didSet {
             if overlay.isOpen {
@@ -215,7 +201,6 @@ final class PaletteViewModel {
     private static let pageSize = 160
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var previewWarmTask: Task<Void, Never>?
-    @ObservationIgnored private var imageQuickLookHoverTask: Task<Void, Never>?
     @ObservationIgnored private var loadMoreTask: Task<Void, Never>?
     private var nextCursor: ClipboardSearchCursor?
     @ObservationIgnored private var loadedPageCount = 1
@@ -375,29 +360,9 @@ final class PaletteViewModel {
         if follow { scrollIntent = ScrollIntent(kind: .follow) }
     }
 
-    /// Only the selected image's right-hand preview reports hover; stale view exits cannot close a new preview.
-    func setImageQuickLookHovered(_ hovered: Bool, itemID: ClipboardItem.ID) {
-        guard selectedID == itemID else { return }
-        imageQuickLookHoverTask?.cancel()
-        imageQuickLookHoverTask = nil
-        guard hovered && searchReady && !menuOpen && selectedItem?.kind == .image else {
-            imageQuickLookOpen = false
-            ImageQuickLook.close()
-            return
-        }
-        guard !imageQuickLookOpen else { return }
-        imageQuickLookHoverTask = Task { [weak self] in
-            do {
-                try await Task.sleep(for: .milliseconds(300))
-            } catch {
-                return
-            }
-            guard let self, !Task.isCancelled, selectedID == itemID,
-                searchReady, !menuOpen, selectedItem?.kind == .image
-            else { return }
-            imageQuickLookHoverTask = nil
-            imageQuickLookOpen = true
-        }
+    func openImageQuickLook(for itemID: ClipboardItem.ID) {
+        guard selectedID == itemID, searchReady, !menuOpen, selectedItem?.kind == .image else { return }
+        imageQuickLookOpen = true
     }
 
     func openActions(for id: ClipboardItem.ID) {

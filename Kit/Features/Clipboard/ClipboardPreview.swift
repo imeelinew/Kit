@@ -164,22 +164,9 @@ struct ClipboardPreview: View {
             }?.layout.matchingBounds(query: query) ?? []
             Group {
                 if let image = payload?.image {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .overlay {
-                            ImageSearchHighlightOverlay(imageSize: image.size, regions: highlights)
-                        }
-                        .clipShape(
-                            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                                .strokeBorder(Theme.Colors.cardStroke, lineWidth: 1)
-                        )
-                        .onHover { hovered in
-                            vm.setImageQuickLookHovered(hovered, itemID: item.id)
-                        }
+                    ClipboardPreviewImage(image: image, highlights: highlights) {
+                        vm.openImageQuickLook(for: item.id)
+                    }
                 } else {
                     Image(systemName: "photo").font(.system(.largeTitle))
                         .symbolRenderingMode(.hierarchical).foregroundStyle(.tertiary)
@@ -199,6 +186,39 @@ struct ClipboardPreview: View {
                 .allowsHitTesting(false)
             }
         }
+    }
+}
+
+private struct ClipboardPreviewImage: View {
+    let image: NSImage
+    let highlights: [CGRect]
+    let onActivate: () -> Void
+
+    @State private var hovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button(action: onActivate) {
+            Image(nsImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .overlay {
+                    ImageSearchHighlightOverlay(imageSize: image.size, regions: highlights)
+                }
+                .clipShape(
+                    RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                        .strokeBorder(Theme.Colors.cardStroke, lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(hovered ? 0.14 : 0), radius: 6, x: 0, y: 3)
+                .offset(y: hovered && !reduceMotion ? -2 : 0)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: hovered)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
+        .accessibilityLabel(Text("Content Preview"))
     }
 }
 

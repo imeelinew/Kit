@@ -8,7 +8,7 @@ enum ImageQuickLook {
     }
 }
 
-/// Hover-triggered image Quick Look via `NSPopover`, sized to the room left of or below the preview so
+/// Click-triggered image Quick Look via `NSPopover`, sized to the room left of or below the preview so
 /// AppKit does not flip the popover on top of the anchor.
 ///
 /// The representable sits on the right-hand preview image so the popover arrow targets the image.
@@ -105,7 +105,7 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
         requestedPresented = false
         notifyWhenClosed = false
         if immediately, let popover {
-            // A hover-exit animation may already be in flight. Hide its window as well;
+            // A close animation may already be in flight, hide its window as well
             // changing animates alone does not finish an animation that already started.
             popover.animates = false
             popover.contentViewController?.view.window?.alphaValue = 0
@@ -146,7 +146,7 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
         }
 
         if let popover, popover.isShown {
-            // Selection changes close the session. Keep an already showing image stable during hover.
+            // Selection changes close the session, keep an already showing image stable
             guard shownURL == url, shownSize == placement.size, shownAnchorView === anchorView
             else { return }
             if shownHighlights != requestedHighlights,
@@ -178,13 +178,6 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
         shownHighlights = requestedHighlights
         popover.show(
             relativeTo: anchorView.bounds, of: anchorView, preferredEdge: placement.edge)
-    }
-
-    func popoverWillShow(_ notification: Notification) {
-        guard let shownPopover = notification.object as? NSPopover,
-            shownPopover === popover, requestedPresented, !isClosing
-        else { return }
-        PaletteHaptics.previewOpened()
     }
 
     private func beginClose() {
