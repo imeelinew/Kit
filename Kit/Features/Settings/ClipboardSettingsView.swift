@@ -43,8 +43,6 @@ struct ClipboardSettingsView: View {
                 .accessibilityLabel("Add Application…")
             }
 
-            LLMClassificationSettingsSection()
-
             Section("Clipboard History") {
                 Toggle("Update history after action", isOn: $settings.updateHistoryAfterAction)
 

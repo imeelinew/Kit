@@ -8,7 +8,6 @@
 "Move to Another Stack" = "Move to Another Stack";
 "Remove from Stack" = "Remove from Stack";
 "All Types" = "All Types";
-"API Key" = "API Key";
 "App Language" = "App Language";
 "Appearance" = "Appearance";
 "Back" = "Back";
@@ -22,15 +21,6 @@
 "Clear History" = "Clear History";
 "Check for Updates" = "Check for Updates…";
 "Clipboard" = "Clipboard";
-"LLM Classification" = "LLM Classification";
-"Enable LLM Classification" = "Enable LLM Classification";
-"Classification Engine" = "Classification Engine";
-"API Channel" = "API Channel";
-"Official API" = "Official API";
-"TypeSafe API Key" = "TypeSafe API Key";
-"OpenAI API Key" = "OpenAI API Key";
-"OpenRouter API Key" = "OpenRouter API Key";
-"Save" = "Save";
 "Show Kit" = "Show Kit";
 "Code" = "Code";
 "Content Preview" = "Content Preview";

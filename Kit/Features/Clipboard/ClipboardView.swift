@@ -415,29 +415,10 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             // a deletion. Reloading here would interrupt the animation already in flight.
             guard previousRows != rows else { return false }
             let difference = rows.map(\.id).difference(from: previousRows.map(\.id))
-            // Animate retained items independently of pagination and scroll updates that
-            // may arrive with the AI verdict. Those updates must not force a row reload.
             let oldRowsByID = Dictionary(uniqueKeysWithValues: previousRows.map { ($0.id, $0) })
             let retainedContentUnchanged = rows.allSatisfy { row in
-                guard let oldRow = oldRowsByID[row.id], oldRow != row else { return true }
-                guard case .item(let old) = oldRow, case .item(let new) = row else { return false }
-                return old.kind != .image && new.kind != .image
-                    && old.withKind(new.kind) == new
-            }
-            if retainedContentUnchanged {
-                for row in rows {
-                    guard case .item(let item) = row,
-                        let oldRow = oldRowsByID[row.id], case .item(let old) = oldRow,
-                        old.kind != item.kind,
-                        let oldIndex = previousRows.firstIndex(where: { $0.id == row.id }),
-                        let cell = tableView.view(atColumn: 0, row: oldIndex,
-                            makeIfNecessary: false) as? ClipboardItemCellView
-                    else { continue }
-                    cell.updateKind(item.kind,
-                        animated: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
-                    cell.updateTitle(item: item, query: query, locale: locale)
-                }
-                if difference.isEmpty { return false }
+                guard let oldRow = oldRowsByID[row.id] else { return true }
+                return oldRow == row
             }
             // Preserve retained cells for small edits even when row animation is disabled.
             // Large replacements and page loads still reload immediately.

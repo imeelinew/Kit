@@ -30,7 +30,7 @@ Kit transforms clipboard history into an on-demand command palette, enabling sea
 
 ## Key Features
 
-- **Multi-Type Capture & Smart Classification**: Automatically captures plain text, Markdown, code, links, file paths, and images with source app and timestamp metadata, supporting local rule classification and opt-in LLM classification (OpenAI, OpenRouter, TypeSafe)
+- **Multi-Type Capture & Smart Classification**: Automatically captures plain text, Markdown, code, links, file paths, and images with source app and timestamp metadata, using local rule classification
 - **Multi-Dimensional Search & Offline OCR**: Instant results powered by SQLite FTS full-text search, featuring full Pinyin and initialism matching for Chinese, plus local offline OCR to index and highlight matching text within image previews
 - **Keyboard-First Workflow**: Summon the palette instantly with a customizable global shortcut, paste directly, copy immediately, or paste continuously while keeping the palette open, automatically switching to English input to ensure uninterrupted typing, with quick deletion undo
 - **Image Pinning & Full Preview**: Pin image clippings to the front of the screen as floating sticky notes, supporting small, medium, and large sizing with transparent checkerboard backgrounds, and hover over list items for instant full-size previews

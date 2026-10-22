@@ -175,7 +175,6 @@ final class ClipboardStore: ObservableObject {
     private var imageByFingerprintStmt: OpaquePointer?
     private var textByContentStmt: OpaquePointer?
     private var itemByIDStmt: OpaquePointer?
-    private var updateKindStmt: OpaquePointer?
     private var insertStackStmt: OpaquePointer?
     private var upsertMembershipStmt: OpaquePointer?
     private var deleteMembershipStmt: OpaquePointer?
@@ -384,21 +383,6 @@ final class ClipboardStore: ObservableObject {
         guard hasDeferredHistoryUpdates else { return }
         hasDeferredHistoryUpdates = false
         load()
-    }
-
-    /// Re-grade an existing row's kind (async LLM classification). The row id is stable across
-    /// recopies of the same content, so a late answer lands on the right item or on nothing if
-    /// the item was deleted in the meantime.
-    @discardableResult
-    func updateKind(id: ClipboardItem.ID, to kind: ClipboardItem.Kind) -> Bool {
-        guard let stmt = updateKindStmt else { return false }
-        sqlite3_bind_text(stmt, 1, kind.rawValue, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_text(stmt, 2, id.uuidString, -1, SQLITE_TRANSIENT)
-        guard stepAndReset(stmt), sqlite3_changes(db) == 1 else { return false }
-        guard let index = items.firstIndex(where: { $0.id == id }) else { return true }
-        guard items[index].kind != kind else { return true }
-        items[index] = items[index].withKind(kind)
-        return true
     }
 
     @discardableResult
@@ -1353,7 +1337,6 @@ final class ClipboardStore: ObservableObject {
             """
             \(Self.itemSelection) WHERE id = ? LIMIT 1
             """)
-        updateKindStmt = prepare("UPDATE items SET kind = ? WHERE id = ?")
         insertStackStmt = prepare(
             "INSERT INTO stacks(id, name, position) VALUES(?,?,?)")
         upsertMembershipStmt = prepare(
@@ -1437,7 +1420,7 @@ final class ClipboardStore: ObservableObject {
         [
             insertStmt, loadStmt, refreshStmt, deleteByIDStmt,
             staleImagesStmt, deleteStaleStmt, imageByFingerprintStmt, textByContentStmt, itemByIDStmt,
-            updateKindStmt, insertStackStmt, upsertMembershipStmt, deleteMembershipStmt,
+            insertStackStmt, upsertMembershipStmt, deleteMembershipStmt,
         ].forEach { sqlite3_finalize($0) }
         sqlite3_close_v2(db)
     }

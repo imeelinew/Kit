@@ -57,24 +57,8 @@ final class ApplicationMenu: NSObject, NSMenuItemValidation {
 
     @objc private func copyText(_ sender: Any?) {
         guard let editor, editor.selectedRange().length > 0 else { return }
-        if editor.delegate is NSSecureTextField {
-            // API keys intentionally support copying the selection while retaining secure entry.
-            // One write declares the string together with every sensitive marker, so other
-            // clipboard managers conceal it and Kit's own policy skips it without the
-            // second pasteboard change a post-hoc marker would need.
-            let value = editor.string as NSString
-            let selection = editor.selectedRange()
-            guard NSMaxRange(selection) <= value.length else { return }
-            let pasteboard = NSPasteboard.general
-            pasteboard.declareTypes(
-                [.string] + Array(ClipboardCapturePolicy.sensitiveTypes)
-                    + [ClipboardCapturePolicy.internalType],
-                owner: nil)
-            pasteboard.setString(value.substring(with: selection), forType: .string)
-        } else {
-            editor.copy(sender)
-            Paster.markCurrentPasteboardInternal()
-        }
+        editor.copy(sender)
+        Paster.markCurrentPasteboardInternal()
     }
 
     @objc private func cutText(_ sender: Any?) {

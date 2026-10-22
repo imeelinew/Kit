@@ -102,32 +102,13 @@ final class ClipboardManager {
 
             switch capture.content {
             case .text(let text):
-                if self.settings.llmClassificationEnabled {
-                    // Capture immediately; only the selected LLM decides the eventual classification.
-                    guard let item = self.store.addText(
-                        text, kind: .text, sourceBundleID: capture.sourceBundleID,
-                        expectedGeneration: capture.generation),
-                        let configuration = self.settings.llmClassificationConfiguration
-                    else { return }
-                    Task { [weak self] in
-                        guard let kind = await LLMTextClassifier.classify(
-                            text, configuration: configuration),
-                            let self, self.settings.llmClassificationEnabled,
-                            self.settings.llmClassificationConfiguration == configuration,
-                            self.store.captureGeneration == capture.generation,
-                            self.store.item(id: item.id) != nil
-                        else { return }
-                        self.store.updateKind(id: item.id, to: kind)
-                    }
-                } else {
-                    let kind = await Task.detached(priority: .utility) {
-                        ClipboardTextClassifier.kind(for: text)
-                    }.value
-                    guard !Task.isCancelled else { return }
-                    self.store.addText(
-                        text, kind: kind, sourceBundleID: capture.sourceBundleID,
-                        expectedGeneration: capture.generation)
-                }
+                let kind = await Task.detached(priority: .utility) {
+                    ClipboardTextClassifier.kind(for: text)
+                }.value
+                guard !Task.isCancelled else { return }
+                self.store.addText(
+                    text, kind: kind, sourceBundleID: capture.sourceBundleID,
+                    expectedGeneration: capture.generation)
             case .image(let png):
                 await self.store.addImage(
                     png, sourceBundleID: capture.sourceBundleID,

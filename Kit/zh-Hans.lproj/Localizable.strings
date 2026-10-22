@@ -8,7 +8,6 @@
 "Move to Another Stack" = "切换到其他 Stack";
 "Remove from Stack" = "移出 Stack";
 "All Types" = "全部类型";
-"API Key" = "API 密钥";
 "App Language" = "应用语言";
 "Appearance" = "外观";
 "Back" = "返回";
@@ -22,15 +21,6 @@
 "Clear History" = "清空历史";
 "Check for Updates" = "检查更新…";
 "Clipboard" = "剪贴板";
-"LLM Classification" = "LLM 识别分类";
-"Enable LLM Classification" = "开启 LLM 识别分类";
-"Classification Engine" = "分类引擎";
-"API Channel" = "API 渠道";
-"Official API" = "官方 API";
-"TypeSafe API Key" = "TypeSafe API Key";
-"OpenAI API Key" = "OpenAI API Key";
-"OpenRouter API Key" = "OpenRouter API Key";
-"Save" = "保存";
 "Show Kit" = "打开 Kit";
 "Code" = "代码";
 "Content Preview" = "内容预览";

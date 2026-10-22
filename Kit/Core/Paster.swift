@@ -35,8 +35,7 @@ enum Paster {
             didDeliver: { store.recordHistoryAction(id: item.id, deferPublication: keepingPaletteOpen) })
     }
 
-    /// Our own field editors can receive Paste directly, including secure fields. No synthetic key
-    /// or Accessibility permission is needed, and the saved selection is restored before delivery.
+    /// Paste directly into our own field editors and restore the saved selection before delivery
     @MainActor @discardableResult
     static func paste(
         _ item: ClipboardItem, store: ClipboardStore, into target: TextFieldPasteTarget,

@@ -74,7 +74,6 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
         return copy
     }
 
-    /// Same capture re-graded (async LLM classification); identity and every other field stay.
     func withKind(_ kind: Kind) -> ClipboardItem {
         var copy = self
         copy.kind = kind
