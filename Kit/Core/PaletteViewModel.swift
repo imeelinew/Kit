@@ -360,9 +360,9 @@ final class PaletteViewModel {
         if follow { scrollIntent = ScrollIntent(kind: .follow) }
     }
 
-    func openImageQuickLook(for itemID: ClipboardItem.ID) {
+    func toggleImageQuickLook(for itemID: ClipboardItem.ID) {
         guard selectedID == itemID, searchReady, !menuOpen, selectedItem?.kind == .image else { return }
-        imageQuickLookOpen = true
+        imageQuickLookOpen.toggle()
     }
 
     func openActions(for id: ClipboardItem.ID) {

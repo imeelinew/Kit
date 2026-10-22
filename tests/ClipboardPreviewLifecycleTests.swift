@@ -70,7 +70,7 @@ enum ClipboardPreviewLifecycleTests {
             probe, selector: #selector(CloseProbe.willClose(_:)),
             name: NSPopover.willCloseNotification, object: nil)
         defer { NotificationCenter.default.removeObserver(probe) }
-        vm.openImageQuickLook(for: item.id)
+        vm.toggleImageQuickLook(for: item.id)
         for _ in 0..<100 {
             if panel.childWindows?.contains(where: { $0.isVisible }) == true { break }
             try await Task.sleep(for: .milliseconds(50))

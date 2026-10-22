@@ -48,14 +48,59 @@ struct ImageQuickLookAnchor: NSViewRepresentable {
 }
 
 private final class ImageQuickLookAnchorView: NSView {
+    private var dismissalMonitor: Any?
+    private var dismissingButton: Int?
+
+    isolated deinit {
+        if let dismissalMonitor { NSEvent.removeMonitor(dismissalMonitor) }
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        if let dismissalMonitor {
+            NSEvent.removeMonitor(dismissalMonitor)
+            self.dismissalMonitor = nil
+        }
+        dismissingButton = nil
+        if window != nil {
+            dismissalMonitor = NSEvent.addLocalMonitorForEvents(
+                matching: [.leftMouseDown, .rightMouseDown, .leftMouseUp, .rightMouseUp,
+                           .leftMouseDragged, .rightMouseDragged]
+            ) { [weak self] event in
+                let consumed = MainActor.assumeIsolated {
+                    self?.consumesDismissal(event) ?? false
+                }
+                return consumed ? nil : event
+            }
+        }
         ImageQuickLookSession.shared.anchorDidChange(self)
     }
 
     override func layout() {
         super.layout()
         ImageQuickLookSession.shared.anchorDidChange(self)
+    }
+
+    private func consumesDismissal(_ event: NSEvent) -> Bool {
+        guard let window, event.window === window else { return false }
+        if dismissingButton == event.buttonNumber {
+            switch event.type {
+            case .leftMouseUp, .rightMouseUp:
+                dismissingButton = nil
+                return true
+            case .leftMouseDragged, .rightMouseDragged:
+                return true
+            case .leftMouseDown, .rightMouseDown:
+                dismissingButton = nil
+            default:
+                break
+            }
+        }
+        guard event.type == .leftMouseDown || event.type == .rightMouseDown,
+            ImageQuickLookSession.shared.dismissFromPalette(self) else { return false }
+        // Own the whole closing click so a stationary SwiftUI button cannot reopen the preview
+        dismissingButton = event.buttonNumber
+        return true
     }
 }
 
@@ -130,6 +175,15 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
         scheduleReconcile()
     }
 
+    func dismissFromPalette(_ view: NSView) -> Bool {
+        guard anchorView === view, requestedPresented || shownAnchorView === view else { return false }
+        requestedPresented = false
+        notifyWhenClosed = false
+        onDismiss?()
+        beginClose()
+        return true
+    }
+
     private func scheduleReconcile() {
         guard !reconcileScheduled else { return }
         reconcileScheduled = true
@@ -173,7 +227,7 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
         guard popover == nil else { return }
 
         let popover = NSPopover()
-        popover.behavior = .transient
+        popover.behavior = .applicationDefined
         popover.animates = true
         popover.delegate = self
         popover.contentSize = placement.size
@@ -213,7 +267,7 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
         shownHighlights = []
         isClosing = false
 
-        // A transient outside-click close originates in AppKit, so reflect it into SwiftUI.
+        // Reflect an AppKit-initiated close into SwiftUI
         if !appInitiatedClose {
             requestedPresented = false
             notifyWhenClosed = true

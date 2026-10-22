@@ -164,8 +164,10 @@ struct ClipboardPreview: View {
             }?.layout.matchingBounds(query: query) ?? []
             Group {
                 if let image = payload?.image {
-                    ClipboardPreviewImage(image: image, highlights: highlights) {
-                        vm.openImageQuickLook(for: item.id)
+                    ClipboardPreviewImage(
+                        image: image, highlights: highlights, isPresented: vm.imageQuickLookOpen
+                    ) {
+                        vm.toggleImageQuickLook(for: item.id)
                     }
                 } else {
                     Image(systemName: "photo").font(.system(.largeTitle))
@@ -192,10 +194,14 @@ struct ClipboardPreview: View {
 private struct ClipboardPreviewImage: View {
     let image: NSImage
     let highlights: [CGRect]
+    let isPresented: Bool
     let onActivate: () -> Void
 
     @State private var hovered = false
+    @State private var hoverLiftSuppressed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var lifted: Bool { isPresented || (hovered && !hoverLiftSuppressed) }
 
     var body: some View {
         Button(action: onActivate) {
@@ -212,12 +218,18 @@ private struct ClipboardPreviewImage: View {
                     RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
                         .strokeBorder(Theme.Colors.cardStroke, lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(hovered ? 0.14 : 0), radius: 6, x: 0, y: 3)
-                .offset(y: hovered && !reduceMotion ? -2 : 0)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: hovered)
+                .shadow(color: .black.opacity(lifted ? 0.14 : 0), radius: 6, x: 0, y: 3)
+                .offset(y: lifted && !reduceMotion ? -2 : 0)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: lifted)
         }
         .buttonStyle(.plain)
-        .onHover { hovered = $0 }
+        .onHover {
+            hovered = $0
+            if !$0 { hoverLiftSuppressed = false }
+        }
+        .onChange(of: isPresented) {
+            if !isPresented { hoverLiftSuppressed = true }
+        }
         .accessibilityLabel(Text("Content Preview"))
     }
 }
