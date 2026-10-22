@@ -71,9 +71,15 @@ enum ClipboardPreviewLifecycleTests {
             name: NSPopover.willCloseNotification, object: nil)
         defer { NotificationCenter.default.removeObserver(probe) }
         vm.openImageQuickLook(for: item.id)
-        try await Task.sleep(for: .milliseconds(650))
+        for _ in 0..<100 {
+            if panel.childWindows?.contains(where: { $0.isVisible }) == true { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
         guard let previewWindow = panel.childWindows?.first(where: { $0.isVisible }) else {
-            preconditionFailure("The regression must exercise a real, visible NSPopover")
+            preconditionFailure(
+                "The regression must exercise a real, visible NSPopover, "
+                    + "paletteVisible=\(panel.isVisible), requested=\(vm.imageQuickLookOpen), "
+                    + "selectedImage=\(vm.selectedID == item.id), searchReady=\(vm.searchReady)")
         }
         probe.isHiding = true
         let displayedContent = panel.contentView!

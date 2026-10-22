@@ -20,7 +20,7 @@ struct ImageQuickLookAnchor: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSView {
-        let view = NSView()
+        let view = ImageQuickLookAnchorView()
         context.coordinator.anchorView = view
         return view
     }
@@ -44,6 +44,18 @@ struct ImageQuickLookAnchor: NSViewRepresentable {
 
     final class Coordinator {
         var anchorView: NSView?
+    }
+}
+
+private final class ImageQuickLookAnchorView: NSView {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        ImageQuickLookSession.shared.anchorDidChange(self)
+    }
+
+    override func layout() {
+        super.layout()
+        ImageQuickLookSession.shared.anchorDidChange(self)
     }
 }
 
@@ -85,7 +97,7 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
             // A newly mounted/updated anchor supersedes any deferred failure notification from
             // the previous SwiftUI view identity.
             notifyWhenClosed = false
-            reconcileWhenLaidOut()
+            scheduleReconcile()
         } else {
             beginClose()
         }
@@ -113,12 +125,9 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
         beginClose()
     }
 
-    private func reconcileWhenLaidOut() {
-        if let anchorView, !anchorView.bounds.isEmpty, anchorView.window != nil {
-            reconcile()
-        } else {
-            scheduleReconcile()
-        }
+    func anchorDidChange(_ view: NSView) {
+        guard anchorView === view, requestedPresented else { return }
+        scheduleReconcile()
     }
 
     private func scheduleReconcile() {
@@ -137,7 +146,8 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
             return
         }
         guard !isClosing else { return }
-        guard let anchorView, anchorView.window != nil else { return }
+        guard let anchorView, anchorView.window?.isVisible == true,
+            !anchorView.bounds.isEmpty else { return }
         guard let placement = Self.placement(url: url, anchorView: anchorView) else {
             requestedPresented = false
             notifyWhenClosed = true
