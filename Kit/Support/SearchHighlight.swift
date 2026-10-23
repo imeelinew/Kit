@@ -22,16 +22,7 @@ enum SearchHighlight {
             string: string,
             attributes: [.font: font, .foregroundColor: foreground]
         )
-        let ranges = matchingRanges(source: string, query: query)
-        guard !ranges.isEmpty else {
-            NerdSymbolsFont.applyFallback(to: output, baseFont: font)
-            return output
-        }
-
-        let color = NSColor.controlAccentColor.withAlphaComponent(0.32)
-        for range in ranges {
-            output.addAttribute(.backgroundColor, value: color, range: NSRange(range, in: string))
-        }
+        apply(to: output, query: query)
         NerdSymbolsFont.applyFallback(to: output, baseFont: font)
         return output
     }
@@ -47,15 +38,16 @@ enum SearchHighlight {
     /// explicit font and paragraph-layout attribute produced by the Markdown renderer.
     static func applying(to attributed: NSAttributedString, query: String) -> NSAttributedString {
         let output = NSMutableAttributedString(attributedString: attributed)
-        let source = output.string
-        let ranges = matchingRanges(source: source, query: query)
-        guard !ranges.isEmpty else { return output }
+        apply(to: output, query: query)
+        return output
+    }
 
+    private static func apply(to output: NSMutableAttributedString, query: String) {
+        let source = output.string
         let color = NSColor.controlAccentColor.withAlphaComponent(0.32)
-        for range in ranges {
+        for range in matchingRanges(source: source, query: query) {
             output.addAttribute(.backgroundColor, value: color, range: NSRange(range, in: source))
         }
-        return output
     }
 
     static func matchingRanges(
