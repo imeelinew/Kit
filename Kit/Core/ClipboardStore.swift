@@ -564,23 +564,18 @@ final class ClipboardStore: ObservableObject {
     /// Remove a stack together with every history row assigned to it.
     @discardableResult
     func deleteStack(_ id: ClipboardStack.ID) -> Bool {
-        guard stacks.contains(where: { $0.id == id }),
-            sqlite3_exec(db, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK
-        else { return false }
-        var committed = false
-        defer {
-            if !committed { sqlite3_exec(db, "ROLLBACK", nil, nil, nil) }
-        }
-
-        guard let contents = stackContents(id),
-            deleteStackRows(
+        guard stacks.contains(where: { $0.id == id }) else { return false }
+        var contents: (itemIDs: Set<ClipboardItem.ID>, imageURLs: [URL])?
+        guard transaction({
+            contents = stackContents(id)
+            guard contents != nil else { return false }
+            return deleteStackRows(
                 "DELETE FROM items WHERE id IN (SELECT item_id FROM stack_items WHERE stack_id = ?)",
-                stackID: id),
-            deleteStackRows("DELETE FROM stack_items WHERE stack_id = ?", stackID: id),
-            deleteStackRows("DELETE FROM stacks WHERE id = ?", stackID: id),
-            sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK
+                stackID: id)
+                && deleteStackRows("DELETE FROM stack_items WHERE stack_id = ?", stackID: id)
+                && deleteStackRows("DELETE FROM stacks WHERE id = ?", stackID: id)
+        }), let contents
         else { return false }
-        committed = true
 
         if deletedEntry?.stackID == id { discardDeletion() }
         stacks.removeAll { $0.id == id }
