@@ -59,94 +59,6 @@ final class ClipboardStore: ObservableObject {
         FROM items
         """
 
-    private static let coreSchema = """
-        CREATE TABLE IF NOT EXISTS items(
-          id TEXT NOT NULL UNIQUE,
-          kind TEXT NOT NULL,
-          text TEXT,
-          image_path TEXT,
-          created_at REAL NOT NULL,
-          source_app TEXT,
-          image_fingerprint TEXT,
-          custom_title TEXT,
-          first_copied_at REAL,
-          copy_count INTEGER NOT NULL DEFAULT 1,
-          pinyin TEXT,
-          pinyin_initials TEXT,
-          ocr_text TEXT,
-          ocr_status TEXT,
-          ocr_version INTEGER,
-          ocr_attempts INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE INDEX IF NOT EXISTS items_created_at ON items(created_at);
-        CREATE INDEX IF NOT EXISTS items_kind ON items(kind);
-        CREATE INDEX IF NOT EXISTS items_text_content
-          ON items(text, created_at DESC) WHERE kind != 'image';
-        CREATE UNIQUE INDEX IF NOT EXISTS items_image_fingerprint
-          ON items(image_fingerprint) WHERE image_fingerprint IS NOT NULL;
-        CREATE INDEX IF NOT EXISTS items_image_path
-          ON items(image_path) WHERE image_path IS NOT NULL;
-        CREATE TABLE IF NOT EXISTS stacks(
-          id TEXT NOT NULL UNIQUE,
-          name TEXT NOT NULL,
-          position INTEGER NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS stack_items(
-          item_id TEXT NOT NULL UNIQUE,
-          stack_id TEXT NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS stack_items_stack_id
-          ON stack_items(stack_id, item_id);
-        CREATE TABLE IF NOT EXISTS pending_blob_deletions(
-          path TEXT NOT NULL PRIMARY KEY
-        );
-        """
-
-    private static let searchSchema = """
-        CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
-          text, pinyin, pinyin_initials,
-          content='items', content_rowid='rowid', tokenize='trigram'
-        );
-        CREATE TRIGGER IF NOT EXISTS items_ai AFTER INSERT ON items BEGIN
-          INSERT INTO items_fts(rowid, text, pinyin, pinyin_initials)
-          VALUES(new.rowid, new.text, new.pinyin, new.pinyin_initials);
-        END;
-        CREATE TRIGGER IF NOT EXISTS items_ad AFTER DELETE ON items BEGIN
-          INSERT INTO items_fts(items_fts, rowid, text, pinyin, pinyin_initials)
-          VALUES('delete', old.rowid, old.text, old.pinyin, old.pinyin_initials);
-        END;
-        CREATE TRIGGER IF NOT EXISTS items_au
-        AFTER UPDATE OF text, pinyin, pinyin_initials ON items BEGIN
-          INSERT INTO items_fts(items_fts, rowid, text, pinyin, pinyin_initials)
-          VALUES('delete', old.rowid, old.text, old.pinyin, old.pinyin_initials);
-          INSERT INTO items_fts(rowid, text, pinyin, pinyin_initials)
-          VALUES(new.rowid, new.text, new.pinyin, new.pinyin_initials);
-        END;
-        """
-
-    /// Separate OCR index preserves the existing text index during the one-time schema upgrade.
-    private static let imageSearchSchema = """
-        CREATE VIRTUAL TABLE IF NOT EXISTS image_ocr_fts USING fts5(
-          ocr_text, tokenize='trigram'
-        );
-        CREATE TRIGGER IF NOT EXISTS image_ocr_ai AFTER INSERT ON items
-        WHEN new.ocr_text IS NOT NULL BEGIN
-          INSERT INTO image_ocr_fts(rowid, ocr_text) VALUES(new.rowid, new.ocr_text);
-        END;
-        CREATE TRIGGER IF NOT EXISTS image_ocr_ad AFTER DELETE ON items
-        WHEN old.ocr_text IS NOT NULL BEGIN
-          DELETE FROM image_ocr_fts WHERE rowid = old.rowid;
-        END;
-        CREATE TRIGGER IF NOT EXISTS image_ocr_au AFTER UPDATE OF ocr_text ON items BEGIN
-          DELETE FROM image_ocr_fts WHERE rowid = old.rowid;
-          INSERT INTO image_ocr_fts(rowid, ocr_text)
-          SELECT new.rowid, new.ocr_text WHERE new.ocr_text IS NOT NULL;
-        END;
-        CREATE INDEX IF NOT EXISTS items_pending_ocr ON items(created_at)
-          WHERE kind = 'image' AND
-            (ocr_status IS NULL OR (ocr_status = 'failed' AND ocr_attempts < \(ClipboardImageTextRecognition.maxAttempts)));
-        """
-
     private let imagesDir: URL
     private let deletedImagesDir: URL
     private let dbURL: URL
@@ -469,10 +381,7 @@ final class ClipboardStore: ObservableObject {
     }
 
     private func transaction(_ body: () -> Bool) -> Bool {
-        guard sqlite3_exec(db, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { return false }
-        if body(), sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK { return true }
-        sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
-        return false
+        ClipboardSQLite.transaction(in: db, body)
     }
 
     private func discardDeletion() {
@@ -1287,14 +1196,7 @@ final class ClipboardStore: ObservableObject {
         guard
             sqlite3_open_v2(dbURL.path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil)
                 == SQLITE_OK,
-            sqlite3_exec(
-                db, "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=1000;",
-                nil, nil, nil) == SQLITE_OK,
-            sqlite3_exec(db, Self.coreSchema, nil, nil, nil) == SQLITE_OK
-        else { return }
-        guard migrateCopyMetadata(),
-            sqlite3_exec(db, Self.searchSchema, nil, nil, nil) == SQLITE_OK,
-            migrateImageSearch()
+            let db, ClipboardSQLite.prepareSchema(in: db)
         else { return }
         insertStmt = prepare(
             """
@@ -1340,61 +1242,6 @@ final class ClipboardStore: ObservableObject {
             ON CONFLICT(item_id) DO UPDATE SET stack_id = excluded.stack_id
             """)
         deleteMembershipStmt = prepare("DELETE FROM stack_items WHERE item_id = ?")
-    }
-
-    /// The legacy created_at column stores the most recent copy time
-    /// Older first-copy times and copy counts cannot be reconstructed
-    private func migrateCopyMetadata() -> Bool {
-        guard let stmt = prepare("PRAGMA table_info(items)") else { return false }
-        var columns = Set<String>()
-        var status = sqlite3_step(stmt)
-        while status == SQLITE_ROW {
-            if let name = ClipboardSQLite.columnString(stmt, 1) { columns.insert(name) }
-            status = sqlite3_step(stmt)
-        }
-        sqlite3_finalize(stmt)
-        guard status == SQLITE_DONE else { return false }
-        return transaction {
-            for (name, type) in [
-                ("first_copied_at", "REAL"), ("copy_count", "INTEGER NOT NULL DEFAULT 1"),
-            ] where !columns.contains(name) {
-                guard sqlite3_exec(db, "ALTER TABLE items ADD COLUMN \(name) \(type)",
-                                   nil, nil, nil) == SQLITE_OK else { return false }
-            }
-            return sqlite3_exec(db,
-                "UPDATE items SET first_copied_at = created_at WHERE first_copied_at IS NULL",
-                nil, nil, nil) == SQLITE_OK
-        }
-    }
-
-    private func migrateImageSearch() -> Bool {
-        guard let stmt = prepare("PRAGMA table_info(items)") else { return false }
-        var columns = Set<String>()
-        var status = sqlite3_step(stmt)
-        while status == SQLITE_ROW {
-            if let name = ClipboardSQLite.columnString(stmt, 1) { columns.insert(name) }
-            status = sqlite3_step(stmt)
-        }
-        sqlite3_finalize(stmt)
-        guard status == SQLITE_DONE else { return false }
-        return transaction {
-            for (name, type) in [
-                ("ocr_text", "TEXT"), ("ocr_status", "TEXT"), ("ocr_version", "INTEGER"),
-                ("ocr_attempts", "INTEGER NOT NULL DEFAULT 0"),
-            ] where !columns.contains(name) {
-                guard sqlite3_exec(db, "ALTER TABLE items ADD COLUMN \(name) \(type)",
-                                   nil, nil, nil) == SQLITE_OK else { return false }
-            }
-            guard sqlite3_exec(db, Self.imageSearchSchema, nil, nil, nil) == SQLITE_OK else {
-                return false
-            }
-            // Keep prior searchable text until the newer recognizer replaces it in the background.
-            return sqlite3_exec(db, """
-                UPDATE items SET ocr_status = NULL, ocr_version = NULL, ocr_attempts = 0
-                WHERE kind = 'image' AND ocr_version IS NOT NULL
-                  AND ocr_version != \(ClipboardImageTextRecognition.version)
-                """, nil, nil, nil) == SQLITE_OK
-        }
     }
 
     private func prepare(_ sql: String) -> OpaquePointer? {
