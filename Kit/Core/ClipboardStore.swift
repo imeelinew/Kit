@@ -369,7 +369,7 @@ final class ClipboardStore: ObservableObject {
         }
         discardDeletion()
         if let stackID { stackMembership[restored.id] = stackID }
-        items = Array(Self.displayOrder(
+        items = Array(ClipboardSearch.displayOrder(
             [restored] + items.filter { $0.id != restored.id }).prefix(Self.memoryWindow))
         if existing == nil {
             scheduleSearchMetadataUpdate(for: restored)
@@ -696,54 +696,26 @@ final class ClipboardStore: ObservableObject {
         let path = dbURL.path
         let includesImageText = imageTextSearchEnabled
         let imageGeneration = imageTextSearchGeneration
-        let databaseTask = Task.detached(priority: .userInitiated) {
-            ClipboardSearch.queryDatabase(
-                path: path, query: trimmed, kind: kind, stackID: stackID,
-                after: cursor, limit: limit, includesImageText: includesImageText)
-        }
         let membership = stackMembership
         let resident = cursor == nil && !trimmed.isEmpty ? items.filter {
             (kind == nil || $0.kind == kind)
                 && (stackID == nil || membership[$0.id] == stackID)
         } : []
-        let databasePage = await withTaskCancellationHandler {
-            await databaseTask.value
-        } onCancel: {
-            databaseTask.cancel()
+        let searchTask = Task.detached(priority: .userInitiated) {
+            ClipboardSearch.query(
+                path: path, query: trimmed, kind: kind, stackID: stackID,
+                after: cursor, limit: limit, includesImageText: includesImageText,
+                residentItems: resident)
         }
-        guard !Task.isCancelled, imageGeneration == imageTextSearchGeneration, let databasePage else {
+        let page = await withTaskCancellationHandler {
+            await searchTask.value
+        } onCancel: {
+            searchTask.cancel()
+        }
+        guard !Task.isCancelled, imageGeneration == imageTextSearchGeneration, let page else {
             return ClipboardSearchPage(items: [], nextCursor: nil)
         }
-        guard !resident.isEmpty else { return databasePage }
-
-        // Titles, compacted pinyin, and Unicode matching still need the resident overlay.
-        // Database hits are already authoritative and never need to be matched twice.
-        let databaseIDs = Set(databasePage.items.map(\.id))
-        let residentTask = Task.detached(priority: .userInitiated) {
-            var matches: [ClipboardItem] = []
-            for item in resident {
-                guard !Task.isCancelled else { return [ClipboardItem]() }
-                if !databaseIDs.contains(item.id),
-                    item.matches(trimmed, includeImageText: includesImageText)
-                {
-                    matches.append(item)
-                }
-            }
-            return matches
-        }
-        let residentResult = await withTaskCancellationHandler {
-            await residentTask.value
-        } onCancel: {
-            residentTask.cancel()
-        }
-        guard !Task.isCancelled, imageGeneration == imageTextSearchGeneration else {
-            return ClipboardSearchPage(items: [], nextCursor: nil)
-        }
-        guard !residentResult.isEmpty else { return databasePage }
-
-        return ClipboardSearchPage(
-            items: Self.displayOrder(databasePage.items + residentResult),
-            nextCursor: databasePage.nextCursor)
+        return page
     }
 
     func waitForSearchMetadata() async {
@@ -917,17 +889,6 @@ final class ClipboardStore: ObservableObject {
     }
 
     // MARK: - Private
-
-    /// One canonical order for the normal list and every search path: newest copy first.
-    /// Original offsets make exact timestamp ties stable.
-    private nonisolated static func displayOrder(_ values: [ClipboardItem]) -> [ClipboardItem] {
-        values.enumerated().sorted { lhs, rhs in
-            let left = lhs.element
-            let right = rhs.element
-            if left.lastCopiedAt != right.lastCopiedAt { return left.lastCopiedAt > right.lastCopiedAt }
-            return lhs.offset < rhs.offset
-        }.map(\.element)
-    }
 
     /// Copy metadata and history position commit together before feedback
     @discardableResult

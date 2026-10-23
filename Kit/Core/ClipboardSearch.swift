@@ -18,6 +18,47 @@ struct SearchMetadataUpdate: Sendable {
 }
 
 enum ClipboardSearch {
+    /// Combine indexed hits with a filtered resident snapshot while pinyin indexing catches up
+    static func query(
+        path: String, query: String, kind: ClipboardItem.Kind?,
+        stackID: ClipboardStack.ID?, after cursor: ClipboardSearchCursor?, limit: Int,
+        includesImageText: Bool, residentItems: [ClipboardItem]
+    ) -> ClipboardSearchPage? {
+        guard let page = queryDatabase(
+            path: path, query: query, kind: kind, stackID: stackID,
+            after: cursor, limit: limit, includesImageText: includesImageText),
+            !Task.isCancelled
+        else { return nil }
+        guard !residentItems.isEmpty else { return page }
+
+        // Database hits are authoritative, only missing residents need literal or pinyin matching
+        let databaseIDs = Set(page.items.map(\.id))
+        var additions: [ClipboardItem] = []
+        for item in residentItems {
+            guard !Task.isCancelled else { return nil }
+            if !databaseIDs.contains(item.id),
+                item.matches(query, includeImageText: includesImageText)
+            {
+                additions.append(item)
+            }
+        }
+        guard !Task.isCancelled else { return nil }
+        guard !additions.isEmpty else { return page }
+        return ClipboardSearchPage(
+            items: displayOrder(page.items + additions), nextCursor: page.nextCursor)
+    }
+
+    /// One canonical order for the normal list and every search path: newest copy first.
+    /// Original offsets make exact timestamp ties stable.
+    static func displayOrder(_ values: [ClipboardItem]) -> [ClipboardItem] {
+        values.enumerated().sorted { lhs, rhs in
+            let left = lhs.element
+            let right = rhs.element
+            if left.lastCopiedAt != right.lastCopiedAt { return left.lastCopiedAt > right.lastCopiedAt }
+            return lhs.offset < rhs.offset
+        }.map(\.element)
+    }
+
     static func queryDatabase(
         path: String, query: String, kind: ClipboardItem.Kind?,
         stackID: ClipboardStack.ID?, after cursor: ClipboardSearchCursor?, limit: Int,
