@@ -17,7 +17,6 @@ struct SearchMetadataUpdate: Sendable {
     var retryCount = 0
 }
 
-
 enum ClipboardSearch {
     static func queryDatabase(
         path: String, query: String, kind: ClipboardItem.Kind?,
@@ -37,51 +36,7 @@ enum ClipboardSearch {
         // Interrupt cancelled scans inside sqlite3_step, including no-result short queries.
         sqlite3_progress_handler(connection, 1000, { _ in Task.isCancelled ? 1 : 0 }, nil)
 
-        let escaped = query
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "%", with: "\\%")
-            .replacingOccurrences(of: "_", with: "\\_")
-        let pattern = "%\(escaped)%"
-        let imageQuery = ClipboardImageTextRecognition.normalizedText(query)
-        let imagePattern = "%" + imageQuery
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "%", with: "\\%")
-            .replacingOccurrences(of: "_", with: "\\_") + "%"
-        let usesFTS = query.count >= 3
-        let textCondition: String
-        var textBindings: [String] = []
-        if query.isEmpty {
-            textCondition = "1 = 1"
-        } else {
-            var contentCondition: String
-            if usesFTS {
-                contentCondition = "i.rowid IN (SELECT rowid FROM items_fts WHERE items_fts MATCH ?)"
-                textBindings.append("\"" + query.replacingOccurrences(of: "\"", with: "\"\"") + "\"")
-            } else {
-                contentCondition = """
-                    (i.text LIKE ? ESCAPE '\\' OR i.pinyin LIKE ? ESCAPE '\\'
-                     OR i.pinyin_initials LIKE ? ESCAPE '\\')
-                    """
-                textBindings.append(contentsOf: [pattern, pattern, pattern])
-            }
-            // OCR pinyin also lives in the common text index. Custom titles remain searchable.
-            if !includesImageText {
-                contentCondition = "(i.kind != 'image' AND \(contentCondition))"
-            }
-            var conditions = [contentCondition]
-            if includesImageText {
-                if usesFTS && imageQuery.count >= 3 {
-                    conditions.append("i.rowid IN (SELECT rowid FROM image_ocr_fts WHERE image_ocr_fts MATCH ?)")
-                    textBindings.append("\"" + imageQuery.replacingOccurrences(of: "\"", with: "\"\"") + "\"")
-                } else {
-                    conditions.append("i.ocr_text LIKE ? ESCAPE '\\'")
-                    textBindings.append(imagePattern)
-                }
-            }
-            conditions.append("i.custom_title LIKE ? ESCAPE '\\'")
-            textBindings.append(pattern)
-            textCondition = "(" + conditions.joined(separator: " OR ") + ")"
-        }
+        let predicate = textPredicate(query: query, includesImageText: includesImageText)
         let kindCondition = kind == nil ? "" : " AND i.kind = ?"
         let stackJoin = stackID == nil ? "" : "JOIN stack_items si ON si.item_id = i.id"
         let stackCondition = stackID == nil ? "" : " AND si.stack_id = ?"
@@ -94,7 +49,7 @@ enum ClipboardSearch {
                    i.ocr_text, i.ocr_status, i.ocr_version, i.ocr_attempts, i.copy_count, i.rowid
             FROM items i
             \(stackJoin)
-            WHERE \(textCondition)\(kindCondition)\(stackCondition)\(cursorCondition)
+            WHERE \(predicate.sql)\(kindCondition)\(stackCondition)\(cursorCondition)
             ORDER BY i.created_at DESC, i.rowid DESC
             LIMIT ?
             """
@@ -108,7 +63,7 @@ enum ClipboardSearch {
         defer { sqlite3_finalize(statement) }
 
         var parameter: Int32 = 1
-        for value in textBindings {
+        for value in predicate.bindings {
             sqlite3_bind_text(statement, parameter, value, -1, SQLITE_TRANSIENT)
             parameter += 1
         }
@@ -147,6 +102,57 @@ enum ClipboardSearch {
         return ClipboardSearchPage(
             items: results.map(\.item),
             nextCursor: hasMore ? results.last?.cursor : nil)
+    }
+
+    private static func textPredicate(
+        query: String, includesImageText: Bool
+    ) -> (sql: String, bindings: [String]) {
+        guard !query.isEmpty else { return ("1 = 1", []) }
+
+        let pattern = containsPattern(query)
+        let usesFTS = query.count >= 3
+        var contentCondition: String
+        var bindings: [String] = []
+        if usesFTS {
+            contentCondition = "i.rowid IN (SELECT rowid FROM items_fts WHERE items_fts MATCH ?)"
+            bindings.append(ftsPhrase(query))
+        } else {
+            contentCondition = """
+                (i.text LIKE ? ESCAPE '\\' OR i.pinyin LIKE ? ESCAPE '\\'
+                 OR i.pinyin_initials LIKE ? ESCAPE '\\')
+                """
+            bindings.append(contentsOf: [pattern, pattern, pattern])
+        }
+        // OCR pinyin also lives in the common text index, custom titles remain searchable
+        if !includesImageText {
+            contentCondition = "(i.kind != 'image' AND \(contentCondition))"
+        }
+        var conditions = [contentCondition]
+        if includesImageText {
+            let imageQuery = ClipboardImageTextRecognition.normalizedText(query)
+            if usesFTS && imageQuery.count >= 3 {
+                conditions.append("i.rowid IN (SELECT rowid FROM image_ocr_fts WHERE image_ocr_fts MATCH ?)")
+                bindings.append(ftsPhrase(imageQuery))
+            } else {
+                conditions.append("i.ocr_text LIKE ? ESCAPE '\\'")
+                bindings.append(containsPattern(imageQuery))
+            }
+        }
+        conditions.append("i.custom_title LIKE ? ESCAPE '\\'")
+        bindings.append(pattern)
+        return ("(" + conditions.joined(separator: " OR ") + ")", bindings)
+    }
+
+    private static func containsPattern(_ text: String) -> String {
+        let escaped = text
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "%", with: "\\%")
+            .replacingOccurrences(of: "_", with: "\\_")
+        return "%\(escaped)%"
+    }
+
+    private static func ftsPhrase(_ text: String) -> String {
+        "\"" + text.replacingOccurrences(of: "\"", with: "\"\"") + "\""
     }
 
     static func updateMetadata(
@@ -197,6 +203,4 @@ enum ClipboardSearch {
         committed = sqlite3_exec(connection, "COMMIT", nil, nil, nil) == SQLITE_OK
         return committed
     }
-
-
 }
