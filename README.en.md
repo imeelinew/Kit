@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/assets/readme-icon.png" width="112" height="112" alt="Kit app icon">
+  <img src=".github/assets/readme-icon.png?v=20261024" width="112" height="112" alt="Kit app icon">
 </p>
 
 <h1 align="center">Kit</h1>
