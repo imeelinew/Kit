@@ -318,10 +318,28 @@ final class PreviewTextScrollView: KitScrollView {
 
 }
 
+@MainActor
+protocol PreviewSelectionOwner: AnyObject {
+    var isPreviewSelectionCurrent: Bool { get }
+}
+
 final class PreviewTextView: NSTextView {
     static let trailingGutter: CGFloat = 16
 
+    var canCopyCurrentSelection: Bool {
+        guard isSelectable, selectedRange().length > 0 else { return false }
+        var ancestor = superview
+        while let view = ancestor {
+            if let owner = view as? any PreviewSelectionOwner {
+                return owner.isPreviewSelectionCurrent
+            }
+            ancestor = view.superview
+        }
+        return true
+    }
+
     override func copy(_ sender: Any?) {
+        guard canCopyCurrentSelection else { return }
         let pasteboard = NSPasteboard.general
         let previousChangeCount = pasteboard.changeCount
         super.copy(sender)

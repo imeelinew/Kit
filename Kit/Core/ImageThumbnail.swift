@@ -29,6 +29,47 @@ enum ImageThumbnail {
 
     private static let managedImageDirectories = ManagedImageDirectories()
 
+    private final class FileVersions: @unchecked Sendable {
+        private struct Entry {
+            let version: UInt64
+            var accessed: UInt64
+        }
+        private let lock = NSLock()
+        private var clock: UInt64 = 0
+        private var entries: [String: Entry] = [:]
+
+        func version(for url: URL, invalidating: Bool = false) -> UInt64 {
+            lock.withLock {
+                clock &+= 1
+                let path = url.standardizedFileURL.path
+                if var entry = entries[path], !invalidating {
+                    entry.accessed = clock
+                    entries[path] = entry
+                    return entry.version
+                }
+                if entries[path] == nil, entries.count >= 1024,
+                    let oldest = entries.min(by: { $0.value.accessed < $1.value.accessed })?.key
+                {
+                    entries[oldest] = nil
+                }
+                entries[path] = Entry(version: clock, accessed: clock)
+                return clock
+            }
+        }
+    }
+
+    private static let fileVersions = FileVersions()
+
+    static func fileVersion(for url: URL) -> UInt64 {
+        if managedImageDirectories.contains(url.deletingLastPathComponent()) { return 0 }
+        return fileVersions.version(for: url)
+    }
+
+    /// A fresh version prevents pending decodes from repopulating the current file's cache
+    static func invalidateFile(at url: URL) {
+        _ = fileVersions.version(for: url, invalidating: true)
+    }
+
     /// Persist thumbnails only beside originals owned by a clipboard store
     static func registerManagedImageDirectory(_ url: URL) {
         managedImageDirectories.register(url)
@@ -84,14 +125,22 @@ enum ImageThumbnail {
         maxPixel <= rowThreshold ? rowCache : previewCache
     }
 
-    private static func cacheKey(_ url: URL, _ maxPixel: CGFloat) -> NSString {
-        "\(url.path)#\(Int(maxPixel))" as NSString
+    private static func cacheKey(_ url: URL, _ maxPixel: CGFloat, version: UInt64) -> NSString {
+        "\(url.path)#\(Int(maxPixel))#\(version)" as NSString
     }
 
     struct DecodeRequest: Hashable, Sendable {
         let url: URL
         let maxPixel: Int
         let generation: UInt64
+        let sourceVersion: UInt64
+
+        init(url: URL, maxPixel: Int, generation: UInt64, sourceVersion: UInt64 = 0) {
+            self.url = url
+            self.maxPixel = maxPixel
+            self.generation = generation
+            self.sourceVersion = sourceVersion
+        }
     }
 
     /// A freshly-decoded, thereafter-immutable image is safe to move across the actor boundary.
@@ -267,7 +316,8 @@ enum ImageThumbnail {
         cache: { request, result in
             guard let image = result.image else { return }
             pick(CGFloat(request.maxPixel)).insert(
-                image, forKey: cacheKey(request.url, CGFloat(request.maxPixel)),
+                image, forKey: cacheKey(
+                    request.url, CGFloat(request.maxPixel), version: request.sourceVersion),
                 cost: result.cost, generation: request.generation)
         })
 
@@ -324,18 +374,22 @@ enum ImageThumbnail {
 
     /// Cache-only lookup (never touches disk) so views render an already-decoded thumbnail on the same frame.
     static func cached(_ url: URL, maxPixel: CGFloat) -> NSImage? {
-        pick(CGFloat(Int(maxPixel))).values.object(forKey: cacheKey(url, maxPixel))
+        pick(CGFloat(Int(maxPixel))).values.object(
+            forKey: cacheKey(url, maxPixel, version: fileVersion(for: url)))
     }
 
     /// Decodes off the main thread and returns the decode directly, not a cache re-read — a purge or eviction mid-decode must not strand a thumbnail on its placeholder.
     static func loadAsync(_ url: URL, maxPixel: CGFloat, priority: Priority? = nil) async -> NSImage? {
         guard !Task.isCancelled else { return nil }
         let maxPixel = CGFloat(Int(maxPixel))
-        if let cached = cached(url, maxPixel: maxPixel) { return cached }
+        let version = fileVersion(for: url)
+        if let cached = pick(maxPixel).values.object(
+            forKey: cacheKey(url, maxPixel, version: version)) { return cached }
         let generation = pick(maxPixel).currentGeneration()
         let decoded = await decodeCoordinator.decode(DecodeRequest(
-            url: url, maxPixel: Int(maxPixel), generation: generation), priority: priority)
-        guard !Task.isCancelled else { return nil }
+            url: url, maxPixel: Int(maxPixel), generation: generation, sourceVersion: version),
+            priority: priority)
+        guard !Task.isCancelled, version == fileVersion(for: url) else { return nil }
         return decoded.image
     }
 

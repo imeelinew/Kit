@@ -99,6 +99,7 @@ struct ImageTextLayout: Sendable {
 final class ImageSearchHighlightPayload {
     let url: URL
     let layout: ImageTextLayout
+    private let sourceVersion: UInt64
 
     private static let cache: NSCache<NSURL, ImageSearchHighlightPayload> = {
         let cache = NSCache<NSURL, ImageSearchHighlightPayload>()
@@ -110,13 +111,20 @@ final class ImageSearchHighlightPayload {
     nonisolated private static let queue = DispatchQueue(
         label: "com.eli.Kit.image-search-geometry", qos: .userInitiated)
 
-    private init(url: URL, layout: ImageTextLayout) {
+    private init(url: URL, layout: ImageTextLayout, sourceVersion: UInt64) {
         self.url = url
         self.layout = layout
+        self.sourceVersion = sourceVersion
+    }
+
+    func matches(_ url: URL) -> Bool {
+        self.url == url && sourceVersion == ImageThumbnail.fileVersion(for: url)
     }
 
     static func cached(for url: URL) -> ImageSearchHighlightPayload? {
-        cache.object(forKey: url as NSURL)
+        guard let payload = cache.object(forKey: url as NSURL), payload.matches(url)
+        else { return nil }
+        return payload
     }
 
     static func purge() {
@@ -131,8 +139,12 @@ final class ImageSearchHighlightPayload {
         guard !Task.isCancelled else { return nil }
         if let hit = cached(for: url) { return hit }
         let currentGeneration = generation
-        guard let layout = await recognize(url), !Task.isCancelled else { return nil }
-        let payload = ImageSearchHighlightPayload(url: url, layout: layout)
+        let sourceVersion = ImageThumbnail.fileVersion(for: url)
+        guard let layout = await recognize(url), !Task.isCancelled,
+            sourceVersion == ImageThumbnail.fileVersion(for: url)
+        else { return nil }
+        let payload = ImageSearchHighlightPayload(
+            url: url, layout: layout, sourceVersion: sourceVersion)
         if currentGeneration == generation {
             cache.setObject(payload, forKey: url as NSURL,
                             cost: layout.text.utf8.count + layout.regions.count * MemoryLayout<ImageTextLayout.Region>.stride)

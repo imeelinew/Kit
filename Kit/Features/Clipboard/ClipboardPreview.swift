@@ -9,6 +9,9 @@ final class ClipboardPreviewPayload {
     let itemID: ClipboardItem.ID
     let image: NSImage?
     let details: Details
+    private let copiedAt: Date
+    private let imageURL: URL?
+    private let imageVersion: UInt64
 
     struct Details: Sendable {
         var characters: Int?
@@ -30,19 +33,33 @@ final class ClipboardPreviewPayload {
         cache.removeAllObjects()
     }
 
-    private init(itemID: ClipboardItem.ID, image: NSImage?, details: Details) {
-        self.itemID = itemID
+    private init(
+        item: ClipboardItem, image: NSImage?, details: Details,
+        imageURL: URL?, imageVersion: UInt64
+    ) {
+        self.itemID = item.id
         self.image = image
         self.details = details
+        self.copiedAt = item.lastCopiedAt
+        self.imageURL = imageURL
+        self.imageVersion = imageVersion
+    }
+
+    func matches(_ item: ClipboardItem) -> Bool {
+        itemID == item.id && copiedAt == item.lastCopiedAt
+            && imageVersion == (imageURL.map { ImageThumbnail.fileVersion(for: $0) } ?? 0)
     }
 
     static func cached(for item: ClipboardItem) -> ClipboardPreviewPayload? {
-        cache.object(forKey: item.id as NSUUID)
+        guard let payload = cache.object(forKey: item.id as NSUUID), payload.matches(item)
+        else { return nil }
+        return payload
     }
 
     static func load(for item: ClipboardItem, imageURL: URL?) async -> ClipboardPreviewPayload {
         if let hit = cached(for: item) { return hit }
         let generation = cacheGeneration
+        let imageVersion = imageURL.map { ImageThumbnail.fileVersion(for: $0) } ?? 0
         let detailsTask = Task.detached(priority: .userInitiated) {
             var details = Details()
             guard !Task.isCancelled else { return details }
@@ -87,11 +104,12 @@ final class ClipboardPreviewPayload {
                 image = nil
             }
             return ClipboardPreviewPayload(
-                itemID: item.id, image: image, details: await detailsTask.value)
+                item: item, image: image, details: await detailsTask.value,
+                imageURL: imageURL, imageVersion: imageVersion)
         } onCancel: {
             detailsTask.cancel()
         }
-        if !Task.isCancelled, generation == cacheGeneration {
+        if !Task.isCancelled, generation == cacheGeneration, payload.matches(item) {
             let cost = payload.image.map { Int($0.size.width * $0.size.height) * 4 } ?? 1
             cache.setObject(payload, forKey: item.id as NSUUID, cost: cost)
         }
@@ -100,6 +118,17 @@ final class ClipboardPreviewPayload {
 }
 
 struct ClipboardPreview: View {
+    private struct LoadID: Hashable {
+        let itemID: ClipboardItem.ID
+        let copiedAt: Date
+        let imageVersion: UInt64
+    }
+
+    private struct HighlightLoadID: Hashable {
+        let url: URL
+        let version: UInt64
+    }
+
     let item: ClipboardItem?
     var query: String = ""
     @Bindable var vm: PaletteViewModel
@@ -110,11 +139,19 @@ struct ClipboardPreview: View {
     @State private var imageHighlights: ImageSearchHighlightPayload?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private var loadID: LoadID? {
+        item.map {
+            LoadID(
+                itemID: $0.id, copiedAt: $0.lastCopiedAt,
+                imageVersion: store.imageURL(for: $0).map { ImageThumbnail.fileVersion(for: $0) } ?? 0)
+        }
+    }
+
     var body: some View {
         let payload = item.flatMap { item in
-            (vm.preparedPreview?.itemID == item.id ? vm.preparedPreview : nil)
+            (vm.preparedPreview?.matches(item) == true ? vm.preparedPreview : nil)
                 ?? ClipboardPreviewPayload.cached(for: item)
-                ?? (loadedPayload?.itemID == item.id ? loadedPayload : nil)
+                ?? (loadedPayload?.matches(item) == true ? loadedPayload : nil)
         }
         let information = item.map {
             ClipboardInfoSection(item: $0, details: payload?.details ?? .init(), store: store, settings: settings)
@@ -127,7 +164,7 @@ struct ClipboardPreview: View {
             },
             information: Group { if let information { information } })
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: item?.id) {
+        .task(id: loadID) {
             guard let item else {
                 loadedPayload = nil
                 return
@@ -137,7 +174,9 @@ struct ClipboardPreview: View {
             guard !Task.isCancelled else { return }
             loadedPayload = payload
         }
-        .task(id: imageHighlightURL) {
+        .task(id: imageHighlightURL.map {
+            HighlightLoadID(url: $0, version: ImageThumbnail.fileVersion(for: $0))
+        }) {
             guard let url = imageHighlightURL else {
                 imageHighlights = nil
                 return
@@ -181,7 +220,7 @@ struct ClipboardPreview: View {
             let imageURL = store.imageURL(for: item)
             let highlights = imageURL.flatMap { url in
                 ImageSearchHighlightPayload.cached(for: url)
-                    ?? (imageHighlights?.url == url ? imageHighlights : nil)
+                    ?? (imageHighlights?.matches(url) == true ? imageHighlights : nil)
             }?.layout.matchingBounds(query: query) ?? []
             Group {
                 if let image = payload?.image {
@@ -389,6 +428,7 @@ private final class ClipboardPreviewContainerView: NSView {
     ) {
         let changed = current?.itemID != itemID
         if changed, let old = current {
+            old.retireSelection()
             current = nil
             retiring.append(old)
         }
@@ -445,14 +485,33 @@ private final class ClipboardPreviewContainerView: NSView {
     }
 }
 
-private final class ClipboardPreviewPane: NSView {
+private final class ClipboardPreviewPane: NSView, PreviewSelectionOwner {
     let itemID: ClipboardItem.ID
     private var kind: ClipboardItem.Kind
     private var content = NSHostingController(rootView: AnyView(EmptyView()))
     private let information = PreviewInformationScrollView()
     private let title = NSTextField(labelWithString: "")
     private var informationHeight: CGFloat = 0
+    private var isRetiring = false
     override var isFlipped: Bool { true }
+
+    var isPreviewSelectionCurrent: Bool {
+        guard !isRetiring else { return false }
+        guard let panel = window as? PalettePanel else { return true }
+        return panel.paletteViewModel?.selectedID == itemID
+    }
+
+    func retireSelection() {
+        isRetiring = true
+        func clearSelection(in view: NSView) {
+            if let text = view as? PreviewTextView {
+                text.setSelectedRange(NSRange(location: 0, length: 0))
+                text.isSelectable = false
+            }
+            view.subviews.forEach { clearSelection(in: $0) }
+        }
+        clearSelection(in: content.view)
+    }
 
     init(itemID: ClipboardItem.ID, kind: ClipboardItem.Kind) {
         self.itemID = itemID

@@ -65,10 +65,20 @@ struct ClipboardCaptureTests {
             preconditionFailure("TIFF data normalizes to a decodable PNG")
         }
 
-        let file = FileManager.default.temporaryDirectory.appendingPathComponent("notes.txt")
+        let fileDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try! FileManager.default.createDirectory(at: fileDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: fileDirectory) }
+        let textFile = fileDirectory.appendingPathComponent("notes.txt")
+        let imageFile = fileDirectory.appendingPathComponent("draft.png")
+        try! Data("captured notes\n".utf8).write(to: textFile)
+        try! red.png.write(to: imageFile)
+        let copiedFiles = [textFile.standardizedFileURL, imageFile.standardizedFileURL]
         let fileCopy = await pipeline.process(
-            snapshot(text: "notes.txt", imageData: red.png, imageIsPNG: true, fileURLs: [file]))
-        expect(fileCopy == nil, "Copied files are ignored alongside their other representations")
+            snapshot(text: "notes.txt", imageData: red.png, imageIsPNG: true,
+                     fileURLs: copiedFiles))
+        expect(fileCopy?.content == .files(copiedFiles),
+               "Copied files preserve their ordered URL set ahead of text and image representations")
 
         let limit = ClipboardCapturePipeline.maxTextBytes
         let capped = await pipeline.process(snapshot(text: String(repeating: "a", count: limit)))
@@ -80,6 +90,6 @@ struct ClipboardCaptureTests {
         let blank = await pipeline.process(snapshot(text: "  \n\t "))
         expect(blank == nil, "Whitespace-only text is dropped")
 
-        print("PASS: capture policy, file copy exclusion, PNG passthrough, TIFF normalization, text limits")
+        print("PASS: capture policy, file capture precedence, PNG passthrough, TIFF normalization, text limits")
     }
 }

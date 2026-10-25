@@ -430,6 +430,7 @@ private final class ClipboardThumbnailView: NSView {
     private let symbolView = NSImageView()
     private var representedID: ClipboardItem.ID?
     private var representedURL: URL?
+    private var representedVersion: UInt64?
     private var loadTask: Task<Void, Never>?
     private var displayedImage: NSImage?
     private var displayedFileIcon: NSImage?
@@ -495,14 +496,17 @@ private final class ClipboardThumbnailView: NSView {
 
     func configure(item: ClipboardItem, imageURL: URL?) {
         let sourceURL = imageURL ?? item.fileURLs.first
+        let sourceVersion = sourceURL.map { ImageThumbnail.fileVersion(for: $0) }
         let usesFileContents = item.kind == .image || item.kind == .file
         if usesFileContents, representedID == item.id, representedURL == sourceURL,
+            representedVersion == sourceVersion,
             finishedLoading || loadTask != nil
         { return }
         loadTask?.cancel()
         loadTask = nil
         representedID = item.id
         representedURL = sourceURL
+        representedVersion = sourceVersion
         displayedImage = nil
         displayedFileIcon = nil
         finishedLoading = false
@@ -563,6 +567,7 @@ private final class ClipboardThumbnailView: NSView {
         loadTask = nil
         representedID = nil
         representedURL = nil
+        representedVersion = nil
         displayedImage = nil
         displayedFileIcon = nil
         finishedLoading = false

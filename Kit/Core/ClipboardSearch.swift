@@ -78,6 +78,7 @@ enum ClipboardSearch {
         sqlite3_progress_handler(connection, 1000, { _ in Task.isCancelled ? 1 : 0 }, nil)
 
         let predicate = textPredicate(query: query, includesImageText: includesImageText)
+        let validatesFileImageText = !includesImageText && !query.isEmpty
         let kindCondition = kind == nil ? "" : " AND i.kind = ?"
         let stackJoin = stackID == nil ? "" : "JOIN stack_items si ON si.item_id = i.id"
         let stackCondition = stackID == nil ? "" : " AND si.stack_id = ?"
@@ -123,22 +124,29 @@ enum ClipboardSearch {
             sqlite3_bind_int64(statement, parameter + 2, cursor.rowID)
             parameter += 3
         }
-        sqlite3_bind_int64(statement, parameter, sqlite3_int64(limit + 1))
+        // OCR pinyin shares this index with paths, so disabled OCR needs candidate validation
+        // Apply the page limit after validation to avoid truncating later genuine matches
+        sqlite3_bind_int64(statement, parameter, validatesFileImageText ? -1 : sqlite3_int64(limit + 1))
 
         var results: [(item: ClipboardItem, cursor: ClipboardSearchCursor)] = []
         var status = sqlite3_step(statement)
         while status == SQLITE_ROW {
             if Task.isCancelled { return nil }
             if let item = ClipboardSQLite.row(statement) {
-                results.append((
-                    item: item,
-                    cursor: ClipboardSearchCursor(
-                        lastCopiedAt: item.lastCopiedAt,
-                        rowID: sqlite3_column_int64(statement, 15))))
+                if !validatesFileImageText || item.kind != .image || !item.isFileBacked
+                    || item.matches(query, includeImageText: false)
+                {
+                    results.append((
+                        item: item,
+                        cursor: ClipboardSearchCursor(
+                            lastCopiedAt: item.lastCopiedAt,
+                            rowID: sqlite3_column_int64(statement, 15))))
+                    if results.count > limit { break }
+                }
             }
             status = sqlite3_step(statement)
         }
-        guard status == SQLITE_DONE else { return nil }
+        guard status == SQLITE_DONE || (status == SQLITE_ROW && results.count > limit) else { return nil }
         let hasMore = results.count > limit
         if hasMore { results.removeLast() }
         return ClipboardSearchPage(

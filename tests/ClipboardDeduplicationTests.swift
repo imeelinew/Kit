@@ -26,11 +26,23 @@ struct ClipboardDeduplicationTests {
         let stack = store.createStack(name: "Saved")!
         store.assign(a.id, to: stack.id)
         _ = store.addText("这确实是一次新的复制。", kind: .text, sourceBundleID: "other")
-        let again = store.addText("新的复制", kind: .text, sourceBundleID: "second")!
-        precondition(again.id == a.id && store.items.count == 2, "A → B → A reuses A")
-        precondition(again.lastCopiedAt >= a.lastCopiedAt && again.sourceBundleID == "second"
+        let differentSource = store.addText("新的复制", kind: .text, sourceBundleID: "second")!
+        precondition(differentSource.id != a.id && store.items.count == 3,
+                     "The same text from a different source remains separate")
+        precondition(store.item(id: a.id) == a,
+                     "A different source does not change the original entry")
+        let again = store.addText("新的复制", kind: .text, sourceBundleID: "first")!
+        precondition(again.id == a.id && store.items.count == 3, "A → B → A from the same source reuses A")
+        precondition(again.lastCopiedAt >= a.lastCopiedAt && again.sourceBundleID == "first"
                      && abs(again.firstCopiedAt.timeIntervalSince(a.firstCopiedAt)) < 0.000001
                      && again.copyCount == 2)
+        precondition(store.stackID(for: a.id) == stack.id,
+                     "Same-source recopy preserves stack membership")
+
+        let nilSource = store.addText("nil source", kind: .text, sourceBundleID: nil)!
+        let nilSourceAgain = store.addText("nil source", kind: .text, sourceBundleID: nil)!
+        precondition(nilSourceAgain.id == nilSource.id && nilSourceAgain.copyCount == 2,
+                     "Text without a source deduplicates with other text without a source")
 
         // Exact contents, not visible first lines or normalized whitespace, determine identity.
         let different = ["新的复制 ", "新的复制\n", "Case", "case", "same\nA", "same\nB",
@@ -44,10 +56,14 @@ struct ClipboardDeduplicationTests {
         let before = store.item(id: a.id)!
         let reopened = ClipboardStore(directory: directory)
         reopened.load()
-        precondition(reopened.addText("新的复制", kind: .text, sourceBundleID: "fifth")?.id == a.id)
-        precondition(reopened.item(id: a.id)!.copyCount == before.copyCount + 1)
+        let restarted = reopened.addText("新的复制", kind: .text, sourceBundleID: "first")!
+        precondition(restarted.id == a.id && reopened.items.count == store.items.count,
+                     "Same-source recopy after restart reuses the original without adding an entry")
+        precondition(restarted.copyCount == before.copyCount + 1
+                     && restarted.firstCopiedAt == before.firstCopiedAt,
+                     "Same-source recopy after restart advances the count and preserves the first time")
         precondition(reopened.stackID(for: a.id) == stack.id)
-        print("PASS: interleaved/consecutive copies, exact-content identity, restart persistence")
+        print("PASS: same-source recopy, source isolation, nil-source identity, exact bytes, metadata and restart")
     }
 
     @MainActor

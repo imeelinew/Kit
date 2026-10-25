@@ -82,6 +82,7 @@ final class ClipboardStore: ObservableObject {
     private var insertStmt: OpaquePointer?
     private var loadStmt: OpaquePointer?
     private var refreshStmt: OpaquePointer?
+    private var refreshImageOCRStmt: OpaquePointer?
     private var deleteByIDStmt: OpaquePointer?
     private var staleImagesStmt: OpaquePointer?
     private var deleteStaleStmt: OpaquePointer?
@@ -245,10 +246,20 @@ final class ClipboardStore: ObservableObject {
         guard fileURLs.allSatisfy(\.isFileURL) else { return nil }
         let normalizedURLs = fileURLs.map(\.standardizedFileURL)
         guard !normalizedURLs.isEmpty else { return nil }
+        for url in normalizedURLs {
+            ImageThumbnail.invalidateFile(at: url)
+        }
         let kind = kind(forFileURLs: normalizedURLs)
         if let existing = fileItem(matching: normalizedURLs, sourceBundleID: sourceBundleID) {
-            let updated = existing.recopied(sourceBundleID: sourceBundleID).withKind(kind)
-            guard refresh(updated) else { return nil }
+            let resetImageOCR = existing.kind == .image || kind == .image
+            var updated = existing.recopied(sourceBundleID: sourceBundleID).withKind(kind)
+            if resetImageOCR { updated = updated.withImageOCR(nil) }
+            guard refresh(updated, resetImageOCR: resetImageOCR) else { return nil }
+            if kind == .image {
+                if let url = imageURL(for: updated) { warmImageRow(url) }
+                startImageOCRWorkerIfNeeded()
+                refreshImageTextIndexState()
+            }
             return updated
         }
         let item = ClipboardItem(
@@ -646,7 +657,7 @@ final class ClipboardStore: ObservableObject {
     func imageTextIndexImageCount() -> Int {
         guard let stmt = prepare("""
             SELECT COUNT(*) FROM items
-            WHERE kind = 'image' AND image_path IS NOT NULL
+            WHERE \(ClipboardSQLite.imageBackedPredicate)
             """)
         else { return 0 }
         defer { sqlite3_finalize(stmt) }
@@ -655,17 +666,52 @@ final class ClipboardStore: ObservableObject {
 
     @discardableResult
     func clearImageTextIndex() -> Bool {
-        guard sqlite3_exec(db, """
-            UPDATE items SET ocr_text = NULL, pinyin = NULL, pinyin_initials = NULL,
-                             ocr_status = 'complete', ocr_version = \(ClipboardImageTextRecognition.version)
-            WHERE kind = 'image' AND image_path IS NOT NULL AND ocr_text IS NOT NULL
-            """, nil, nil, nil) == SQLITE_OK else { return false }
+        guard transaction({
+            guard let select = prepare("""
+                SELECT id, text, file_urls IS NOT NULL FROM items
+                WHERE \(ClipboardSQLite.imageBackedPredicate) AND ocr_text IS NOT NULL
+                """)
+            else { return false }
+            defer { sqlite3_finalize(select) }
+            var rows: [(id: String, text: String?, isFileBacked: Bool)] = []
+            var status = sqlite3_step(select)
+            while status == SQLITE_ROW {
+                guard let id = ClipboardSQLite.columnString(select, 0) else { return false }
+                rows.append((
+                    id: id, text: ClipboardSQLite.columnString(select, 1),
+                    isFileBacked: sqlite3_column_int(select, 2) != 0))
+                status = sqlite3_step(select)
+            }
+            guard status == SQLITE_DONE else { return false }
+            guard let update = prepare("""
+                UPDATE items SET ocr_text = NULL, ocr_status = 'complete',
+                                 ocr_version = \(ClipboardImageTextRecognition.version),
+                                 pinyin = ?, pinyin_initials = ?
+                WHERE id = ? AND \(ClipboardSQLite.imageBackedPredicate)
+                """)
+            else { return false }
+            defer { sqlite3_finalize(update) }
+            for row in rows {
+                var full: String?
+                var initials: String?
+                if row.isFileBacked {
+                    let forms = Pinyin.searchForms(for: row.text ?? "")
+                    full = forms.full.isEmpty ? nil : forms.full
+                    initials = forms.initials.isEmpty ? nil : forms.initials
+                }
+                ClipboardSQLite.bindText(full, to: update, at: 1)
+                ClipboardSQLite.bindText(initials, to: update, at: 2)
+                ClipboardSQLite.bindText(row.id, to: update, at: 3)
+                guard stepAndReset(update) else { return false }
+            }
+            return true
+        }) else { return false }
         imageTextSearchGeneration &+= 1
         imageOCRTask?.cancel()
         imageOCRRebuildIDs = nil
 
         func cleared(_ item: ClipboardItem) -> ClipboardItem {
-            guard item.kind == .image, item.imagePath != nil,
+            guard item.kind == .image,
                 let metadata = item.imageOCR, metadata.text != nil
             else {
                 return item
@@ -691,7 +737,7 @@ final class ClipboardStore: ObservableObject {
         guard transaction({
             guard let stmt = prepare("""
                 SELECT id FROM items
-                WHERE kind = 'image' AND image_path IS NOT NULL
+                WHERE \(ClipboardSQLite.imageBackedPredicate)
                 ORDER BY created_at, rowid
                 """)
             else { return false }
@@ -706,7 +752,7 @@ final class ClipboardStore: ObservableObject {
             guard status == SQLITE_DONE else { return false }
             return sqlite3_exec(db, """
                 UPDATE items SET ocr_status = NULL, ocr_version = NULL, ocr_attempts = 0
-                WHERE kind = 'image' AND image_path IS NOT NULL
+                WHERE \(ClipboardSQLite.imageBackedPredicate)
                 """, nil, nil, nil) == SQLITE_OK
         }) else { return false }
         imageTextSearchGeneration &+= 1
@@ -724,7 +770,7 @@ final class ClipboardStore: ObservableObject {
             guard let stmt = prepare("""
                 SELECT EXISTS(
                     SELECT 1 FROM items
-                    WHERE kind = 'image' AND image_path IS NOT NULL AND ocr_text IS NOT NULL
+                    WHERE \(ClipboardSQLite.imageBackedPredicate) AND ocr_text IS NOT NULL
                 )
                 """)
             else { return }
@@ -780,7 +826,7 @@ final class ClipboardStore: ObservableObject {
     private func nextImageOCRItem() -> ClipboardItem? {
         if imageOCRRebuildIDs != nil, !imageTextSearchEnabled {
             while let id = imageOCRRebuildIDs?.last {
-                if let item = loadItem(id: id), item.kind == .image, item.imagePath != nil,
+                if let item = loadItem(id: id), item.kind == .image,
                     item.imageOCR == nil || (item.imageOCR?.status == .failed
                         && (item.imageOCR?.attempts ?? 0) < ClipboardImageTextRecognition.maxAttempts)
                 { return item }
@@ -790,8 +836,7 @@ final class ClipboardStore: ObservableObject {
         }
         guard imageTextSearchEnabled else { return nil }
         guard let stmt = prepare("""
-            \(Self.itemSelection) WHERE kind = 'image'
-              AND image_path IS NOT NULL AND
+            \(Self.itemSelection) WHERE \(ClipboardSQLite.imageBackedPredicate) AND
               (ocr_status IS NULL OR (ocr_status = 'failed' AND ocr_attempts < \(ClipboardImageTextRecognition.maxAttempts)))
             ORDER BY created_at DESC, rowid DESC LIMIT 1
             """)
@@ -843,19 +888,23 @@ final class ClipboardStore: ObservableObject {
                             text: text, status: status,
                             version: ClipboardImageTextRecognition.version,
                             attempts: (item.imageOCR?.attempts ?? 0) + 1),
-                        Pinyin.searchForms(for: text ?? ""))
+                        Self.searchForms(for: item, imageOCRText: text))
                 }.value
                 guard !Task.isCancelled else { return }
                 if self?.saveImageOCR(metadata.0, forms: metadata.1, for: item,
-                                      generation: generation) != true,
-                    self?.item(id: item.id) != nil
-                {
+                                      generation: generation) != true {
+                    guard let self, let current = self.item(id: item.id) else { continue }
+                    guard self.hasSameOCRSource(current, as: item) else { continue }
                     // Retry a transient database lock once, without running recognition again.
                     try? await Task.sleep(for: .seconds(1))
                     guard !Task.isCancelled else { return }
-                    guard self?.saveImageOCR(metadata.0, forms: metadata.1, for: item,
-                                            generation: generation) == true
-                    else { return }
+                    guard self.saveImageOCR(metadata.0, forms: metadata.1, for: item,
+                                           generation: generation) == true
+                    else {
+                        guard let current = self.item(id: item.id) else { continue }
+                        guard self.hasSameOCRSource(current, as: item) else { continue }
+                        return
+                    }
                 }
                 // Yield between images so a large backfill cannot monopolize the app.
                 try? await Task.sleep(for: .milliseconds(25))
@@ -872,8 +921,9 @@ final class ClipboardStore: ObservableObject {
         guard generation == captureGeneration, let stmt = prepare("""
             UPDATE items SET ocr_text = ?, ocr_status = ?, ocr_version = ?, ocr_attempts = ?,
                              pinyin = ?, pinyin_initials = ?
-            WHERE id = ? AND kind = 'image' AND image_path IS NOT NULL
-              AND image_path IS ? AND image_fingerprint IS ?
+            WHERE id = ? AND \(ClipboardSQLite.imageBackedPredicate)
+              AND created_at = ? AND copy_count = ?
+              AND image_path IS ? AND image_fingerprint IS ? AND file_urls IS ?
             """)
         else { return false }
         defer { sqlite3_finalize(stmt) }
@@ -884,8 +934,13 @@ final class ClipboardStore: ObservableObject {
         sqlite3_bind_text(stmt, 5, forms.full, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 6, forms.initials, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 7, item.id.uuidString, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_text(stmt, 8, item.imagePath, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_text(stmt, 9, item.imageFingerprint, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_double(stmt, 8, item.lastCopiedAt.timeIntervalSince1970)
+        sqlite3_bind_int64(stmt, 9, Int64(item.copyCount))
+        sqlite3_bind_text(stmt, 10, item.imagePath, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 11, item.imageFingerprint, -1, SQLITE_TRANSIENT)
+        ClipboardSQLite.bindText(
+            item.isFileBacked ? ClipboardSQLite.encodedFileURLs(item.fileURLs) : nil,
+            to: stmt, at: 12)
         guard sqlite3_step(stmt) == SQLITE_DONE, sqlite3_changes(db) == 1 else { return false }
         if let index = items.firstIndex(where: { $0.id == item.id }),
             let updated = loadItem(id: item.id)
@@ -898,11 +953,35 @@ final class ClipboardStore: ObservableObject {
         return true
     }
 
+    private func hasSameOCRSource(_ current: ClipboardItem, as captured: ClipboardItem) -> Bool {
+        // Compare the epoch values stored by SQLite, which can round Date precision
+        current.id == captured.id && current.kind == .image
+            && current.lastCopiedAt.timeIntervalSince1970 == captured.lastCopiedAt.timeIntervalSince1970
+            && current.copyCount == captured.copyCount
+            && current.imagePath == captured.imagePath
+            && current.imageFingerprint == captured.imageFingerprint
+            && current.fileURLs == captured.fileURLs
+    }
+
     private func scheduleSearchMetadataUpdate(for item: ClipboardItem) {
-        guard let text = item.text, Pinyin.containsHan(text) else { return }
+        guard item.kind != .image, !item.isFileBacked,
+            let text = item.text, Pinyin.containsHan(text)
+        else { return }
         pendingSearchMetadata.append(
             SearchMetadataUpdate(id: item.id.uuidString, text: text))
         startSearchMetadataWorkerIfNeeded()
+    }
+
+    nonisolated private static func searchForms(
+        for item: ClipboardItem, imageOCRText: String?
+    ) -> Pinyin.SearchForms {
+        let text: String
+        if item.kind == .image {
+            text = [item.text, imageOCRText].compactMap { $0 }.joined(separator: "\n")
+        } else {
+            text = item.text ?? ""
+        }
+        return Pinyin.searchForms(for: text)
     }
 
     private func startSearchMetadataWorkerIfNeeded() {
@@ -945,14 +1024,20 @@ final class ClipboardStore: ObservableObject {
     /// Copy metadata and history position commit together before feedback
     @discardableResult
     private func refresh(
-        _ updated: ClipboardItem, externalCapture: Bool = true, deferPublication: Bool = false
+        _ updated: ClipboardItem, externalCapture: Bool = true, deferPublication: Bool = false,
+        resetImageOCR: Bool = false
     ) -> Bool {
-        guard let stmt = refreshStmt else { return false }
+        guard let stmt = resetImageOCR ? refreshImageOCRStmt : refreshStmt else { return false }
         sqlite3_bind_double(stmt, 1, updated.lastCopiedAt.timeIntervalSince1970)
         sqlite3_bind_text(stmt, 2, updated.sourceBundleID, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 3, updated.id.uuidString, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 4, updated.kind.rawValue, -1, SQLITE_TRANSIENT)
         sqlite3_bind_int64(stmt, 5, Int64(updated.copyCount))
+        if resetImageOCR {
+            let forms = Self.searchForms(for: updated, imageOCRText: updated.imageOCR?.text)
+            ClipboardSQLite.bindText(forms.full, to: stmt, at: 6)
+            ClipboardSQLite.bindText(forms.initials, to: stmt, at: 7)
+        }
         guard stepAndReset(stmt), sqlite3_changes(db) == 1 else { return false }
         if deferPublication {
             hasDeferredHistoryUpdates = true
@@ -975,7 +1060,7 @@ final class ClipboardStore: ObservableObject {
         if items.count > Self.memoryWindow { items.removeLast() }
         pruneIfDue()
         scheduleSearchMetadataUpdate(for: item)
-        if item.kind == .image, item.imagePath != nil { startImageOCRWorkerIfNeeded() }
+        if item.kind == .image { startImageOCRWorkerIfNeeded() }
         onItemCaptured?()
         return true
     }
@@ -1000,7 +1085,7 @@ final class ClipboardStore: ObservableObject {
             for column: Int32 in 10...12 { sqlite3_bind_null(stmt, column) }
             sqlite3_bind_int(stmt, 13, 0)
         }
-        let forms = Pinyin.searchForms(for: item.imageOCR?.text ?? "")
+        let forms = Self.searchForms(for: item, imageOCRText: item.imageOCR?.text)
         sqlite3_bind_text(stmt, 14, forms.full, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 15, forms.initials, -1, SQLITE_TRANSIENT)
         sqlite3_bind_int64(stmt, 16, Int64(item.copyCount))
@@ -1265,6 +1350,13 @@ final class ClipboardStore: ObservableObject {
             """)
         refreshStmt = prepare(
             "UPDATE items SET created_at = ?1, source_app = ?2, kind = ?4, copy_count = ?5 WHERE id = ?3")
+        refreshImageOCRStmt = prepare(
+            """
+            UPDATE items SET created_at = ?1, source_app = ?2, kind = ?4, copy_count = ?5,
+                             ocr_text = NULL, ocr_status = NULL, ocr_version = NULL,
+                             ocr_attempts = 0, pinyin = ?6, pinyin_initials = ?7
+            WHERE id = ?3
+            """)
         deleteByIDStmt = prepare("DELETE FROM items WHERE id = ?")
         staleImagesStmt = prepare(
             """
@@ -1318,7 +1410,7 @@ final class ClipboardStore: ObservableObject {
 
     private func closeDatabase() {
         [
-            insertStmt, loadStmt, refreshStmt, deleteByIDStmt,
+            insertStmt, loadStmt, refreshStmt, refreshImageOCRStmt, deleteByIDStmt,
             staleImagesStmt, deleteStaleStmt, imageByFingerprintStmt, textByContentStmt,
             fileByContentStmt, itemByIDStmt,
             insertStackStmt, upsertMembershipStmt, deleteMembershipStmt,

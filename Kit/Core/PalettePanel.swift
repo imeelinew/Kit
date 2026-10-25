@@ -362,6 +362,9 @@ final class PalettePanel: NSPanel {
     private func canCopySelectedText(viewModel: PaletteViewModel) -> Bool {
         guard !viewModel.menuOpen || viewModel.isNamingStack else { return false }
         guard let editor = firstResponder as? NSTextView else { return false }
+        guard (editor as? PreviewTextView)?.canCopyCurrentSelection != false else {
+            return false
+        }
         return editor.selectedRange().length > 0
     }
 
@@ -369,6 +372,7 @@ final class PalettePanel: NSPanel {
     private func copySelectedText() -> Bool {
         guard paletteViewModel?.menuOpen != true || paletteViewModel?.isNamingStack == true,
             let editor = firstResponder as? NSTextView,
+            (editor as? PreviewTextView)?.canCopyCurrentSelection != false,
             editor.selectedRange().length > 0
         else { return false }
 
@@ -385,10 +389,7 @@ final class PalettePanel: NSPanel {
         guard paletteViewModel?.menuOpen != true,
             paletteViewModel?.isNamingStack != true,
             firstResponder is PreviewTextView || firstResponder === self,
-            event.modifierFlags.intersection([.command, .option, .control]).isEmpty,
-            let characters = event.characters,
-            !characters.isEmpty,
-            characters.unicodeScalars.allSatisfy(Self.isPrintableTypingScalar),
+            startsSearchTyping(event),
             let searchField,
             searchField.isEnabled
         else { return false }
@@ -399,9 +400,31 @@ final class PalettePanel: NSPanel {
         return true
     }
 
+    /// A dead key can begin with an empty or control character, so fall back to the layout's
+    /// unmodified key while still rejecting navigation and function-key private-use scalars
+    private func startsSearchTyping(_ event: NSEvent) -> Bool {
+        guard event.modifierFlags.intersection([.command, .control]).isEmpty else {
+            return false
+        }
+        if let characters = event.characters,
+            characters.unicodeScalars.contains(where: Self.isFunctionKeyScalar)
+        {
+            return false
+        }
+        let candidates = [event.characters, event.charactersIgnoringModifiers]
+        return candidates.contains { text in
+            guard let text, !text.isEmpty else { return false }
+            return text.unicodeScalars.allSatisfy(Self.isPrintableTypingScalar)
+        }
+    }
+
     private static func isPrintableTypingScalar(_ scalar: Unicode.Scalar) -> Bool {
         !CharacterSet.controlCharacters.contains(scalar)
-            && !(0xF700...0xF8FF).contains(Int(scalar.value))
+            && !isFunctionKeyScalar(scalar)
+    }
+
+    private static func isFunctionKeyScalar(_ scalar: Unicode.Scalar) -> Bool {
+        (0xF700...0xF8FF).contains(Int(scalar.value))
     }
 
     init<Content: View>(

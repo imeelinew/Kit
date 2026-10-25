@@ -22,6 +22,7 @@ enum ClipboardPreviewLifecycleTests {
         let selectedID: ClipboardItem.ID
         var isHiding = false
         var checkedClose = false
+        var shownPopover: NSPopover?
 
         init(core: AppCore, panel: PalettePanel, selectedID: ClipboardItem.ID) {
             self.core = core
@@ -29,8 +30,14 @@ enum ClipboardPreviewLifecycleTests {
             self.selectedID = selectedID
         }
 
+        @objc func didShow(_ notification: Notification) {
+            guard let popover = notification.object as? NSPopover,
+                popover.contentViewController?.view.window?.parent === panel else { return }
+            shownPopover = popover
+        }
+
         @objc func willClose(_ notification: Notification) {
-            guard isHiding else { return }
+            guard isHiding, notification.object as? NSPopover === shownPopover else { return }
             checkedClose = true
             precondition(panel.alphaValue == 0,
                          "The palette is invisible before AppKit starts closing its popover")
@@ -69,13 +76,18 @@ enum ClipboardPreviewLifecycleTests {
         NotificationCenter.default.addObserver(
             probe, selector: #selector(CloseProbe.willClose(_:)),
             name: NSPopover.willCloseNotification, object: nil)
+        NotificationCenter.default.addObserver(
+            probe, selector: #selector(CloseProbe.didShow(_:)),
+            name: NSPopover.didShowNotification, object: nil)
         defer { NotificationCenter.default.removeObserver(probe) }
         vm.toggleImageQuickLook(for: item.id)
         for _ in 0..<100 {
-            if panel.childWindows?.contains(where: { $0.isVisible }) == true { break }
+            if probe.shownPopover?.isShown == true { break }
             try await Task.sleep(for: .milliseconds(50))
         }
-        guard let previewWindow = panel.childWindows?.first(where: { $0.isVisible }) else {
+        guard let popover = probe.shownPopover, popover.isShown,
+            let previewWindow = popover.contentViewController?.view.window,
+            previewWindow.isVisible else {
             preconditionFailure(
                 "The regression must exercise a real, visible NSPopover, "
                     + "paletteVisible=\(panel.isVisible), requested=\(vm.imageQuickLookOpen), "

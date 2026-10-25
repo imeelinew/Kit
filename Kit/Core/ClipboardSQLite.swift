@@ -4,6 +4,9 @@ import SQLite3
 let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 enum ClipboardSQLite {
+    static let imageBackedPredicate =
+        "kind = 'image' AND (image_path IS NOT NULL OR file_urls IS NOT NULL)"
+
     static func transaction(in db: OpaquePointer?, _ body: () -> Bool) -> Bool {
         guard sqlite3_exec(db, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { return false }
         if body(), sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK { return true }
@@ -119,7 +122,7 @@ extension ClipboardSQLite {
                 // Keep prior searchable text until the newer recognizer replaces it in the background
                 return execute("""
                     UPDATE items SET ocr_status = NULL, ocr_version = NULL, ocr_attempts = 0
-                    WHERE kind = 'image' AND image_path IS NOT NULL
+                    WHERE \(ClipboardSQLite.imageBackedPredicate)
                       AND ocr_version IS NOT NULL
                       AND ocr_version != \(ClipboardImageTextRecognition.version)
                     """)
@@ -255,8 +258,8 @@ extension ClipboardSQLite {
               INSERT INTO image_ocr_fts(rowid, ocr_text)
               SELECT new.rowid, new.ocr_text WHERE new.ocr_text IS NOT NULL;
             END;
-            CREATE INDEX IF NOT EXISTS items_pending_ocr ON items(created_at)
-              WHERE kind = 'image' AND image_path IS NOT NULL AND
+            CREATE INDEX IF NOT EXISTS items_pending_image_ocr ON items(created_at)
+              WHERE (kind = 'image' AND (image_path IS NOT NULL OR file_urls IS NOT NULL)) AND
                 (ocr_status IS NULL OR (ocr_status = 'failed' AND ocr_attempts < \(ClipboardImageTextRecognition.maxAttempts)));
             """
     }
