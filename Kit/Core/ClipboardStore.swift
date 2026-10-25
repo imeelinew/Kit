@@ -979,7 +979,8 @@ final class ClipboardStore: ObservableObject {
         if item.kind == .image {
             text = [item.text, imageOCRText].compactMap { $0 }.joined(separator: "\n")
         } else {
-            text = item.text ?? ""
+            // Large text entries build their pinyin metadata on the background queue
+            text = item.isFileBacked ? (item.text ?? "") : ""
         }
         return Pinyin.searchForms(for: text)
     }

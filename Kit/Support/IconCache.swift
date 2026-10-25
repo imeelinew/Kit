@@ -14,18 +14,22 @@ enum IconCache {
         return cache
     }()
 
-    static func cached(forFile path: String) -> NSImage? {
-        cache.values.object(forKey: path as NSString)
+    private static func key(for path: String, version: UInt64) -> NSString {
+        "\(path)#\(version)" as NSString
+    }
+
+    static func cached(forFile path: String, version: UInt64 = 0) -> NSImage? {
+        cache.values.object(forKey: key(for: path, version: version))
     }
 
     private struct Decoded: @unchecked Sendable { let image: NSImage? }
 
-    static func loadAsync(forFile path: String) async -> NSImage? {
-        if let cached = cached(forFile: path) { return cached }
+    static func loadAsync(forFile path: String, version: UInt64 = 0) async -> NSImage? {
+        if let cached = cached(forFile: path, version: version) { return cached }
         let task = Task.detached(priority: .userInitiated) { () -> Decoded in
             guard !Task.isCancelled else { return Decoded(image: nil) }
             guard FileManager.default.fileExists(atPath: path) else { return Decoded(image: nil) }
-            return Decoded(image: icon(forFile: path))
+            return Decoded(image: icon(forFile: path, version: version))
         }
         let decoded = await withTaskCancellationHandler {
             await task.value
@@ -35,8 +39,8 @@ enum IconCache {
         return Task.isCancelled ? nil : decoded.image
     }
 
-    static func icon(forFile path: String) -> NSImage {
-        let key = path as NSString
+    static func icon(forFile path: String, version: UInt64 = 0) -> NSImage {
+        let key = key(for: path, version: version)
         if let cached = cache.values.object(forKey: key) { return cached }
         let (icon, cost) = downsampled(NSWorkspace.shared.icon(forFile: path))
         cache.values.setObject(icon, forKey: key, cost: cost)

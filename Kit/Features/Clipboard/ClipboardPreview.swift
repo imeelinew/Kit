@@ -329,10 +329,13 @@ private struct ClipboardFileIcon: View {
             }
         }
         .frame(width: size, height: size)
-        .task(id: url) {
+        .task(id: "\(url.absoluteString)#\(ImageThumbnail.fileVersion(for: url))") {
+            let version = ImageThumbnail.fileVersion(for: url)
             image = nil
             guard FileManager.default.fileExists(atPath: url.path) else { return }
-            image = await IconCache.loadAsync(forFile: url.path)
+            let loaded = await IconCache.loadAsync(forFile: url.path, version: version)
+            guard !Task.isCancelled, version == ImageThumbnail.fileVersion(for: url) else { return }
+            image = loaded
         }
     }
 }

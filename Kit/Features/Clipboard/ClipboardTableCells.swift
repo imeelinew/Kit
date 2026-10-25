@@ -532,7 +532,10 @@ private final class ClipboardThumbnailView: NSView {
             loadTask = Task { @MainActor [weak self] in
                 let image = await ImageThumbnail.loadAsync(
                     imageURL, maxPixel: Self.imageMaxPixel)
-                guard !Task.isCancelled, let self, representedID == id else { return }
+                guard !Task.isCancelled, let self, representedID == id,
+                    representedVersion == sourceVersion,
+                    sourceVersion == sourceURL.map({ ImageThumbnail.fileVersion(for: $0) })
+                else { return }
                 loadTask = nil
                 finishedLoading = true
                 guard let image else { return }
@@ -544,15 +547,18 @@ private final class ClipboardThumbnailView: NSView {
                 finishedLoading = true
                 return
             }
-            if let cached = IconCache.cached(forFile: sourceURL.path) {
+            if let cached = IconCache.cached(forFile: sourceURL.path, version: sourceVersion ?? 0) {
                 showFileIcon(cached)
                 finishedLoading = true
                 return
             }
             let id = item.id
             loadTask = Task { @MainActor [weak self] in
-                let icon = await IconCache.loadAsync(forFile: sourceURL.path)
-                guard !Task.isCancelled, let self, representedID == id else { return }
+                let icon = await IconCache.loadAsync(forFile: sourceURL.path, version: sourceVersion ?? 0)
+                guard !Task.isCancelled, let self, representedID == id,
+                    representedVersion == sourceVersion,
+                    sourceVersion == ImageThumbnail.fileVersion(for: sourceURL)
+                else { return }
                 loadTask = nil
                 finishedLoading = true
                 guard let icon else { return }
