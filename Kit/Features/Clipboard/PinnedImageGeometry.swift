@@ -35,6 +35,17 @@ struct PinnedImageGeometry {
             width: size.width, height: size.height)
     }
 
+    var minimumFrameSize: CGSize {
+        CGSize(width: baseSize.width * minimumScale, height: baseSize.height * minimumScale)
+    }
+
+    mutating func adopt(_ frame: CGRect) {
+        guard frame.width.isFinite, frame.height.isFinite,
+            frame.width > 0, frame.height > 0 else { return }
+        logarithmicScale = log(frame.width / baseSize.width)
+        center = CGPoint(x: frame.midX, y: frame.midY)
+    }
+
     /// Additive gesture deltas make equal opposite movements reversible. Clamp the stored
     /// scale as well as the frame, so reversing at a boundary responds immediately.
     mutating func zoom(by delta: CGFloat, visibleFrame: CGRect) {

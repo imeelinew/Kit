@@ -13,6 +13,10 @@ final class PinnedImagePanel: NSPanel {
     }
 
     func fitToScreen() {
+        // Adopt native edge resizing before applying the shared gesture sizing policy
+        if let geometry, frame.size != geometry.frame.size {
+            self.geometry?.adopt(frame)
+        }
         // Window Server drags are asynchronous and may not deliver mouseUp. Adopt the actual
         // position before the next sizing action, while retaining the exact zoom center otherwise.
         let movedCenter = frame != appliedFrame ? CGPoint(x: frame.midX, y: frame.midY) : nil

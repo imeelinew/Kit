@@ -92,6 +92,10 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         hiddenForFullscreen.remove(itemID)
     }
 
+    func windowDidEndLiveResize(_ notification: Notification) {
+        (notification.object as? PinnedImagePanel)?.fitToScreen()
+    }
+
     private func close(_ itemID: ClipboardItem.ID) {
         hiddenForFullscreen.remove(itemID)
         panels[itemID]?.close()
@@ -124,11 +128,13 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
     private func makePanel(title: String, geometry: PinnedImageGeometry) -> PinnedImagePanel {
         let panel = PinnedImagePanel(
             contentRect: geometry.frame,
-            styleMask: [.borderless],
+            styleMask: [.borderless, .resizable],
             backing: .buffered,
             defer: false
         )
         panel.geometry = geometry
+        panel.contentAspectRatio = geometry.baseSize
+        panel.contentMinSize = geometry.minimumFrameSize
         panel.title = title
         panel.isFloatingPanel = true
         panel.level = .floating
