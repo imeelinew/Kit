@@ -128,45 +128,43 @@ struct RootPaletteView: View {
     }
 
     private var typeFilterControl: some View {
-        BarButton(pressed: showTypeFilter, action: { vm.toggleTypeFilter() }) {
+        Button(action: { vm.toggleTypeFilter() }) {
             HStack(spacing: Theme.Spacing.sm) {
                 Image(systemName: vm.kindFilter.symbolName)
                     .font(.system(size: 16, weight: .regular))
-                    .foregroundStyle(Theme.Colors.textSecondary)
+                    .foregroundStyle(Color(nsColor: .secondaryLabelColor))
                 Text(vm.kindFilter.title)
                     .font(Theme.Typography.bar)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color(nsColor: .labelColor))
                 Image(systemName: "chevron.down")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.Colors.textSecondary)
+                    .foregroundStyle(Color(nsColor: .secondaryLabelColor))
             }
         }
-        .padding(Theme.Spacing.xs)
-        .frosted(in: Capsule())
+        .buttonStyle(FilterButtonStyle(isPresented: showTypeFilter))
         .fixedSize()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(vm.kindFilter.title)
     }
 
     private var stackFilterControl: some View {
-        BarButton(pressed: showStackFilter, action: { vm.toggleStackFilter() }) {
+        Button(action: { vm.toggleStackFilter() }) {
             HStack(spacing: Theme.Spacing.sm) {
                 if vm.stackFilter == nil {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 16, weight: .regular))
-                        .foregroundStyle(Theme.Colors.textSecondary)
+                        .foregroundStyle(Color(nsColor: .secondaryLabelColor))
                 }
                 Text(vm.stackFilterTitle)
                     .font(Theme.Typography.bar)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Color(nsColor: .labelColor))
                     .lineLimit(1)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.Colors.textSecondary)
+                    .foregroundStyle(Color(nsColor: .secondaryLabelColor))
             }
         }
-        .padding(Theme.Spacing.xs)
-        .frosted(in: Capsule())
+        .buttonStyle(FilterButtonStyle(isPresented: showStackFilter))
         .fixedSize()
         .background {
             GeometryReader { proxy in
@@ -340,6 +338,35 @@ private struct MenuCircleButton: View {
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
         .frosted(in: Circle())
+    }
+}
+
+private struct FilterButtonStyle: ButtonStyle {
+    let isPresented: Bool
+    @State private var hovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        let active = configuration.isPressed || isPresented
+        configuration.label
+            .padding(.horizontal, Theme.Spacing.md)
+            .frame(height: 28)
+            .background {
+                Capsule().fill(
+                    active ? Theme.Colors.selection
+                        : hovered ? Theme.Colors.rowHover : Color.clear)
+            }
+            .scaleEffect(active && !reduceMotion ? 0.97 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.08), value: active)
+            .padding(Theme.Spacing.xs)
+            .background {
+                // Keep glass vibrancy and pointer feedback out of the readable label layer
+                Capsule().fill(.clear)
+                    .glassEffect(.regular.tint(Theme.Colors.glassFrost), in: Capsule())
+                    .allowsHitTesting(false)
+            }
+            .contentShape(Capsule())
+            .onHover { hovered = $0 }
     }
 }
 
