@@ -58,15 +58,30 @@ final class ClipboardPreviewPayload {
                 }
                 details.words = count
             }
-            if let imageURL {
+            if let imageURL,
+                FileManager.default.fileExists(atPath: imageURL.path)
+            {
                 details.pixelSize = ImageThumbnail.pixelSize(of: imageURL)
                 details.fileBytes = try? imageURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+            } else if item.isFileBacked {
+                var totalBytes = 0
+                var foundSize = false
+                for url in item.fileURLs {
+                    guard let values = try? url.resourceValues(
+                        forKeys: [.fileSizeKey, .isRegularFileKey]),
+                        values.isRegularFile == true,
+                        let size = values.fileSize
+                    else { continue }
+                    totalBytes += size
+                    foundSize = true
+                }
+                details.fileBytes = foundSize ? totalBytes : nil
             }
             return details
         }
         let payload = await withTaskCancellationHandler {
             let image: NSImage?
-            if let imageURL {
+            if let imageURL, FileManager.default.fileExists(atPath: imageURL.path) {
                 image = await ImageThumbnail.loadAsync(imageURL, maxPixel: 900)
             } else {
                 image = nil
@@ -156,6 +171,12 @@ struct ClipboardPreview: View {
             }
         case .code:
             CodePreview(code: item.text ?? "", query: query)
+        case .file:
+            if item.fileURLs.count == 1 {
+                ClipboardFilePreview(url: item.fileURLs[0])
+            } else {
+                ClipboardFileCollectionPreview(urls: item.fileURLs)
+            }
         case .image:
             let imageURL = store.imageURL(for: item)
             let highlights = imageURL.flatMap { url in
@@ -187,6 +208,92 @@ struct ClipboardPreview: View {
                     onActions: { vm.openActions(for: item.id) }
                 )
             }
+        }
+    }
+}
+
+private struct ClipboardFilePreview: View {
+    let url: URL
+
+    var body: some View {
+        VStack(spacing: Theme.Spacing.lg) {
+            ClipboardFileIcon(url: url, size: 72)
+            Text(url.lastPathComponent)
+                .font(.system(size: 13, weight: .medium))
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .truncationMode(.middle)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Theme.Spacing.xl)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct ClipboardFileCollectionPreview: View {
+    let urls: [URL]
+
+    private var height: CGFloat {
+        min(320, CGFloat(urls.count) * 50)
+    }
+
+    var body: some View {
+        ScrollView(.vertical) {
+            LazyVStack(spacing: 0) {
+                ForEach(urls, id: \.self) { url in
+                    HStack(spacing: Theme.Spacing.md) {
+                        ClipboardFileIcon(url: url, size: 28)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(url.lastPathComponent)
+                                .font(.system(size: 12, weight: .medium))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Text(url.path)
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, Theme.Spacing.sm)
+                    .frame(height: 50)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+        .frame(height: height)
+        .background(Color.primary.opacity(0.025))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+    }
+}
+
+private struct ClipboardFileIcon: View {
+    let url: URL
+    let size: CGFloat
+
+    @State private var image: NSImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } else {
+                Image(systemName: url.hasDirectoryPath ? "folder" : "doc")
+                    .resizable()
+                    .symbolRenderingMode(.hierarchical)
+                    .aspectRatio(contentMode: .fit)
+                    .foregroundStyle(.secondary)
+                    .padding(size / 7)
+            }
+        }
+        .frame(width: size, height: size)
+        .task(id: url) {
+            image = nil
+            guard FileManager.default.fileExists(atPath: url.path) else { return }
+            image = await IconCache.loadAsync(forFile: url.path)
         }
     }
 }
@@ -547,7 +654,7 @@ private struct ClipboardInfoSection: View {
         rows.append(
             InfoRow(
                 label: "Type",
-                value: item.kind.typeLabel,
+                value: item.typeLabel,
                 localizesValue: true))
         if let stackID = store.stackID(for: item.id),
             let stack = store.stacks.first(where: { $0.id == stackID })
@@ -565,12 +672,22 @@ private struct ClipboardInfoSection: View {
                 $0.formatted(.number.locale(settings.language.locale))
             } ?? "—"))
         case .image:
+            if item.isFileBacked {
+                rows.append(filePathRow)
+            }
             rows.append(InfoRow(label: "Dimensions", value: details.pixelSize.map {
                 "\(Int($0.width))×\(Int($0.height))"
             } ?? "—"))
-            rows.append(InfoRow(label: "Size", value: details.fileBytes.map {
-                Int64($0).formatted(.byteCount(style: .file).locale(settings.language.locale))
-            } ?? "—"))
+            rows.append(sizeRow)
+        case .file:
+            if item.fileURLs.count > 1 {
+                rows.append(
+                    InfoRow(
+                        label: "Count", value: item.fileURLs.count.formatted(
+                            .number.locale(settings.language.locale))))
+            }
+            rows.append(filePathRow)
+            rows.append(sizeRow)
         }
         Self.timestampFormatter.locale = settings.language.locale
         if item.copyCount > 1 {
@@ -584,6 +701,16 @@ private struct ClipboardInfoSection: View {
                 InfoRow(label: "Copied", value: Self.timestampFormatter.string(from: item.lastCopiedAt)))
         }
         return rows
+    }
+
+    private var filePathRow: InfoRow {
+        InfoRow(label: "Path", value: item.fileURLs.map(\.path).joined(separator: ", "))
+    }
+
+    private var sizeRow: InfoRow {
+        InfoRow(label: "Size", value: details.fileBytes.map {
+            Int64($0).formatted(.byteCount(style: .file).locale(settings.language.locale))
+        } ?? "—")
     }
 
     /// Source app name + icon from the recorded bundle ID; the Launch Services lookup is a quick main-thread call and the icon comes from the shared `IconCache`.

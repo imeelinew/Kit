@@ -43,6 +43,8 @@
 "English" = "English";
 "Follow System" = "Follow System";
 "Forever" = "Forever";
+"File" = "File";
+"Files" = "Files";
 "General" = "General";
 "History" = "History";
 "Image" = "Image";
@@ -174,3 +176,5 @@
 "First copied" = "First copied";
 
 "Copied" = "Copied";
+
+"Count" = "Count";

@@ -57,8 +57,11 @@ final class ApplicationMenu: NSObject, NSMenuItemValidation {
 
     @objc private func copyText(_ sender: Any?) {
         guard let editor, editor.selectedRange().length > 0 else { return }
+        let previousChangeCount = NSPasteboard.general.changeCount
         editor.copy(sender)
-        Paster.markCurrentPasteboardInternal()
+        if NSPasteboard.general.changeCount != previousChangeCount {
+            Paster.markCurrentPasteboardSelection()
+        }
     }
 
     @objc private func cutText(_ sender: Any?) {

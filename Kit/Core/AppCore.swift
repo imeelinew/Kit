@@ -226,6 +226,13 @@ final class AppCore {
     }
 
     func revealClipboardItem(_ item: ClipboardItem, dismissPalette: Bool = true) {
+        if item.isFileBacked {
+            let urls = item.fileURLs.filter { FileManager.default.fileExists(atPath: $0.path) }
+            guard !urls.isEmpty else { NSSound.beep(); return }
+            if dismissPalette { hidePalette(restoreFocus: false) }
+            NSWorkspace.shared.activateFileViewerSelecting(urls)
+            return
+        }
         let url: URL
         switch item.kind {
         case .image:

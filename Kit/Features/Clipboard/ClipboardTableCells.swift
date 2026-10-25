@@ -200,10 +200,11 @@ final class ClipboardItemCellView: NSTableCellView {
         let customTitle = item.customTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasCustomTitle = customTitle?.isEmpty == false
         let isImage = item.kind == .image
+        let showsImageTitle = isImage && (hasCustomTitle || item.isFileBacked)
         NSLayoutConstraint.deactivate(isImage ? standardConstraints : imageConstraints)
         NSLayoutConstraint.activate(isImage ? imageConstraints : standardConstraints)
-        titleLabel.isHidden = isImage && !hasCustomTitle
-        // Keep image-only rows identifiable to VoiceOver without a redundant visible label.
+        titleLabel.isHidden = isImage && !showsImageTitle
+        // Keep inline image rows identifiable to VoiceOver without a redundant visible label.
         thumbnailView.setAccessibilityElement(isImage)
         thumbnailView.setAccessibilityRole(isImage ? .image : .unknown)
         thumbnailView.setAccessibilityLabel(isImage ? item.displayTitle(locale: locale) : nil)
@@ -220,7 +221,7 @@ final class ClipboardItemCellView: NSTableCellView {
         guard item.kind == .image else { return 36 }
         let hasCustomTitle = item.customTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
             .isEmpty == false
-        return hasCustomTitle ? 92 : 72
+        return item.isFileBacked || hasCustomTitle ? 92 : 72
     }
 
     private func renderTitle() {
@@ -283,6 +284,8 @@ final class ClipboardItemCellView: NSTableCellView {
             return item.defaultTitle(locale: locale)
         case .path:
             return item.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        case .file:
+            return item.defaultTitle(locale: locale)
         case .link:
             let text = item.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             guard let url = URL(string: text), let host = url.host else { return text }
@@ -407,6 +410,8 @@ private final class ClipboardThumbnailView: NSView {
     private var representedURL: URL?
     private var loadTask: Task<Void, Never>?
     private var displayedImage: NSImage?
+    private var displayedFileIcon: NSImage?
+    private var finishedLoading = false
     private var placeholderKind: ClipboardItem.Kind = .image
 
     deinit { loadTask?.cancel() }
@@ -467,25 +472,34 @@ private final class ClipboardThumbnailView: NSView {
     }
 
     func configure(item: ClipboardItem, imageURL: URL?) {
-        if item.kind == .image, representedID == item.id, representedURL == imageURL,
-            displayedImage != nil || loadTask != nil
+        let sourceURL = imageURL ?? item.fileURLs.first
+        let usesFileContents = item.kind == .image || item.kind == .file
+        if usesFileContents, representedID == item.id, representedURL == sourceURL,
+            finishedLoading || loadTask != nil
         { return }
         loadTask?.cancel()
         loadTask = nil
         representedID = item.id
-        representedURL = imageURL
+        representedURL = sourceURL
         displayedImage = nil
+        displayedFileIcon = nil
+        finishedLoading = false
 
         switch item.kind {
         case .text, .markdown, .code, .link, .path:
             showKind(item.kind)
+            finishedLoading = true
         case .image:
             showKind(.image)
-            guard let imageURL else { return }
+            guard let imageURL, FileManager.default.fileExists(atPath: imageURL.path) else {
+                finishedLoading = true
+                return
+            }
             if let cached = ImageThumbnail.cached(
                 imageURL, maxPixel: Self.imageMaxPixel)
             {
                 showImage(cached)
+                finishedLoading = true
                 return
             }
             let id = item.id
@@ -494,8 +508,29 @@ private final class ClipboardThumbnailView: NSView {
                     imageURL, maxPixel: Self.imageMaxPixel)
                 guard !Task.isCancelled, let self, representedID == id else { return }
                 loadTask = nil
+                finishedLoading = true
                 guard let image else { return }
                 showImage(image)
+            }
+        case .file:
+            showKind(.file)
+            guard let sourceURL, FileManager.default.fileExists(atPath: sourceURL.path) else {
+                finishedLoading = true
+                return
+            }
+            if let cached = IconCache.cached(forFile: sourceURL.path) {
+                showFileIcon(cached)
+                finishedLoading = true
+                return
+            }
+            let id = item.id
+            loadTask = Task { @MainActor [weak self] in
+                let icon = await IconCache.loadAsync(forFile: sourceURL.path)
+                guard !Task.isCancelled, let self, representedID == id else { return }
+                loadTask = nil
+                finishedLoading = true
+                guard let icon else { return }
+                showFileIcon(icon)
             }
         }
     }
@@ -507,20 +542,25 @@ private final class ClipboardThumbnailView: NSView {
         representedID = nil
         representedURL = nil
         displayedImage = nil
+        displayedFileIcon = nil
+        finishedLoading = false
         showKind(.image)
     }
 
     func refreshAppearance() {
-        guard let displayedImage else {
+        if let displayedImage {
+            showImage(displayedImage)
+        } else if let displayedFileIcon {
+            showFileIcon(displayedFileIcon)
+        } else {
             showKind(placeholderKind)
-            return
         }
-        showImage(displayedImage)
     }
 
     private func showKind(_ kind: ClipboardItem.Kind) {
         placeholderKind = kind
         displayedImage = nil
+        displayedFileIcon = nil
         layer?.contents = nil
         layer?.cornerRadius = Theme.Radius.thumbnail
         layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.08).cgColor
@@ -536,9 +576,23 @@ private final class ClipboardThumbnailView: NSView {
 
     private func showImage(_ image: NSImage) {
         displayedImage = image
+        displayedFileIcon = nil
         symbolView.isHidden = true
         layer?.backgroundColor = NSColor.clear.cgColor
         layer?.contents = nil
         needsDisplay = true
+    }
+
+    private func showFileIcon(_ image: NSImage) {
+        displayedImage = nil
+        displayedFileIcon = image
+        layer?.contents = nil
+        layer?.cornerRadius = Theme.Radius.thumbnail
+        layer?.backgroundColor = NSColor.clear.cgColor
+        needsDisplay = true
+        symbolView.isHidden = false
+        symbolView.contentTintColor = nil
+        image.isTemplate = false
+        symbolView.image = image
     }
 }

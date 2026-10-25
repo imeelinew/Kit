@@ -43,6 +43,8 @@
 "English" = "English";
 "Follow System" = "跟随系统";
 "Forever" = "永久";
+"File" = "文件";
+"Files" = "多个文件";
 "General" = "通用";
 "History" = "历史记录";
 "Image" = "图像";
@@ -174,3 +176,5 @@
 "First copied" = "首次复制";
 
 "Copied" = "复制时间";
+
+"Count" = "数量";

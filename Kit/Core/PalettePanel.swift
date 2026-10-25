@@ -101,6 +101,7 @@ final class PalettePanel: NSPanel {
         }
         if event.type == .keyDown { beginKeyboardSelection() }
         if event.type == .keyDown, route(event) { return }
+        if event.type == .keyDown { _ = moveSearchFocusForTyping(event) }
         super.sendEvent(event)
         // Keep movement delivery independent of tracking-area invalidation during list
         // updates and content reattachment. The table still owns hit testing and hover intent.
@@ -170,6 +171,13 @@ final class PalettePanel: NSPanel {
         // The action menu's Delete row: fixed at Control-Backspace, not user-recordable.
         if modifiers == .control, keyCode == kVK_Delete {
             return handleOnce(.delete, event: event)
+        }
+
+        if modifiers == .command, keyCode == kVK_ANSI_C,
+            canCopySelectedText(viewModel: paletteViewModel),
+            copySelectedText()
+        {
+            return true
         }
 
         if PaletteShortcut.actions.matches(shortcut) {
@@ -319,7 +327,7 @@ final class PalettePanel: NSPanel {
         return true
     }
 
-    /// Keep palette editing behind its modal actions and mark copied search text as internal.
+    /// Keep palette editing behind its modal actions and identify copied text as Kit content
     private func handleEditingShortcut(_ keyCode: Int) -> Bool {
         guard paletteViewModel?.menuOpen != true || paletteViewModel?.isNamingStack == true,
             let editor = firstResponder as? NSTextView
@@ -329,14 +337,15 @@ final class PalettePanel: NSPanel {
 
         switch keyCode {
         case kVK_ANSI_C:
-            guard editor.selectedRange().length > 0 else { return true }
-            editor.copy(nil)
-            Paster.markCurrentPasteboardInternal()
-            return true
+            return copySelectedText()
         case kVK_ANSI_X:
             guard editor.isEditable, editor.selectedRange().length > 0 else { return true }
+            let pasteboard = NSPasteboard.general
+            let previousChangeCount = pasteboard.changeCount
             editor.cut(nil)
-            Paster.markCurrentPasteboardInternal()
+            if pasteboard.changeCount != previousChangeCount {
+                Paster.markCurrentPasteboardSelection()
+            }
             return true
         case kVK_ANSI_V:
             guard editor.isEditable else { return true }
@@ -348,6 +357,51 @@ final class PalettePanel: NSPanel {
         default:
             return false
         }
+    }
+
+    private func canCopySelectedText(viewModel: PaletteViewModel) -> Bool {
+        guard !viewModel.menuOpen || viewModel.isNamingStack else { return false }
+        guard let editor = firstResponder as? NSTextView else { return false }
+        return editor.selectedRange().length > 0
+    }
+
+    @discardableResult
+    private func copySelectedText() -> Bool {
+        guard paletteViewModel?.menuOpen != true || paletteViewModel?.isNamingStack == true,
+            let editor = firstResponder as? NSTextView,
+            editor.selectedRange().length > 0
+        else { return false }
+
+        let pasteboard = NSPasteboard.general
+        let previousChangeCount = pasteboard.changeCount
+        editor.copy(nil)
+        if pasteboard.changeCount != previousChangeCount {
+            Paster.markCurrentPasteboardSelection()
+        }
+        return true
+    }
+
+    private func moveSearchFocusForTyping(_ event: NSEvent) -> Bool {
+        guard paletteViewModel?.menuOpen != true,
+            paletteViewModel?.isNamingStack != true,
+            firstResponder is PreviewTextView || firstResponder === self,
+            event.modifierFlags.intersection([.command, .option, .control]).isEmpty,
+            let characters = event.characters,
+            !characters.isEmpty,
+            characters.unicodeScalars.allSatisfy(Self.isPrintableTypingScalar),
+            let searchField,
+            searchField.isEnabled
+        else { return false }
+
+        guard makeFirstResponder(searchField) else { return false }
+        pendingSearchFocusRequest = nil
+        setSearchCaretHidden(false)
+        return true
+    }
+
+    private static func isPrintableTypingScalar(_ scalar: Unicode.Scalar) -> Bool {
+        !CharacterSet.controlCharacters.contains(scalar)
+            && !(0xF700...0xF8FF).contains(Int(scalar.value))
     }
 
     init<Content: View>(

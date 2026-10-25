@@ -2,7 +2,7 @@ import Foundation
 
 struct ClipboardItem: Identifiable, Hashable, Sendable {
     enum Kind: String, Sendable {
-        case text, markdown, code, link, path, image
+        case text, markdown, code, link, path, image, file
 
         var typeLabel: String {
             switch self {
@@ -12,6 +12,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
             case .link: "Link"
             case .path: "Path"
             case .image: "Image"
+            case .file: "File"
             }
         }
     }
@@ -23,6 +24,8 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     let imagePath: String?
     /// SHA-256 of canonical visible pixels. Text rows leave it nil.
     let imageFingerprint: String?
+    /// Ordered source file URLs captured as one clipboard entry.
+    let fileURLs: [URL]
     let firstCopiedAt: Date
     private(set) var lastCopiedAt: Date
     private(set) var copyCount: Int
@@ -36,19 +39,20 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     init(text: String, kind: Kind, sourceBundleID: String?) {
         self.init(
             id: UUID(), kind: kind, text: text,
-            imagePath: nil, imageFingerprint: nil, lastCopiedAt: Date(),
+            imagePath: nil, imageFingerprint: nil, fileURLs: [], lastCopiedAt: Date(),
             sourceBundleID: sourceBundleID)
     }
 
     init(imagePath: String, imageFingerprint: String, sourceBundleID: String?) {
         self.init(
             id: UUID(), kind: .image, text: nil, imagePath: imagePath,
-            imageFingerprint: imageFingerprint, lastCopiedAt: Date(), sourceBundleID: sourceBundleID)
+            imageFingerprint: imageFingerprint, fileURLs: [], lastCopiedAt: Date(),
+            sourceBundleID: sourceBundleID)
     }
 
     init(
         id: UUID, kind: Kind, text: String?, imagePath: String?, imageFingerprint: String?,
-        lastCopiedAt: Date, sourceBundleID: String?,
+        fileURLs: [URL] = [], lastCopiedAt: Date, sourceBundleID: String?,
         customTitle: String? = nil, firstCopiedAt: Date? = nil, copyCount: Int = 1,
         imageOCR: ClipboardImageOCR? = nil
     ) {
@@ -57,12 +61,19 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
         self.text = text
         self.imagePath = imagePath
         self.imageFingerprint = imageFingerprint
+        self.fileURLs = fileURLs
         self.firstCopiedAt = firstCopiedAt ?? lastCopiedAt
         self.lastCopiedAt = lastCopiedAt
         self.copyCount = copyCount
         self.imageOCR = imageOCR
         self.sourceBundleID = sourceBundleID
         self.customTitle = customTitle
+    }
+
+    var isFileBacked: Bool { !fileURLs.isEmpty }
+
+    var typeLabel: String {
+        fileURLs.count > 1 ? "Files" : kind.typeLabel
     }
 
     /// An external recopy reuses the entry with a fresh copy time and source application.
@@ -96,10 +107,13 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     }
 
     func defaultTitle(locale: Locale) -> String {
+        if isFileBacked {
+            return fileURLs.map(\.lastPathComponent).joined(separator: ", ")
+        }
         switch kind {
         case .image:
             return AppLocalization.string("Image", locale: locale)
-        case .text, .markdown, .code, .link, .path:
+        case .text, .markdown, .code, .link, .path, .file:
             let text = String((text ?? "").prefix(200)).trimmingCharacters(
                 in: .whitespacesAndNewlines)
             let lineEnd = text.firstIndex(where: { $0.isNewline }) ?? text.endIndex

@@ -87,7 +87,8 @@ enum ClipboardSearch {
         let sql = """
             SELECT i.id, i.kind, i.text, i.image_path, i.created_at, i.source_app,
                    i.image_fingerprint, i.custom_title, i.first_copied_at,
-                   i.ocr_text, i.ocr_status, i.ocr_version, i.ocr_attempts, i.copy_count, i.rowid
+                   i.ocr_text, i.ocr_status, i.ocr_version, i.ocr_attempts, i.copy_count,
+                   i.file_urls, i.rowid
             FROM items i
             \(stackJoin)
             WHERE \(predicate.sql)\(kindCondition)\(stackCondition)\(cursorCondition)
@@ -133,7 +134,7 @@ enum ClipboardSearch {
                     item: item,
                     cursor: ClipboardSearchCursor(
                         lastCopiedAt: item.lastCopiedAt,
-                        rowID: sqlite3_column_int64(statement, 14))))
+                        rowID: sqlite3_column_int64(statement, 15))))
             }
             status = sqlite3_step(statement)
         }
@@ -166,7 +167,10 @@ enum ClipboardSearch {
         }
         // OCR pinyin also lives in the common text index, custom titles remain searchable
         if !includesImageText {
-            contentCondition = "(i.kind != 'image' AND \(contentCondition))"
+            contentCondition = """
+                ((i.kind != 'image' OR (i.kind = 'image' AND i.image_path IS NULL))
+                 AND \(contentCondition))
+                """
         }
         var conditions = [contentCondition]
         if includesImageText {

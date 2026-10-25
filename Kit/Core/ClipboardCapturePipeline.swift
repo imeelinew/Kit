@@ -14,6 +14,7 @@ struct PasteboardSnapshot: Sendable {
 enum CapturedClipboardContent: Sendable, Equatable {
     case text(String)
     case image(Data)
+    case files([URL])
 }
 
 struct ClipboardCapture: Sendable, Equatable {
@@ -28,9 +29,12 @@ actor ClipboardCapturePipeline {
     static let maxTextBytes = 8 * 1024 * 1024
 
     func process(_ snapshot: PasteboardSnapshot) -> ClipboardCapture? {
-        // A copied file or folder must retain its file identity when pasted again.
-        // Until captures can do that, ignore file URLs and any accompanying text or image data.
-        guard snapshot.fileURLs.isEmpty else { return nil }
+        if !snapshot.fileURLs.isEmpty {
+            guard snapshot.fileURLs.allSatisfy(\.isFileURL) else { return nil }
+            return ClipboardCapture(
+                content: .files(snapshot.fileURLs.map(\.standardizedFileURL)),
+                sourceBundleID: snapshot.sourceBundleID, generation: snapshot.generation)
+        }
 
         if let data = snapshot.imageData,
             let png = snapshot.imageIsPNG ? data : Self.normalizedImageData(data)
@@ -67,6 +71,8 @@ actor ClipboardCapturePipeline {
 enum ClipboardCapturePolicy {
     /// Marker attached to Kit's own writes so monitoring ignores them.
     static let internalType = NSPasteboard.PasteboardType("com.eli.Kit.internal")
+    /// Marker identifying a copied text selection from Kit's own interface.
+    static let selectionType = NSPasteboard.PasteboardType("com.eli.Kit.selection")
 
     /// Pasteboard markers password managers, browsers, and the OS put on secret copies.
     static let sensitiveTypes: Set<NSPasteboard.PasteboardType> = [

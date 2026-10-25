@@ -20,9 +20,14 @@ enum ClipboardSQLite {
     }
 
     static func row(_ stmt: OpaquePointer?) -> ClipboardItem? {
-        guard let idString = columnString(stmt, 0), let id = UUID(uuidString: idString),
+        guard let stmt, let idString = columnString(stmt, 0),
+            let id = UUID(uuidString: idString),
             let kindString = columnString(stmt, 1),
             let storedKind = ClipboardItem.Kind(rawValue: kindString)
+        else { return nil }
+        let imagePath = columnString(stmt, 3)
+        guard let fileURLs = decodeFileURLs(
+            columnString(stmt, 14), kind: storedKind, imagePath: imagePath)
         else { return nil }
         let imageOCR: ClipboardImageOCR?
         if let status = columnString(stmt, 10).flatMap(ClipboardImageOCR.Status.init(rawValue:)) {
@@ -34,13 +39,44 @@ enum ClipboardSQLite {
             imageOCR = nil
         }
         return ClipboardItem(
-            id: id, kind: storedKind, text: columnString(stmt, 2), imagePath: columnString(stmt, 3),
+            id: id, kind: storedKind, text: columnString(stmt, 2), imagePath: imagePath,
             imageFingerprint: columnString(stmt, 6),
+            fileURLs: fileURLs,
             lastCopiedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4)),
             sourceBundleID: columnString(stmt, 5), customTitle: columnString(stmt, 7),
             firstCopiedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 8)),
             copyCount: Int(sqlite3_column_int64(stmt, 13)),
             imageOCR: imageOCR)
+    }
+
+    static func encodedFileURLs(_ urls: [URL]) -> String? {
+        guard let data = try? JSONEncoder().encode(urls.map(\.absoluteString)) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func decodeFileURLs(
+        _ raw: String?, kind: ClipboardItem.Kind, imagePath: String?
+    ) -> [URL]? {
+        guard let raw else { return kind == .file ? nil : [] }
+        guard let data = raw.data(using: .utf8),
+            let values = try? JSONDecoder().decode([String].self, from: data)
+        else { return nil }
+        var urls: [URL] = []
+        urls.reserveCapacity(values.count)
+        for value in values {
+            guard let url = URL(string: value), url.isFileURL else { return nil }
+            urls.append(url.standardizedFileURL)
+        }
+        if kind == .file {
+            return urls.isEmpty ? nil : urls
+        }
+        if kind == .image, imagePath == nil {
+            return urls.count == 1 ? urls : nil
+        }
+        if !urls.isEmpty { return nil }
+        return urls
     }
 
     static func columnString(_ stmt: OpaquePointer?, _ index: Int32) -> String? {
@@ -58,6 +94,8 @@ extension ClipboardSQLite {
             execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=1000;")
                 && execute(Self.coreSchema)
                 && migrateCopyMetadata()
+                && migrateFileURLs()
+                && execute(Self.fileURLsSchema)
                 && execute(Self.searchSchema)
                 && migrateImageSearch()
         }
@@ -81,10 +119,15 @@ extension ClipboardSQLite {
                 // Keep prior searchable text until the newer recognizer replaces it in the background
                 return execute("""
                     UPDATE items SET ocr_status = NULL, ocr_version = NULL, ocr_attempts = 0
-                    WHERE kind = 'image' AND ocr_version IS NOT NULL
+                    WHERE kind = 'image' AND image_path IS NOT NULL
+                      AND ocr_version IS NOT NULL
                       AND ocr_version != \(ClipboardImageTextRecognition.version)
                     """)
             }
+        }
+
+        private func migrateFileURLs() -> Bool {
+            migrateColumns([("file_urls", "TEXT")]) { true }
         }
 
         private func migrateColumns(
@@ -135,7 +178,8 @@ extension ClipboardSQLite {
               ocr_text TEXT,
               ocr_status TEXT,
               ocr_version INTEGER,
-              ocr_attempts INTEGER NOT NULL DEFAULT 0
+              ocr_attempts INTEGER NOT NULL DEFAULT 0,
+              file_urls TEXT
             );
             CREATE INDEX IF NOT EXISTS items_created_at ON items(created_at);
             CREATE INDEX IF NOT EXISTS items_kind ON items(kind);
@@ -159,6 +203,16 @@ extension ClipboardSQLite {
             CREATE TABLE IF NOT EXISTS pending_blob_deletions(
               path TEXT NOT NULL PRIMARY KEY
             );
+            """
+
+        private static let fileURLsSchema = """
+            CREATE INDEX IF NOT EXISTS items_text_source
+              ON items(text, source_app)
+              WHERE text IS NOT NULL AND kind != 'image' AND file_urls IS NULL;
+            CREATE INDEX IF NOT EXISTS items_file_source
+              ON items(file_urls, source_app) WHERE file_urls IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS items_owned_image
+              ON items(created_at) WHERE kind = 'image' AND image_path IS NOT NULL;
             """
 
         private static let searchSchema = """
@@ -202,7 +256,7 @@ extension ClipboardSQLite {
               SELECT new.rowid, new.ocr_text WHERE new.ocr_text IS NOT NULL;
             END;
             CREATE INDEX IF NOT EXISTS items_pending_ocr ON items(created_at)
-              WHERE kind = 'image' AND
+              WHERE kind = 'image' AND image_path IS NOT NULL AND
                 (ocr_status IS NULL OR (ocr_status = 'failed' AND ocr_attempts < \(ClipboardImageTextRecognition.maxAttempts)));
             """
     }

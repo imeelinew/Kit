@@ -1,15 +1,17 @@
 import AppKit
 import Carbon.HIToolbox
+import OSLog
 
 enum Paster {
     /// Stamped on Kit's own synthetic keystrokes so listeners can ignore them.
     static let pasteEventTag: Int64 = 0x50415354  // "PAST"
     private static let finderBundleID = "com.apple.finder"
+    private static let logger = Logger(subsystem: "com.eli.Kit", category: "ClipboardTransfer")
 
     private enum Payload: Sendable {
         case text(String)
         case image(Data)
-        case file(URL)
+        case files([URL])
     }
 
     /// Prepare, target, write, and deliver as one ordered transaction. The caller hides the palette
@@ -57,28 +59,39 @@ enum Paster {
     static func copy(
         _ item: ClipboardItem, store: ClipboardStore, willWrite: () -> Void
     ) async -> Bool {
+        logger.info("Copy requested kind=\(item.kind.rawValue, privacy: .public) files=\(item.fileURLs.count)")
         guard let payload = await prepare(item, store: store, targetBundleID: nil),
             !Task.isCancelled
-        else { return false }
+        else {
+            logger.error("Copy stopped before writing cancelled=\(Task.isCancelled)")
+            return false
+        }
         willWrite()
         guard write(payload) else { return false }
         store.recordHistoryAction(id: item.id)
         return true
     }
 
-    /// Keep text copied or cut from Kit's own search field out of clipboard history while
-    /// preserving the field editor's native editing behavior and pasteboard contents.
+    /// Identify a native text selection copy without suppressing its capture
     @MainActor
-    static func markCurrentPasteboardInternal() {
+    static func markCurrentPasteboardSelection() {
         let pasteboard = NSPasteboard.general
-        pasteboard.addTypes([ClipboardManager.internalType], owner: nil)
-        _ = pasteboard.setData(Data(), forType: ClipboardManager.internalType)
+        pasteboard.addTypes([ClipboardCapturePolicy.selectionType], owner: nil)
+        _ = pasteboard.setData(Data(), forType: ClipboardCapturePolicy.selectionType)
     }
 
     @MainActor
     private static func prepare(
         _ item: ClipboardItem, store: ClipboardStore, targetBundleID: String?
     ) async -> Payload? {
+        // File-backed images retain their original filename and file identity
+        if item.isFileBacked {
+            let urls = item.fileURLs
+            // Copying references must not require Kit to read protected source folders
+            // The receiving application resolves the URLs and reports unavailable files
+            guard urls.allSatisfy(\.isFileURL) else { return nil }
+            return .files(urls)
+        }
         switch item.kind {
         case .text, .markdown, .code, .link, .path:
             return item.text.map(Payload.text)
@@ -86,9 +99,11 @@ enum Paster {
             guard let url = store.imageURL(for: item) else { return nil }
             if targetBundleID == finderBundleID {
                 guard FileManager.default.isReadableFile(atPath: url.path) else { return nil }
-                return .file(url)
+                return .files([url])
             }
             return await imagePayload(at: url)
+        case .file:
+            return nil
         }
     }
 
@@ -126,6 +141,10 @@ enum Paster {
     /// The pasteboard is mutated only after payload and target preflight have succeeded.
     @MainActor @discardableResult
     private static func write(_ payload: Payload) -> Bool {
+        // Validate the complete reference collection without accessing source files
+        if case .files(let urls) = payload {
+            guard !urls.isEmpty, urls.allSatisfy(\.isFileURL) else { return false }
+        }
         let pb = NSPasteboard.general
         pb.clearContents()
         switch payload {
@@ -135,9 +154,16 @@ enum Paster {
         case .image(let data):
             pb.declareTypes([.png, ClipboardManager.internalType], owner: nil)
             guard pb.setData(data, forType: .png) else { return false }
-        case .file(let url):
-            guard pb.writeObjects([url as NSURL]) else { return false }
+        case .files(let urls):
+            guard pb.writeObjects(urls.map { $0 as NSURL }) else {
+                logger.error("File pasteboard write failed count=\(urls.count)")
+                return false
+            }
             pb.addTypes([ClipboardManager.internalType], owner: nil)
+            let readableFiles = pb.pasteboardItems?.filter {
+                $0.string(forType: .fileURL) != nil
+            }.count ?? 0
+            logger.notice("File pasteboard write requested=\(urls.count) readable=\(readableFiles)")
         }
         return pb.setData(Data(), forType: ClipboardManager.internalType)
     }

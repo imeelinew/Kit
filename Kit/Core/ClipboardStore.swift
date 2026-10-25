@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import SQLite3
+import UniformTypeIdentifiers
 
 /// SQLite-backed clipboard history (rows + trigram FTS5 index in `clipboard.sqlite3`, image blobs on disk).
 @MainActor
@@ -55,7 +56,7 @@ final class ClipboardStore: ObservableObject {
     private static let itemSelection = """
         SELECT id, kind, text, image_path, created_at, source_app,
                image_fingerprint, custom_title, first_copied_at,
-               ocr_text, ocr_status, ocr_version, ocr_attempts, copy_count
+               ocr_text, ocr_status, ocr_version, ocr_attempts, copy_count, file_urls
         FROM items
         """
 
@@ -86,6 +87,7 @@ final class ClipboardStore: ObservableObject {
     private var deleteStaleStmt: OpaquePointer?
     private var imageByFingerprintStmt: OpaquePointer?
     private var textByContentStmt: OpaquePointer?
+    private var fileByContentStmt: OpaquePointer?
     private var itemByIDStmt: OpaquePointer?
     private var insertStackStmt: OpaquePointer?
     private var upsertMembershipStmt: OpaquePointer?
@@ -108,6 +110,7 @@ final class ClipboardStore: ObservableObject {
     ) {
         let base = directory ?? Self.defaultDirectory
         imagesDir = base.appendingPathComponent("images", isDirectory: true)
+        ImageThumbnail.registerManagedImageDirectory(imagesDir)
         deletedImagesDir = base.appendingPathComponent("deleted-images", isDirectory: true)
         dbURL = base.appendingPathComponent("clipboard.sqlite3")
         precondition(maintenanceInterval.isFinite && maintenanceInterval > 0)
@@ -226,12 +229,35 @@ final class ClipboardStore: ObservableObject {
         expectedGeneration: UInt64? = nil
     ) -> ClipboardItem? {
         if let expectedGeneration, expectedGeneration != captureGeneration { return nil }
-        if let existing = textItem(matching: text) {
+        if let existing = textItem(matching: text, sourceBundleID: sourceBundleID) {
             let updated = existing.recopied(sourceBundleID: sourceBundleID).withKind(kind)
             return refresh(updated) ? updated : nil
         }
         let item = ClipboardItem(text: text, kind: kind, sourceBundleID: sourceBundleID)
         return insert(item) ? item : nil
+    }
+
+    @discardableResult
+    func addFiles(
+        _ fileURLs: [URL], sourceBundleID: String?, expectedGeneration: UInt64? = nil
+    ) -> ClipboardItem? {
+        if let expectedGeneration, expectedGeneration != captureGeneration { return nil }
+        guard fileURLs.allSatisfy(\.isFileURL) else { return nil }
+        let normalizedURLs = fileURLs.map(\.standardizedFileURL)
+        guard !normalizedURLs.isEmpty else { return nil }
+        let kind = kind(forFileURLs: normalizedURLs)
+        if let existing = fileItem(matching: normalizedURLs, sourceBundleID: sourceBundleID) {
+            let updated = existing.recopied(sourceBundleID: sourceBundleID).withKind(kind)
+            guard refresh(updated) else { return nil }
+            return updated
+        }
+        let item = ClipboardItem(
+            id: UUID(), kind: kind,
+            text: normalizedURLs.map(\.path).joined(separator: "\n"),
+            imagePath: nil, imageFingerprint: nil, fileURLs: normalizedURLs,
+            lastCopiedAt: Date(), sourceBundleID: sourceBundleID)
+        guard insert(item) else { return nil }
+        return item
     }
 
     func addImage(
@@ -341,7 +367,13 @@ final class ClipboardStore: ObservableObject {
         }
         guard let entry = deletedEntry, let stmt = insertStmt else { return nil }
         let existing = item(id: entry.item.id)
-            ?? entry.item.text.flatMap { textItem(matching: $0) }
+            ?? (!entry.item.fileURLs.isEmpty
+                ? fileItem(
+                    matching: entry.item.fileURLs,
+                    sourceBundleID: entry.item.sourceBundleID)
+                : entry.item.text.flatMap {
+                    textItem(matching: $0, sourceBundleID: entry.item.sourceBundleID)
+                })
             ?? entry.item.imageFingerprint.flatMap { image(matching: $0) }
         let restored = existing ?? entry.item
         let stackID = stackMembership[restored.id]
@@ -411,6 +443,9 @@ final class ClipboardStore: ObservableObject {
     }
 
     func imageURL(for item: ClipboardItem) -> URL? {
+        if item.kind == .image, item.fileURLs.count == 1 {
+            return item.fileURLs[0]
+        }
         guard let path = item.imagePath else { return nil }
         return managedBlobURL(for: path)
     }
@@ -609,7 +644,11 @@ final class ClipboardStore: ObservableObject {
     }
 
     func imageTextIndexImageCount() -> Int {
-        guard let stmt = prepare("SELECT COUNT(*) FROM items WHERE kind = 'image'") else { return 0 }
+        guard let stmt = prepare("""
+            SELECT COUNT(*) FROM items
+            WHERE kind = 'image' AND image_path IS NOT NULL
+            """)
+        else { return 0 }
         defer { sqlite3_finalize(stmt) }
         return sqlite3_step(stmt) == SQLITE_ROW ? Int(sqlite3_column_int64(stmt, 0)) : 0
     }
@@ -619,14 +658,16 @@ final class ClipboardStore: ObservableObject {
         guard sqlite3_exec(db, """
             UPDATE items SET ocr_text = NULL, pinyin = NULL, pinyin_initials = NULL,
                              ocr_status = 'complete', ocr_version = \(ClipboardImageTextRecognition.version)
-            WHERE kind = 'image' AND ocr_text IS NOT NULL
+            WHERE kind = 'image' AND image_path IS NOT NULL AND ocr_text IS NOT NULL
             """, nil, nil, nil) == SQLITE_OK else { return false }
         imageTextSearchGeneration &+= 1
         imageOCRTask?.cancel()
         imageOCRRebuildIDs = nil
 
         func cleared(_ item: ClipboardItem) -> ClipboardItem {
-            guard item.kind == .image, let metadata = item.imageOCR, metadata.text != nil else {
+            guard item.kind == .image, item.imagePath != nil,
+                let metadata = item.imageOCR, metadata.text != nil
+            else {
                 return item
             }
             return item.withImageOCR(ClipboardImageOCR(
@@ -648,7 +689,11 @@ final class ClipboardStore: ObservableObject {
         guard imageOCRTask == nil else { return false }
         var ids: [ClipboardItem.ID] = []
         guard transaction({
-            guard let stmt = prepare("SELECT id FROM items WHERE kind = 'image' ORDER BY created_at, rowid")
+            guard let stmt = prepare("""
+                SELECT id FROM items
+                WHERE kind = 'image' AND image_path IS NOT NULL
+                ORDER BY created_at, rowid
+                """)
             else { return false }
             defer { sqlite3_finalize(stmt) }
             var status = sqlite3_step(stmt)
@@ -661,7 +706,7 @@ final class ClipboardStore: ObservableObject {
             guard status == SQLITE_DONE else { return false }
             return sqlite3_exec(db, """
                 UPDATE items SET ocr_status = NULL, ocr_version = NULL, ocr_attempts = 0
-                WHERE kind = 'image'
+                WHERE kind = 'image' AND image_path IS NOT NULL
                 """, nil, nil, nil) == SQLITE_OK
         }) else { return false }
         imageTextSearchGeneration &+= 1
@@ -676,7 +721,12 @@ final class ClipboardStore: ObservableObject {
         if imageOCRTask != nil {
             state = .indexing
         } else {
-            guard let stmt = prepare("SELECT EXISTS(SELECT 1 FROM items WHERE kind = 'image' AND ocr_text IS NOT NULL)")
+            guard let stmt = prepare("""
+                SELECT EXISTS(
+                    SELECT 1 FROM items
+                    WHERE kind = 'image' AND image_path IS NOT NULL AND ocr_text IS NOT NULL
+                )
+                """)
             else { return }
             defer { sqlite3_finalize(stmt) }
             guard sqlite3_step(stmt) == SQLITE_ROW else { return }
@@ -730,7 +780,7 @@ final class ClipboardStore: ObservableObject {
     private func nextImageOCRItem() -> ClipboardItem? {
         if imageOCRRebuildIDs != nil, !imageTextSearchEnabled {
             while let id = imageOCRRebuildIDs?.last {
-                if let item = loadItem(id: id), item.kind == .image,
+                if let item = loadItem(id: id), item.kind == .image, item.imagePath != nil,
                     item.imageOCR == nil || (item.imageOCR?.status == .failed
                         && (item.imageOCR?.attempts ?? 0) < ClipboardImageTextRecognition.maxAttempts)
                 { return item }
@@ -740,7 +790,8 @@ final class ClipboardStore: ObservableObject {
         }
         guard imageTextSearchEnabled else { return nil }
         guard let stmt = prepare("""
-            \(Self.itemSelection) WHERE kind = 'image' AND
+            \(Self.itemSelection) WHERE kind = 'image'
+              AND image_path IS NOT NULL AND
               (ocr_status IS NULL OR (ocr_status = 'failed' AND ocr_attempts < \(ClipboardImageTextRecognition.maxAttempts)))
             ORDER BY created_at DESC, rowid DESC LIMIT 1
             """)
@@ -821,7 +872,8 @@ final class ClipboardStore: ObservableObject {
         guard generation == captureGeneration, let stmt = prepare("""
             UPDATE items SET ocr_text = ?, ocr_status = ?, ocr_version = ?, ocr_attempts = ?,
                              pinyin = ?, pinyin_initials = ?
-            WHERE id = ? AND kind = 'image' AND image_path IS ? AND image_fingerprint IS ?
+            WHERE id = ? AND kind = 'image' AND image_path IS NOT NULL
+              AND image_path IS ? AND image_fingerprint IS ?
             """)
         else { return false }
         defer { sqlite3_finalize(stmt) }
@@ -923,7 +975,7 @@ final class ClipboardStore: ObservableObject {
         if items.count > Self.memoryWindow { items.removeLast() }
         pruneIfDue()
         scheduleSearchMetadataUpdate(for: item)
-        if item.kind == .image { startImageOCRWorkerIfNeeded() }
+        if item.kind == .image, item.imagePath != nil { startImageOCRWorkerIfNeeded() }
         onItemCaptured?()
         return true
     }
@@ -952,6 +1004,12 @@ final class ClipboardStore: ObservableObject {
         sqlite3_bind_text(stmt, 14, forms.full, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 15, forms.initials, -1, SQLITE_TRANSIENT)
         sqlite3_bind_int64(stmt, 16, Int64(item.copyCount))
+        if item.isFileBacked {
+            sqlite3_bind_text(
+                stmt, 17, ClipboardSQLite.encodedFileURLs(item.fileURLs), -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(stmt, 17)
+        }
         return stepAndReset(stmt)
     }
 
@@ -963,8 +1021,28 @@ final class ClipboardStore: ObservableObject {
         findItem(using: imageByFingerprintStmt, matching: fingerprint)
     }
 
-    private func textItem(matching text: String) -> ClipboardItem? {
-        findItem(using: textByContentStmt, matching: text)
+    private func textItem(matching text: String, sourceBundleID: String?) -> ClipboardItem? {
+        guard let stmt = textByContentStmt else { return nil }
+        ClipboardSQLite.bindText(text, to: stmt, at: 1)
+        ClipboardSQLite.bindText(sourceBundleID, to: stmt, at: 2)
+        let item = sqlite3_step(stmt) == SQLITE_ROW ? ClipboardSQLite.row(stmt) : nil
+        sqlite3_reset(stmt)
+        sqlite3_clear_bindings(stmt)
+        return item
+    }
+
+    private func fileItem(
+        matching fileURLs: [URL], sourceBundleID: String?
+    ) -> ClipboardItem? {
+        guard let stmt = fileByContentStmt,
+            let encodedURLs = ClipboardSQLite.encodedFileURLs(fileURLs)
+        else { return nil }
+        ClipboardSQLite.bindText(encodedURLs, to: stmt, at: 1)
+        ClipboardSQLite.bindText(sourceBundleID, to: stmt, at: 2)
+        let item = sqlite3_step(stmt) == SQLITE_ROW ? ClipboardSQLite.row(stmt) : nil
+        sqlite3_reset(stmt)
+        sqlite3_clear_bindings(stmt)
+        return item
     }
 
     private func findItem(using stmt: OpaquePointer?, matching value: String) -> ClipboardItem? {
@@ -974,6 +1052,19 @@ final class ClipboardStore: ObservableObject {
         sqlite3_reset(stmt)
         sqlite3_clear_bindings(stmt)
         return item
+    }
+
+    private func kind(forFileURLs urls: [URL]) -> ClipboardItem.Kind {
+        guard urls.count == 1, let url = urls.first else { return .file }
+        let values = try? url.resourceValues(forKeys: [.contentTypeKey, .isDirectoryKey])
+        guard values?.isDirectory != true else { return .file }
+        if values?.contentType?.conforms(to: .image) == true {
+            return .image
+        }
+        guard let type = UTType(filenameExtension: url.pathExtension),
+            type.conforms(to: .image)
+        else { return .file }
+        return .image
     }
 
     private func pruneIfDue() {
@@ -1164,8 +1255,8 @@ final class ClipboardStore: ObservableObject {
             INSERT INTO items(
               id, kind, text, image_path, created_at, source_app, image_fingerprint,
               custom_title, first_copied_at, ocr_text, ocr_status, ocr_version, ocr_attempts,
-              pinyin, pinyin_initials, copy_count
-            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+              pinyin, pinyin_initials, copy_count, file_urls
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """
         )
         loadStmt = prepare(
@@ -1188,7 +1279,13 @@ final class ClipboardStore: ObservableObject {
             """)
         textByContentStmt = prepare(
             """
-            \(Self.itemSelection) WHERE kind != 'image' AND text = ? COLLATE BINARY
+            \(Self.itemSelection) WHERE kind != 'image'
+              AND file_urls IS NULL AND text = ? COLLATE BINARY AND source_app IS ?
+            ORDER BY created_at DESC, rowid DESC LIMIT 1
+            """)
+        fileByContentStmt = prepare(
+            """
+            \(Self.itemSelection) WHERE file_urls = ? AND source_app IS ?
             ORDER BY created_at DESC, rowid DESC LIMIT 1
             """)
         itemByIDStmt = prepare(
@@ -1222,7 +1319,8 @@ final class ClipboardStore: ObservableObject {
     private func closeDatabase() {
         [
             insertStmt, loadStmt, refreshStmt, deleteByIDStmt,
-            staleImagesStmt, deleteStaleStmt, imageByFingerprintStmt, textByContentStmt, itemByIDStmt,
+            staleImagesStmt, deleteStaleStmt, imageByFingerprintStmt, textByContentStmt,
+            fileByContentStmt, itemByIDStmt,
             insertStackStmt, upsertMembershipStmt, deleteMembershipStmt,
         ].forEach { sqlite3_finalize($0) }
         sqlite3_close_v2(db)

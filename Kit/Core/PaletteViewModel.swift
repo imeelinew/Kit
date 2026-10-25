@@ -92,12 +92,13 @@ extension ClipboardItem.Kind {
         case .link: "link"
         case .path: "point.topleft.down.to.point.bottomright.curvepath"
         case .image: "photo"
+        case .file: "doc"
         }
     }
 }
 
 enum ClipboardKindFilter: Equatable, CaseIterable {
-    case all, text, markdown, code, link, path, image
+    case all, text, markdown, code, link, path, image, file
 
     var title: LocalizedStringKey {
         LocalizedStringKey(kind?.typeLabel ?? "All Types")
@@ -116,6 +117,7 @@ enum ClipboardKindFilter: Equatable, CaseIterable {
         case .link: .link
         case .path: .path
         case .image: .image
+        case .file: .file
         }
     }
 }
@@ -257,7 +259,7 @@ final class PaletteViewModel {
             if item.kind == .image {
                 actions.append(.pinToScreen(item))
             }
-            if item.kind == .image || item.kind == .path {
+            if item.kind == .image || item.kind == .file || item.kind == .path {
                 actions.append(.revealInFinder(item))
             }
             if !core.clipboardStore.stacks.isEmpty {
@@ -512,7 +514,7 @@ final class PaletteViewModel {
             core.pinToScreen(item)
         case .revealInFinder:
             guard searchReady, let item = actionTarget,
-                item.kind == .image || item.kind == .path else { return true }
+                item.kind == .image || item.kind == .file || item.kind == .path else { return true }
             overlay = .none
             core.revealClipboardItem(item)
         case .cycleStack(let delta):

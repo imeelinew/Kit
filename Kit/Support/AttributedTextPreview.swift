@@ -122,6 +122,8 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
         // comparison for unrelated SwiftUI updates; layout changes are handled by the scroll view.
         guard context.coordinator.lastInput != input else { return }
         let textView = scrollView.textView
+        let previousString = textView.string
+        let previousSelection = textView.selectedRange()
         let ns: NSAttributedString
         switch storage {
         case .swiftUI(let attributed):
@@ -133,6 +135,15 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
             ns = Self.nsAttributed(from: attributed, fontSize: fontSize)
         }
         textView.textStorage?.setAttributedString(ns)
+        if previousString != ns.string {
+            textView.setSelectedRange(NSRange(location: 0, length: 0))
+        } else if previousSelection.location != NSNotFound {
+            let length = textView.string.utf16.count
+            let location = min(previousSelection.location, length)
+            let selectionLength = min(previousSelection.length, length - location)
+            textView.setSelectedRange(
+                NSRange(location: location, length: selectionLength))
+        }
         textView.invalidateIntrinsicContentSize()
         context.coordinator.lastInput = input
         scrollView.updateDocumentGeometry()
@@ -243,7 +254,7 @@ final class PreviewTextScrollView: KitScrollView {
 
         textView.drawsBackground = false
         textView.isEditable = false
-        textView.isSelectable = false
+        textView.isSelectable = true
         textView.isRichText = true
         textView.allowsUndo = false
         textView.isVerticallyResizable = true
@@ -309,6 +320,19 @@ final class PreviewTextScrollView: KitScrollView {
 
 final class PreviewTextView: NSTextView {
     static let trailingGutter: CGFloat = 16
+
+    override func copy(_ sender: Any?) {
+        let pasteboard = NSPasteboard.general
+        let previousChangeCount = pasteboard.changeCount
+        super.copy(sender)
+        if pasteboard.changeCount != previousChangeCount {
+            Paster.markCurrentPasteboardSelection()
+        }
+    }
+
+    override func paste(_ sender: Any?) {}
+    override func pasteAsPlainText(_ sender: Any?) {}
+    override func pasteAsRichText(_ sender: Any?) {}
 
     override var intrinsicContentSize: NSSize {
         guard let layoutManager, let textContainer else {

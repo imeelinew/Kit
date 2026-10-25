@@ -14,6 +14,26 @@ enum ImageThumbnail {
     static let rowMaxPixel: CGFloat = 512
     private static let rowDiskCache = ClipboardRowThumbnailCache()
 
+    private final class ManagedImageDirectories: @unchecked Sendable {
+        private let lock = NSLock()
+        private var paths: Set<String> = []
+
+        func register(_ url: URL) {
+            _ = lock.withLock { paths.insert(url.standardizedFileURL.path) }
+        }
+
+        func contains(_ url: URL) -> Bool {
+            lock.withLock { paths.contains(url.standardizedFileURL.path) }
+        }
+    }
+
+    private static let managedImageDirectories = ManagedImageDirectories()
+
+    /// Persist thumbnails only beside originals owned by a clipboard store
+    static func registerManagedImageDirectory(_ url: URL) {
+        managedImageDirectories.register(url)
+    }
+
     enum Priority: Int, Sendable {
         case visibleRow, preview, prefetch
     }
@@ -323,7 +343,9 @@ enum ImageThumbnail {
     private static func load(_ url: URL, maxPixel: CGFloat) -> Decoded {
         autoreleasepool {
             guard !Task.isCancelled else { return .empty }
-            let ticket = maxPixel == rowMaxPixel ? rowDiskCache.ticket(for: url) : nil
+            let usesDiskCache = maxPixel == rowMaxPixel
+                && managedImageDirectories.contains(url.deletingLastPathComponent())
+            let ticket = usesDiskCache ? rowDiskCache.ticket(for: url) : nil
             let options: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceCreateThumbnailWithTransform: true,

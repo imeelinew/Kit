@@ -55,7 +55,10 @@ final class ClipboardManager {
         guard !isPaused else { return }
 
         let types = pasteboard.types ?? []
-        let sourceBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let sourceBundleID =
+            types.contains(ClipboardCapturePolicy.selectionType)
+            ? Bundle.main.bundleIdentifier
+            : NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         guard ClipboardCapturePolicy.shouldCapture(
             types: types,
             sourceBundleID: sourceBundleID,
@@ -113,6 +116,10 @@ final class ClipboardManager {
                 await self.store.addImage(
                     png, sourceBundleID: capture.sourceBundleID,
                     expectedGeneration: capture.generation)
+            case .files(let urls):
+                self.store.addFiles(
+                    urls, sourceBundleID: capture.sourceBundleID,
+                    expectedGeneration: capture.generation)
             }
         }
     }
@@ -125,11 +132,23 @@ final class ClipboardManager {
         let pasteboard = NSPasteboard.general
         guard pasteboard.changeCount == changeCount else { return nil }
         let text = pasteboard.string(forType: .string)
-        let fileURLs =
-            (pasteboard.readObjects(
-                forClasses: [NSURL.self],
-                options: [.urlReadingFileURLsOnly: true]
-            ) as? [NSURL])?.map { $0 as URL } ?? []
+        var fileURLs: [URL] = []
+        let legacyFileURLsType = NSPasteboard.PasteboardType("NSFilenamesPboardType")
+        let types = pasteboard.types ?? []
+        // Object coercion can turn a path string into an NSURL, so require a file representation.
+        if types.contains(.fileURL) || types.contains(legacyFileURLsType) {
+            fileURLs =
+                (pasteboard.readObjects(
+                    forClasses: [NSURL.self],
+                    options: [.urlReadingFileURLsOnly: true]
+                ) as? [NSURL])?.map { $0 as URL } ?? []
+            if fileURLs.isEmpty,
+                let paths = pasteboard.propertyList(forType: legacyFileURLsType) as? [String]
+            {
+                fileURLs = paths.map { URL(fileURLWithPath: $0) }
+            }
+            guard !fileURLs.isEmpty else { return nil }
+        }
         if !fileURLs.isEmpty {
             guard !Task.isCancelled, pasteboard.changeCount == changeCount else { return nil }
             return PasteboardSnapshot(
