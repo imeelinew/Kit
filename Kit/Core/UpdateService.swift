@@ -2,8 +2,8 @@ import AppKit
 import Combine
 import Sparkle
 
-private let versionHistoryURL = URL(string: "https://imeelinew.github.io/Kit/version-history.html")!
-private let versionHistoryEnglishURL = URL(string: "https://imeelinew.github.io/Kit/version-history.en.html")!
+private let versionHistoryURL = URL(string: "https://imeelinew.github.io/Kit/site/version-history.html")!
+private let versionHistoryEnglishURL = URL(string: "https://imeelinew.github.io/Kit/site/version-history.en.html")!
 
 /// Gives the no-update alert its "Version History" button and opens the published change log.
 /// Sparkle calls these on the main thread; hopping keeps the nonisolated protocol requirement honest.

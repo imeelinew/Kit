@@ -26,16 +26,16 @@
 ### 文件捕获入口
 
 本地读取阶段已经能取得多个文件 URL，见
-[ClipboardManager.swift:128](../Kit/Core/ClipboardManager.swift#L128)
+[ClipboardManager.swift:128](../../Kit/Core/ClipboardManager.swift#L128)
 
 `PasteboardSnapshot` 保存 `fileURLs: [URL]`，见
-[ClipboardCapturePipeline.swift:9](../Kit/Core/ClipboardCapturePipeline.swift#L9)
+[ClipboardCapturePipeline.swift:9](../../Kit/Core/ClipboardCapturePipeline.swift#L9)
 
 但处理阶段只要 `fileURLs` 非空就直接返回 `nil`，连同时存在的文本和图像也一起丢弃，见
-[ClipboardCapturePipeline.swift:33](../Kit/Core/ClipboardCapturePipeline.swift#L33)
+[ClipboardCapturePipeline.swift:33](../../Kit/Core/ClipboardCapturePipeline.swift#L33)
 
 代码注释明确说明，原因是文件必须保留再次粘贴时的文件身份，而当前能力尚未实现，见
-[ClipboardCapturePipeline.swift:31](../Kit/Core/ClipboardCapturePipeline.swift#L31)
+[ClipboardCapturePipeline.swift:31](../../Kit/Core/ClipboardCapturePipeline.swift#L31)
 
 因此当前结论是：
 
@@ -46,84 +46,84 @@
 ### 当前条目模型
 
 `ClipboardItem.Kind` 只有 `text`、`markdown`、`code`、`link`、`path`、`image`，没有文件或文件数组类型，见
-[ClipboardItem.swift:5](../Kit/Core/ClipboardItem.swift#L5)
+[ClipboardItem.swift:5](../../Kit/Core/ClipboardItem.swift#L5)
 
 条目模型只有单个 `text`、单个内部图片路径和图片指纹，没有文件引用集合，见
-[ClipboardItem.swift:21](../Kit/Core/ClipboardItem.swift#L21)
+[ClipboardItem.swift:21](../../Kit/Core/ClipboardItem.swift#L21)
 
 `path` 是文本分类结果，正文仍是路径字符串，并未保存可再次粘贴的文件对象
 
 重新粘贴时，`path` 与普通文本一样走 `Payload.text`，见
-[Paster.swift:82](../Kit/Core/Paster.swift#L82)
+[Paster.swift:82](../../Kit/Core/Paster.swift#L82)
 
 所以本地 `path` 只能复制路径文字，不能恢复文件或多文件选择
 
 ### 当前图片语义
 
 内联图片会被规范化并写入 Kit 管理目录，数据库保存内部 PNG 路径和内容指纹，见
-[ClipboardStore.swift:252](../Kit/Core/ClipboardStore.swift#L252)
+[ClipboardStore.swift:252](../../Kit/Core/ClipboardStore.swift#L252)
 
 粘贴图片到 Finder 时，Kit 写入内部 PNG 的 `.file` URL，见
-[Paster.swift:87](../Kit/Core/Paster.swift#L87)
+[Paster.swift:87](../../Kit/Core/Paster.swift#L87)
 
 粘贴图片到其他应用时，Kit 读取内部 PNG 并通过 `Payload.image` 写入图片数据，见
-[Paster.swift:98](../Kit/Core/Paster.swift#L98)
+[Paster.swift:98](../../Kit/Core/Paster.swift#L98)
 
 这条路径适合剪贴板内联位图，但不能替代用户文件对象
 
 ### 整项复制与选区复制
 
 默认整项复制快捷键是 `⌘Return`，见
-[ShortcutRecorder.swift:15](../Kit/Features/Settings/ShortcutRecorder.swift#L15)
+[ShortcutRecorder.swift:15](../../Kit/Features/Settings/ShortcutRecorder.swift#L15)
 
 普通列表收到 `⌘C` 后进入编辑快捷键路由，而不是整项复制，见
-[PalettePanel.swift:200](../Kit/Core/PalettePanel.swift#L200)
+[PalettePanel.swift:200](../../Kit/Core/PalettePanel.swift#L200)
 
 搜索框无选区时 `⌘C` 被消费但没有整项动作，搜索框有选区时只复制搜索词，见
-[PalettePanel.swift:322](../Kit/Core/PalettePanel.swift#L322)
+[PalettePanel.swift:322](../../Kit/Core/PalettePanel.swift#L322)
 
 本地搜索框选区复制后还会调用 `markCurrentPasteboardInternal`，因此当前 Kit 会忽略这次捕获，见
-[PalettePanel.swift:331](../Kit/Core/PalettePanel.swift#L331) 与
-[Paster.swift:71](../Kit/Core/Paster.swift#L71)
+[PalettePanel.swift:331](../../Kit/Core/PalettePanel.swift#L331) 与
+[Paster.swift:71](../../Kit/Core/Paster.swift#L71)
 
 这与 Raycast 实机中搜索选区复制会新增条目不同
 
 预览文本当前不可编辑且不可选择，见
-[AttributedTextPreview.swift:246](../Kit/Support/AttributedTextPreview.swift#L246)
+[AttributedTextPreview.swift:246](../../Kit/Support/AttributedTextPreview.swift#L246)
 
 整项文本复制会写入 `.string` 和 Kit 内部类型标记，见
-[Paster.swift:128](../Kit/Core/Paster.swift#L128)
+[Paster.swift:128](../../Kit/Core/Paster.swift#L128)
 
 ### 写入与历史回写
 
 监控器会拒绝 Kit 内部写入，避免把自己的复制再次捕获为外部条目，见
-[ClipboardCapturePipeline.swift:83](../Kit/Core/ClipboardCapturePipeline.swift#L83)
+[ClipboardCapturePipeline.swift:83](../../Kit/Core/ClipboardCapturePipeline.swift#L83)
 
 整项复制在写入成功后显式调用 `recordHistoryAction`，见
-[Paster.swift:65](../Kit/Core/Paster.swift#L65)
+[Paster.swift:65](../../Kit/Core/Paster.swift#L65)
 
 该动作会增加复制次数、更新时间并按设置决定是否更新历史位置，见
-[ClipboardStore.swift:282](../Kit/Core/ClipboardStore.swift#L282)
+[ClipboardStore.swift:282](../../Kit/Core/ClipboardStore.swift#L282)
 
 粘贴使用有序事务，写入剪贴板并成功发送粘贴后才回写历史，见
-[PasteTransaction.swift:17](../Kit/Core/PasteTransaction.swift#L17)
+[PasteTransaction.swift:17](../../Kit/Core/PasteTransaction.swift#L17)
 
 ### 去重、排序与来源
 
 文本按完整原文二进制相等去重，见
-[ClipboardStore.swift:1189](../Kit/Core/ClipboardStore.swift#L1189)
+[ClipboardStore.swift:1189](../../Kit/Core/ClipboardStore.swift#L1189)
 
 图片按指纹去重，见
-[ClipboardSQLite.swift:144](../Kit/Core/ClipboardSQLite.swift#L144)
+[ClipboardSQLite.swift:144](../../Kit/Core/ClipboardSQLite.swift#L144)
 
 列表与搜索按最近复制时间降序，数据库查询见
-[ClipboardSearch.swift:87](../Kit/Core/ClipboardSearch.swift#L87)
+[ClipboardSearch.swift:87](../../Kit/Core/ClipboardSearch.swift#L87)
 
 来源应用在检测剪贴板变化时取当前前台应用的 `bundle ID`，见
-[ClipboardManager.swift:58](../Kit/Core/ClipboardManager.swift#L58)
+[ClipboardManager.swift:58](../../Kit/Core/ClipboardManager.swift#L58)
 
 外部再次复制相同内容会更新来源，Kit 内再次复制会保留原来源，见
-[ClipboardItem.swift:69](../Kit/Core/ClipboardItem.swift#L69)
+[ClipboardItem.swift:69](../../Kit/Core/ClipboardItem.swift#L69)
 
 ## Raycast 实机第一轮结果
 
@@ -294,7 +294,7 @@ Raycast 在该样本中保留了跨来源的两个相同内容条目
 ### 文本去重
 
 当前 Kit 会按完整文本查找已有条目，命中后复用同一 ID、更新时间并更新来源，见
-[ClipboardStore.swift:223](../Kit/Core/ClipboardStore.swift#L223)
+[ClipboardStore.swift:223](../../Kit/Core/ClipboardStore.swift#L223)
 
 Raycast `2.9.0.0` 本次观察到 Kit 与 TextEdit 的相同内容保留为两个条目
 

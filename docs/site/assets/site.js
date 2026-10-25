@@ -1,7 +1,7 @@
 // Keep the download in sync with the existing Sparkle release feed
 async function updateRelease() {
   try {
-    const response = await fetch('appcast.xml');
+    const response = await fetch('../appcast.xml');
     if (!response.ok) return;
     const feed = new DOMParser().parseFromString(await response.text(), 'application/xml');
     if (feed.querySelector('parsererror')) return;
