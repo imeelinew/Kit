@@ -174,6 +174,19 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         return response
     }
 
+    func runFileAccessPanel(_ panel: NSOpenPanel) -> NSApplication.ModalResponse {
+        modalAlertDepth += 1
+        defer {
+            modalAlertDepth = max(0, modalAlertDepth - 1)
+            if let palettePanel = self.panel,
+                palettePanel.isVisible, !hiding
+            {
+                palettePanel.makeKeyAndOrderFront(nil)
+            }
+        }
+        return panel.runModal()
+    }
+
     private func ensurePanel() -> PalettePanel {
         if let panel { return panel }
         let root = RootPaletteView(vm: core.palette, store: core.clipboardStore, settings: core.settings)

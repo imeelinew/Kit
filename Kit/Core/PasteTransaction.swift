@@ -16,6 +16,7 @@ enum PasteTransaction {
     ) async -> Bool {
         guard permission() else { return false }
         guard let payload = await prepare(), !Task.isCancelled else { return false }
+        defer { withExtendedLifetime(payload) {} }
         willDeliver()
         guard await targetReady(), !Task.isCancelled else { return false }
         guard write(payload) else { return false }

@@ -67,6 +67,7 @@ final class ClipboardStore: ObservableObject {
         let item: ClipboardItem
         let stackID: ClipboardStack.ID?
         let imageBackup: URL?
+        let fileBookmarks: [String: Data]
     }
     // A successful deletion replaces this slot; a successful restore consumes it.
     private var deletedEntry: DeletedEntry?
@@ -350,7 +351,9 @@ final class ClipboardStore: ObservableObject {
                 return false
             }
         }
-        let entry = DeletedEntry(item: item, stackID: stackMembership[item.id], imageBackup: backup)
+        let entry = DeletedEntry(
+            item: item, stackID: stackMembership[item.id], imageBackup: backup,
+            fileBookmarks: fileBookmarks(for: item.id))
         let deleted = transaction {
             sqlite3_bind_text(stmt, 1, item.id.uuidString, -1, SQLITE_TRANSIENT)
             return stepAndReset(stmt) && sqlite3_changes(db) == 1 && deleteMembership(item.id)
@@ -404,6 +407,9 @@ final class ClipboardStore: ObservableObject {
         }
         guard transaction({
             if existing == nil, !bindAndInsert(stmt, restored) { return false }
+            if existing == nil, !entry.fileBookmarks.isEmpty,
+                !rememberFileBookmarks(entry.fileBookmarks, for: restored.id)
+            { return false }
             if let stackID, !writeMembership(restored.id, stackID: stackID) { return false }
             return true
         }) else {
@@ -421,6 +427,34 @@ final class ClipboardStore: ObservableObject {
         refreshImageTextIndexState()
         if let url = imageURL(for: restored) { warmImageRow(url) }
         return restored
+    }
+
+    /// Access credentials belong to the history row, so deletion and retention remove them too
+    func fileBookmarks(for id: ClipboardItem.ID) -> [String: Data] {
+        guard let stmt = prepare("SELECT file_bookmarks FROM items WHERE id = ?") else { return [:] }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, id.uuidString, -1, SQLITE_TRANSIENT)
+        guard sqlite3_step(stmt) == SQLITE_ROW,
+            let bytes = sqlite3_column_blob(stmt, 0)
+        else { return [:] }
+        let data = Data(bytes: bytes, count: Int(sqlite3_column_bytes(stmt, 0)))
+        return (try? PropertyListDecoder().decode([String: Data].self, from: data)) ?? [:]
+    }
+
+    @discardableResult
+    func rememberFileBookmarks(_ bookmarks: [String: Data], for id: ClipboardItem.ID) -> Bool {
+        guard !bookmarks.isEmpty else { return true }
+        var merged = fileBookmarks(for: id)
+        merged.merge(bookmarks) { _, fresh in fresh }
+        guard let data = try? PropertyListEncoder().encode(merged),
+            let stmt = prepare("UPDATE items SET file_bookmarks = ? WHERE id = ?")
+        else { return false }
+        defer { sqlite3_finalize(stmt) }
+        _ = data.withUnsafeBytes {
+            sqlite3_bind_blob(stmt, 1, $0.baseAddress, Int32($0.count), SQLITE_TRANSIENT)
+        }
+        sqlite3_bind_text(stmt, 2, id.uuidString, -1, SQLITE_TRANSIENT)
+        return sqlite3_step(stmt) == SQLITE_DONE && sqlite3_changes(db) == 1
     }
 
     private func transaction(_ body: () -> Bool) -> Bool {
@@ -723,7 +757,8 @@ final class ClipboardStore: ObservableObject {
         // Update the resident overlay and undo snapshot before publishing a search revision.
         if let entry = deletedEntry {
             deletedEntry = DeletedEntry(
-                item: cleared(entry.item), stackID: entry.stackID, imageBackup: entry.imageBackup)
+                item: cleared(entry.item), stackID: entry.stackID, imageBackup: entry.imageBackup,
+                fileBookmarks: entry.fileBookmarks)
         }
         items = items.map(cleared)
         refreshImageTextIndexState()

@@ -11,7 +11,7 @@ enum Paster {
     private enum Payload: Sendable {
         case text(String)
         case image(Data)
-        case files([URL])
+        case files(FileAccessLease)
     }
 
     /// Prepare, target, write, and deliver as one ordered transaction. The caller hides the palette
@@ -66,6 +66,7 @@ enum Paster {
             logger.error("Copy stopped before writing cancelled=\(Task.isCancelled)")
             return false
         }
+        defer { withExtendedLifetime(payload) {} }
         willWrite()
         guard write(payload) else { return false }
         store.recordHistoryAction(id: item.id)
@@ -86,11 +87,8 @@ enum Paster {
     ) async -> Payload? {
         // File-backed images retain their original filename and file identity
         if item.isFileBacked {
-            let urls = item.fileURLs
-            // Copying references must not require Kit to read protected source folders
-            // The receiving application resolves the URLs and reports unavailable files
-            guard urls.allSatisfy(\.isFileURL) else { return nil }
-            return .files(urls)
+            guard let access = ClipboardFileAccess.acquire(item, store: store) else { return nil }
+            return .files(access)
         }
         switch item.kind {
         case .text, .markdown, .code, .link, .path:
@@ -99,7 +97,7 @@ enum Paster {
             guard let url = store.imageURL(for: item) else { return nil }
             if targetBundleID == finderBundleID {
                 guard FileManager.default.isReadableFile(atPath: url.path) else { return nil }
-                return .files([url])
+                return .files(FileAccessLease(urls: [url as NSURL]))
             }
             return await imagePayload(at: url)
         case .file:
@@ -141,8 +139,9 @@ enum Paster {
     /// The pasteboard is mutated only after payload and target preflight have succeeded.
     @MainActor @discardableResult
     private static func write(_ payload: Payload) -> Bool {
-        // Validate the complete reference collection without accessing source files
-        if case .files(let urls) = payload {
+        // Keep the credential-bearing NSURL objects intact until the transaction finishes
+        if case .files(let access) = payload {
+            let urls = access.urls
             guard !urls.isEmpty, urls.allSatisfy(\.isFileURL) else { return false }
         }
         let pb = NSPasteboard.general
@@ -154,16 +153,14 @@ enum Paster {
         case .image(let data):
             pb.declareTypes([.png, ClipboardManager.internalType], owner: nil)
             guard pb.setData(data, forType: .png) else { return false }
-        case .files(let urls):
-            guard pb.writeObjects(urls.map { $0 as NSURL }) else {
-                logger.error("File pasteboard write failed count=\(urls.count)")
+        case .files(let access):
+            guard pb.writeObjects(access.urls) else {
+                logger.error("File pasteboard write failed count=\(access.urls.count)")
+                ClipboardFileAccess.showFailure()
                 return false
             }
             pb.addTypes([ClipboardManager.internalType], owner: nil)
-            let readableFiles = pb.pasteboardItems?.filter {
-                $0.string(forType: .fileURL) != nil
-            }.count ?? 0
-            logger.notice("File pasteboard write requested=\(urls.count) readable=\(readableFiles)")
+            logger.notice("File references submitted count=\(access.urls.count)")
         }
         return pb.setData(Data(), forType: ClipboardManager.internalType)
     }

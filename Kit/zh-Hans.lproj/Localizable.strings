@@ -178,3 +178,11 @@
 "Copied" = "复制时间";
 
 "Count" = "数量";
+
+"Allow Access to %@" = "允许访问 %@";
+
+"Allow Access" = "允许访问";
+
+"Unable to Access %@" = "无法访问 %@";
+
+"Unable to Copy Files" = "无法复制文件";

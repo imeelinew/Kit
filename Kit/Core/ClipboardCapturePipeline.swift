@@ -9,6 +9,7 @@ struct PasteboardSnapshot: Sendable {
     let fileURLs: [URL]
     let sourceBundleID: String?
     let generation: UInt64
+    var fileBookmarks: [String: Data] = [:]
 }
 
 enum CapturedClipboardContent: Sendable, Equatable {
@@ -21,6 +22,7 @@ struct ClipboardCapture: Sendable, Equatable {
     let content: CapturedClipboardContent
     let sourceBundleID: String?
     let generation: UInt64
+    var fileBookmarks: [String: Data] = [:]
 }
 
 /// Serial normalization boundary for pasteboard snapshots. Conversion order now matches observed
@@ -33,7 +35,8 @@ actor ClipboardCapturePipeline {
             guard snapshot.fileURLs.allSatisfy(\.isFileURL) else { return nil }
             return ClipboardCapture(
                 content: .files(snapshot.fileURLs.map(\.standardizedFileURL)),
-                sourceBundleID: snapshot.sourceBundleID, generation: snapshot.generation)
+                sourceBundleID: snapshot.sourceBundleID, generation: snapshot.generation,
+                fileBookmarks: snapshot.fileBookmarks)
         }
 
         if let data = snapshot.imageData,

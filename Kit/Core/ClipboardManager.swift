@@ -100,7 +100,7 @@ final class ClipboardManager {
                 return
             }
             guard
-                let capture = await self.pipeline.process(snapshot)
+                let capture = await self.pipeline.process(snapshot), !Task.isCancelled
             else { return }
 
             switch capture.content {
@@ -117,9 +117,12 @@ final class ClipboardManager {
                     png, sourceBundleID: capture.sourceBundleID,
                     expectedGeneration: capture.generation)
             case .files(let urls):
-                self.store.addFiles(
-                    urls, sourceBundleID: capture.sourceBundleID,
-                    expectedGeneration: capture.generation)
+                guard
+                    let item = self.store.addFiles(
+                        urls, sourceBundleID: capture.sourceBundleID,
+                        expectedGeneration: capture.generation)
+                else { return }
+                self.store.rememberFileBookmarks(capture.fileBookmarks, for: item.id)
             }
         }
     }
@@ -133,19 +136,24 @@ final class ClipboardManager {
         guard pasteboard.changeCount == changeCount else { return nil }
         let text = pasteboard.string(forType: .string)
         var fileURLs: [URL] = []
+        var fileBookmarks: [String: Data] = [:]
         let legacyFileURLsType = NSPasteboard.PasteboardType("NSFilenamesPboardType")
         let types = pasteboard.types ?? []
         // Object coercion can turn a path string into an NSURL, so require a file representation.
         if types.contains(.fileURL) || types.contains(legacyFileURLsType) {
-            fileURLs =
+            let originalURLs =
                 (pasteboard.readObjects(
                     forClasses: [NSURL.self],
                     options: [.urlReadingFileURLsOnly: true]
-                ) as? [NSURL])?.map { $0 as URL } ?? []
+                ) as? [NSURL]) ?? []
+            fileBookmarks = ClipboardFileAccess.capture(originalURLs)
+            fileURLs = originalURLs.map { $0 as URL }
             if fileURLs.isEmpty,
                 let paths = pasteboard.propertyList(forType: legacyFileURLsType) as? [String]
             {
-                fileURLs = paths.map { URL(fileURLWithPath: $0) }
+                let legacyURLs = paths.map { NSURL(fileURLWithPath: $0) }
+                fileBookmarks = ClipboardFileAccess.capture(legacyURLs)
+                fileURLs = legacyURLs.map { $0 as URL }
             }
             guard !fileURLs.isEmpty else { return nil }
         }
@@ -153,7 +161,8 @@ final class ClipboardManager {
             guard !Task.isCancelled, pasteboard.changeCount == changeCount else { return nil }
             return PasteboardSnapshot(
                 text: text, imageData: nil, imageIsPNG: false, fileURLs: fileURLs,
-                sourceBundleID: sourceBundleID, generation: generation)
+                sourceBundleID: sourceBundleID, generation: generation,
+                fileBookmarks: fileBookmarks)
         }
 
         var imageData: Data?

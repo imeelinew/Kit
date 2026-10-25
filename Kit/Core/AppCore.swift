@@ -150,6 +150,10 @@ final class AppCore {
         windowController.runModalAlert(alert)
     }
 
+    func runFileAccessPanel(_ panel: NSOpenPanel) -> NSApplication.ModalResponse {
+        windowController.runFileAccessPanel(panel)
+    }
+
     func requestQuit() {
         let locale = settings.language.locale
         let alert = NSAlert()
