@@ -4,7 +4,7 @@ import KeyboardShortcuts
 import SwiftUI
 
 @MainActor
-protocol PaletteHoverSelectionHandling: AnyObject {
+protocol PaletteHoverHandling: AnyObject {
     func clearHover()
     func mouseMoved(with event: NSEvent)
 }
@@ -33,7 +33,7 @@ final class PalettePanel: NSPanel {
     private let mouseLocation: () -> NSPoint
     private var hoverActivationMouseLocation: NSPoint
     private var pointerHasMoved = false
-    private weak var hoverSelectionHandler: (any PaletteHoverSelectionHandling)?
+    private weak var hoverHandler: (any PaletteHoverHandling)?
 
     var hoverMouseLocation: NSPoint { mouseLocation() }
 
@@ -41,8 +41,8 @@ final class PalettePanel: NSPanel {
         beginKeyboardSelection()
     }
 
-    func registerHoverSelectionHandler(_ handler: any PaletteHoverSelectionHandling) {
-        hoverSelectionHandler = handler
+    func registerHoverHandler(_ handler: any PaletteHoverHandling) {
+        hoverHandler = handler
     }
 
     /// Keyboard input owns selection until the physical pointer moves again. Keep this
@@ -50,7 +50,7 @@ final class PalettePanel: NSPanel {
     func beginKeyboardSelection() {
         hoverActivationMouseLocation = hoverMouseLocation
         pointerHasMoved = false
-        hoverSelectionHandler?.clearHover()
+        hoverHandler?.clearHover()
     }
 
     /// A stationary pointer cannot override a presentation or keyboard selection.
@@ -104,9 +104,9 @@ final class PalettePanel: NSPanel {
         if event.type == .keyDown { _ = moveSearchFocusForTyping(event) }
         super.sendEvent(event)
         // Keep movement delivery independent of tracking-area invalidation during list
-        // updates and content reattachment. The table still owns hit testing and hover intent.
+        // updates and content reattachment. The table still owns hit testing and visual hover feedback.
         if event.type == .mouseMoved {
-            hoverSelectionHandler?.mouseMoved(with: event)
+            hoverHandler?.mouseMoved(with: event)
         }
     }
 

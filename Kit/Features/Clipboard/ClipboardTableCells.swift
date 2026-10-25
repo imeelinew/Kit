@@ -95,6 +95,8 @@ final class ClipboardItemCellView: NSTableCellView {
     private var renderedTitleWidth: CGFloat = -1
     private var representedID: ClipboardItem.ID?
     private var selected = false
+    private var hovered = false
+    private var highlighted = false
     private var fadeToken = 0
     private var entranceQueued = false
     private var selectionBeganAt: CFTimeInterval?
@@ -170,6 +172,8 @@ final class ClipboardItemCellView: NSTableCellView {
         super.prepareForReuse()
         representedID = nil
         selected = false
+        hovered = false
+        highlighted = false
         setHighlightOpacity(0)
         titleLabel.isHidden = false
         fullTitle = NSAttributedString(string: "")
@@ -189,6 +193,8 @@ final class ClipboardItemCellView: NSTableCellView {
             // Reused cells must never carry a previous item's highlight or pending fade.
             representedID = item.id
             self.selected = false
+            hovered = false
+            highlighted = false
             setHighlightOpacity(0)
         }
         setSelected(selected)
@@ -313,23 +319,39 @@ final class ClipboardItemCellView: NSTableCellView {
     }
 
     func setSelected(_ selected: Bool) {
+        self.selected = selected
+        updateHighlight(animated: true)
+    }
+
+    func setHovered(_ hovered: Bool, animated: Bool = true) {
+        self.hovered = hovered
+        updateHighlight(animated: animated)
+    }
+
+    private func updateHighlight(animated: Bool) {
+        let highlighted = selected || hovered
         // Offscreen preparation must produce a finished first frame, not enqueue a fade
         // that starts only after the palette has already appeared.
         guard window?.isVisible == true else {
-            self.selected = selected
-            setHighlightOpacity(selected ? 1 : 0)
+            self.highlighted = highlighted
+            setHighlightOpacity(highlighted ? 1 : 0)
             return
         }
-        guard self.selected != selected else { return }
-        let briefVisit = !selected && (
+        guard self.highlighted != highlighted else { return }
+        guard animated else {
+            self.highlighted = highlighted
+            setHighlightOpacity(highlighted ? 1 : 0)
+            return
+        }
+        let briefVisit = !highlighted && (
             entranceQueued
                 || selectionBeganAt.map {
                     CACurrentMediaTime() - $0 < HighlightMotion.briefVisitThreshold
                 } == true
         )
-        self.selected = selected
-        entranceQueued = selected
-        selectionBeganAt = selected ? CACurrentMediaTime() : nil
+        self.highlighted = highlighted
+        entranceQueued = highlighted
+        selectionBeganAt = highlighted ? CACurrentMediaTime() : nil
         fadeToken += 1
         let token = fadeToken
         // The scroll view disables layer actions while scrolling. Start the explicit fade after
@@ -340,7 +362,7 @@ final class ClipboardItemCellView: NSTableCellView {
             if briefVisit {
                 self.animateBriefVisit()
             } else {
-                self.animateHighlight(to: self.selected ? 1 : 0)
+                self.animateHighlight(to: self.highlighted ? 1 : 0)
             }
         }
     }
@@ -380,7 +402,7 @@ final class ClipboardItemCellView: NSTableCellView {
     }
 
     /// A row crossed before its deferred fade begins still gets a soft, short-lived trace.
-    /// This makes rapid pointer sweeps and trackpad scrolling read as a continuous transition.
+    /// This keeps rapid pointer sweeps continuous without animating scroll-driven hover changes
     private func animateBriefVisit() {
         guard let layer = highlightView.layer else { return }
         let current = layer.presentation()?.opacity ?? layer.opacity

@@ -69,7 +69,7 @@ struct RootPaletteView: View {
                         selectedID: vm.selectedID,
                         query: vm.query,
                         scroll: vm.scrollIntent,
-                        hoverEnabled: !vm.menuOpen && !vm.imageQuickLookOpen,
+                        interactionEnabled: !vm.menuOpen && !vm.imageQuickLookOpen && vm.searchReady,
                         store: store,
                         onSelect: { vm.select($0.id) },
                         onActivate: { item in

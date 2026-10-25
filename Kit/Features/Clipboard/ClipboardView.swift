@@ -13,7 +13,7 @@ struct ClipboardList: View {
     let query: String
     /// Changes only when the list should scroll (keyboard nav / reset), so mouse selection never yanks the scroll position.
     let scroll: ScrollIntent
-    let hoverEnabled: Bool
+    let interactionEnabled: Bool
     let store: ClipboardStore
     let onSelect: (ClipboardItem) -> Void
     let onActivate: (ClipboardItem) -> Void
@@ -31,7 +31,7 @@ struct ClipboardList: View {
             selectedID: selectedID,
             query: query,
             scroll: scroll,
-            hoverEnabled: hoverEnabled,
+            interactionEnabled: interactionEnabled,
             store: store,
             onSelect: onSelect,
             onActivate: onActivate,
@@ -77,7 +77,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
     let selectedID: ClipboardItem.ID?
     let query: String
     let scroll: ScrollIntent
-    let hoverEnabled: Bool
+    let interactionEnabled: Bool
     let store: ClipboardStore
     let onSelect: (ClipboardItem) -> Void
     let onActivate: (ClipboardItem) -> Void
@@ -106,7 +106,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             selectedID: selectedID,
             query: query,
             scroll: scroll,
-            hoverEnabled: hoverEnabled,
+            interactionEnabled: interactionEnabled,
             locale: context.environment.locale,
             store: store,
             onSelect: onSelect,
@@ -174,13 +174,14 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             tableView.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
             tableView.dataSource = self
             tableView.delegate = self
-            tableView.target = self
-            tableView.action = #selector(clicked(_:))
+            tableView.onClick = { [weak self] id, wasSelected in
+                self?.clicked(id, wasSelected: wasSelected)
+            }
             tableView.onRightClick = { [weak self] row in self?.rightClicked(row) }
-            tableView.isItemRow = { [weak self] row in
-                guard let self, self.rows.indices.contains(row) else { return false }
-                if case .item = self.rows[row] { return true }
-                return false
+            tableView.itemIDAtRow = { [weak self] row in
+                guard let self, self.rows.indices.contains(row),
+                    case .item(let item) = self.rows[row] else { return nil }
+                return item.id
             }
 
             let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("Clipboard"))
@@ -229,15 +230,15 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             dateGrouping: ClipboardDateGrouping?,
             hasMoreResults: Bool,
             selectedID: ClipboardItem.ID?, query: String,
-            scroll: ScrollIntent, hoverEnabled: Bool, locale: Locale, store: ClipboardStore,
+            scroll: ScrollIntent, interactionEnabled: Bool, locale: Locale, store: ClipboardStore,
             onSelect: @escaping (ClipboardItem) -> Void,
             onActivate: @escaping (ClipboardItem) -> Void,
             onActions: @escaping (ClipboardItem) -> Void,
             onLoadMore: @escaping () -> Void
         ) {
             guard let tableView = tableView else { return }
-            if !hoverEnabled {
-                tableView.hoverEnabled = false
+            if !interactionEnabled {
+                tableView.interactionEnabled = false
             }
             self.store = store
             self.onSelect = onSelect
@@ -331,7 +332,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                     apply(scroll, selectedID: selectedID, to: tableView)
                 }
             }
-            tableView.hoverEnabled = hoverEnabled
+            tableView.interactionEnabled = interactionEnabled
             if !dateChanged { queueHoverRefresh() }
             reportGeometry(scrolling: false)
         }
@@ -512,7 +513,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             guard rows.indices.contains(row), case .item(let item) = rows[row] else { return }
             selectedID = item.id
             updateVisibleSelection(in: tableView)
-            PaletteHaptics.tick()
+            if (tableView as? ClipboardTableView)?.hoveredRow != row { PaletteHaptics.tick() }
             onSelect?(item)
         }
 
@@ -555,6 +556,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                     imageURL: store?.imageURL(for: item),
                     locale: locale
                 )
+                view.setHovered((tableView as? ClipboardTableView)?.hoveredRow == row, animated: false)
                 return view
             case .more:
                 let view =
@@ -568,15 +570,15 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             }
         }
 
-        @objc private func clicked(_ tableView: NSTableView) {
-            // Activation belongs to the table's click action, never its selection delegate:
-            // hovering and keyboard navigation also change selection.
-            let row = tableView.clickedRow
-            guard rows.indices.contains(row), case .item(let item) = rows[row],
-                NSApp.currentEvent?.modifierFlags.contains(.control) != true,
-                (NSApp.currentEvent?.clickCount ?? 1) == 1
-            else { return }
-            onActivate?(item)
+        private func clicked(_ id: ClipboardItem.ID, wasSelected: Bool) {
+            guard let tableView, let row = itemRowIndex[id],
+                case .item(let item) = rows[row] else { return }
+            // Decide from the selection at mouse-down, before this click can change it
+            if wasSelected, selectedID == id {
+                onActivate?(item)
+            } else {
+                tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            }
         }
 
         private func rightClicked(_ row: Int) {
@@ -720,16 +722,13 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             }
         }
 
-        /// One tick per row boundary crossing the viewport edge. Quiet while hover selection
-        /// is following the pointer over rows (its selection ticks already speak) and while
-        /// the scroll came from keyboard navigation or a list reset.
+        /// One tick per row boundary crossing the viewport edge, except during programmatic scrolls
         private func scrollHaptic() {
             guard let tableView else { return }
             let visible = tableView.rows(in: tableView.visibleRect)
             guard visible.location != NSNotFound else { return }
             defer { hapticRow = visible.location }
-            guard !suppressScrollHaptics, !applyingSelection, hapticRow >= 0, hapticRow != visible.location,
-                !tableView.pointerDrivesSelection
+            guard !suppressScrollHaptics, !applyingSelection, hapticRow >= 0, hapticRow != visible.location
             else { return }
             PaletteHaptics.tick()
         }
@@ -741,15 +740,13 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             DispatchQueue.main.async { [weak self] in
                 guard let self, generation == self.hoverRefreshGeneration else { return }
                 self.hoverRefreshQueued = false
-                self.tableView?.refreshHover()
+                self.tableView?.refreshHover(animated: false)
             }
         }
 
         private func cancelQueuedHoverRefresh() {
             hoverRefreshGeneration &+= 1
             hoverRefreshQueued = false
-            // A date regroup can move another row under a stationary pointer.
-            (tableView?.window as? PalettePanel)?.beginKeyboardSelection()
         }
     }
 }
@@ -789,28 +786,24 @@ private final class ClipboardTableScrollView: KitScrollView {
     }
 }
 
-private final class ClipboardTableView: NSTableView, PaletteHoverSelectionHandling {
-    private static let hoverIntentDelay: Duration = .milliseconds(200)
-
+private final class ClipboardTableView: NSTableView, PaletteHoverHandling {
+    var onClick: ((ClipboardItem.ID, Bool) -> Void)?
     var onRightClick: ((Int) -> Void)?
-    var isItemRow: ((Int) -> Bool)?
-    var hoverEnabled = true {
+    var itemIDAtRow: ((Int) -> ClipboardItem.ID?)?
+    var interactionEnabled = true {
         didSet {
-            guard hoverEnabled != oldValue else { return }
-            if hoverEnabled {
-                refreshHover()
+            guard interactionEnabled != oldValue else { return }
+            if interactionEnabled {
+                refreshHover(animated: false)
             } else {
                 clearHover()
             }
         }
     }
 
-    private var hoveredRow: Int?
+    private(set) var hoveredRow: Int?
     private var hoverTrackingArea: NSTrackingArea?
-    private var lastPointerLocation: NSPoint?
     private var lastScreenMouseLocation: NSPoint?
-    private var pendingHoverRow: Int?
-    private var pendingHoverTask: Task<Void, Never>?
 
     override var acceptsFirstResponder: Bool { false }
 
@@ -822,25 +815,12 @@ private final class ClipboardTableView: NSTableView, PaletteHoverSelectionHandli
         convert(window.convertPoint(fromScreen: screenMouseLocation), from: nil)
     }
 
-    /// Hover selection is armed over rows: scrolling feedback defers to its selection ticks.
-    var pointerDrivesSelection: Bool {
-        guard let panel = window as? PalettePanel, panel.allowsHoverSelection,
-            let isItemRow
-        else { return false }
-        let point = pointerLocation(in: panel)
-        guard visibleRect.contains(point) else { return false }
-        let row = row(at: point)
-        return row >= 0 && isItemRow(row)
-    }
-
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
-        if let hoverTrackingArea {
-            removeTrackingArea(hoverTrackingArea)
-        }
+        if let hoverTrackingArea { removeTrackingArea(hoverTrackingArea) }
         let trackingArea = NSTrackingArea(
             rect: .zero,
-            // PalettePanel owns movement delivery; tracking only resets entry/exit state.
+            // The panel delivers movement independently of table layout updates
             options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
             owner: self,
             userInfo: nil
@@ -851,18 +831,21 @@ private final class ClipboardTableView: NSTableView, PaletteHoverSelectionHandli
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
-        lastScreenMouseLocation = screenMouseLocation
-        updateHover(at: convert(event.locationInWindow, from: nil), pointerMoved: false)
+        updatePointerHover(with: event)
     }
 
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
-        let mouseLocation = screenMouseLocation
-        let pointerMoved = lastScreenMouseLocation.map {
-            hypot(mouseLocation.x - $0.x, mouseLocation.y - $0.y) >= 0.5
+        updatePointerHover(with: event)
+    }
+
+    private func updatePointerHover(with event: NSEvent) {
+        let location = screenMouseLocation
+        let moved = lastScreenMouseLocation.map {
+            hypot(location.x - $0.x, location.y - $0.y) >= 0.5
         } ?? true
-        lastScreenMouseLocation = mouseLocation
-        updateHover(at: convert(event.locationInWindow, from: nil), pointerMoved: pointerMoved)
+        lastScreenMouseLocation = location
+        updateHover(at: convert(event.locationInWindow, from: nil), animated: moved, haptic: moved)
     }
 
     override func mouseExited(with event: NSEvent) {
@@ -872,161 +855,86 @@ private final class ClipboardTableView: NSTableView, PaletteHoverSelectionHandli
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        (window as? PalettePanel)?.registerHoverSelectionHandler(self)
-        if window == nil {
-            clearHover()
-        }
+        (window as? PalettePanel)?.registerHoverHandler(self)
+        if window == nil { clearHover() }
     }
 
     override func mouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.control) {
             rightMouseDown(with: event)
-        } else {
-            super.mouseDown(with: event)
+            return
+        }
+        let row = row(at: convert(event.locationInWindow, from: nil))
+        guard interactionEnabled, let window, let id = itemIDAtRow?(row) else { return }
+        let wasSelected = itemIDAtRow?(selectedRow) == id
+        // Track a complete click without AppKit selecting before activation is decided
+        // Stable identity prevents a row replacement during the press from activating another item
+        while let next = window.nextEvent(matching: [.leftMouseUp, .leftMouseDragged]) {
+            if next.type == .leftMouseUp {
+                let point = convert(next.locationInWindow, from: nil)
+                if interactionEnabled, visibleRect.contains(point), pointerHitsTable(at: point),
+                    itemIDAtRow?(self.row(at: point)) == id
+                {
+                    onClick?(id, wasSelected)
+                }
+                return
+            }
         }
     }
 
     override func rightMouseDown(with event: NSEvent) {
+        guard interactionEnabled else { return }
         let row = row(at: convert(event.locationInWindow, from: nil))
-        guard row >= 0 else { return }
+        guard itemIDAtRow?(row) != nil else { return }
         onRightClick?(row)
     }
 
-    func refreshHover() {
-        guard hoverEnabled, let window else {
-            clearHover()
-            return
-        }
-        let point = pointerLocation(in: window)
-        guard visibleRect.contains(point) else {
-            clearHover()
+    func refreshHover(animated: Bool = false) {
+        guard interactionEnabled, let window else {
+            clearHover(animated: animated)
             return
         }
         lastScreenMouseLocation = screenMouseLocation
-        updateHover(at: point, pointerMoved: false)
+        updateHover(at: pointerLocation(in: window), animated: animated, haptic: false)
     }
 
     func clearHover() {
-        hoveredRow = nil
-        lastPointerLocation = nil
+        clearHover(animated: true)
+    }
+
+    private func clearHover(animated: Bool) {
+        setHoveredRow(nil, animated: animated, haptic: false)
         lastScreenMouseLocation = nil
-        cancelPendingHover()
     }
 
-    private func updateHover(at point: NSPoint, pointerMoved: Bool) {
-        guard hoverEnabled, window?.isVisible == true,
+    private func updateHover(at point: NSPoint, animated: Bool, haptic: Bool) {
+        guard interactionEnabled, window?.isVisible == true,
             (window as? PalettePanel)?.allowsHoverSelection != false,
-            visibleRect.contains(point),
-            pointerHitsTable(at: point)
+            visibleRect.contains(point), pointerHitsTable(at: point)
         else {
-            clearHover()
+            clearHover(animated: animated)
             return
         }
-        let previousPoint = lastPointerLocation
-        if pendingHoverRow == row(at: point),
-            let previousPoint,
-            abs(previousPoint.x - point.x) < 0.5,
-            abs(previousPoint.y - point.y) < 0.5
-        {
-            return
-        }
-        lastPointerLocation = point
-
         let row = row(at: point)
-        guard row >= 0, isItemRow?(row) == true else {
-            cancelPendingHover()
-            return
-        }
+        setHoveredRow(itemIDAtRow?(row) == nil ? nil : row, animated: animated, haptic: haptic)
+    }
 
-        // A click or keyboard command may have selected the row before the next pointer event.
-        // Fold that state back into hover tracking instead of starting an obsolete intent delay.
-        if selectedRow == row {
-            hoveredRow = row
-            cancelPendingHover()
-            return
-        }
+    private func setHoveredRow(_ row: Int?, animated: Bool, haptic: Bool) {
         guard hoveredRow != row else { return }
-
-        if pointerMoved, hoveredRow != nil,
-            let previousPoint,
-            isMovingTowardDetails(from: previousPoint, to: point)
-        {
-            scheduleHoverSelection(for: row)
-            return
-        }
-        activateHoverSelection(for: row, at: point)
-    }
-
-    /// The previous pointer position and the visible detail-facing edge form a menu-aim triangle.
-    /// Crossing sibling rows inside this corridor is treated as transit toward the preview, not as
-    /// an intent to select them.
-    private func isMovingTowardDetails(from start: NSPoint, to end: NSPoint) -> Bool {
-        guard end.x > start.x + 0.5, start.x < visibleRect.maxX else { return false }
-        let upperRight = NSPoint(x: visibleRect.maxX, y: visibleRect.minY)
-        let lowerRight = NSPoint(x: visibleRect.maxX, y: visibleRect.maxY)
-        return Self.point(end, isInsideTriangleWith: start, upperRight, lowerRight)
-    }
-
-    private static func point(
-        _ point: NSPoint, isInsideTriangleWith first: NSPoint, _ second: NSPoint, _ third: NSPoint
-    ) -> Bool {
-        func signedArea(_ lhs: NSPoint, _ rhs: NSPoint, _ anchor: NSPoint) -> CGFloat {
-            (lhs.x - anchor.x) * (rhs.y - anchor.y)
-                - (rhs.x - anchor.x) * (lhs.y - anchor.y)
-        }
-
-        let firstSign = signedArea(point, first, second)
-        let secondSign = signedArea(point, second, third)
-        let thirdSign = signedArea(point, third, first)
-        let hasNegative = firstSign < 0 || secondSign < 0 || thirdSign < 0
-        let hasPositive = firstSign > 0 || secondSign > 0 || thirdSign > 0
-        return !(hasNegative && hasPositive)
-    }
-
-    private func scheduleHoverSelection(for row: Int) {
-        pendingHoverTask?.cancel()
-        pendingHoverRow = row
-        let task = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: Self.hoverIntentDelay)
-            guard !Task.isCancelled else { return }
-            self?.activatePendingHoverSelection(for: row)
-        }
-        pendingHoverTask = task
-    }
-
-    private func activatePendingHoverSelection(for row: Int) {
-        guard pendingHoverRow == row else { return }
-        pendingHoverRow = nil
-        pendingHoverTask = nil
-        guard hoverEnabled, let window,
-            (window as? PalettePanel)?.allowsHoverSelection != false
-        else { return }
-
-        let point = pointerLocation(in: window)
-        guard visibleRect.contains(point), pointerHitsTable(at: point), self.row(at: point) == row,
-            isItemRow?(row) == true
-        else { return }
-        activateHoverSelection(for: row, at: point)
-    }
-
-    private func activateHoverSelection(for row: Int, at point: NSPoint) {
-        cancelPendingHover()
+        let previous = hoveredRow
         hoveredRow = row
-        lastPointerLocation = point
-        if selectedRow != row {
-            selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        if let previous {
+            (view(atColumn: 0, row: previous, makeIfNecessary: false) as? ClipboardItemCellView)?
+                .setHovered(false, animated: animated)
+        }
+        if let row {
+            (view(atColumn: 0, row: row, makeIfNecessary: false) as? ClipboardItemCellView)?
+                .setHovered(true, animated: animated)
+            if haptic { PaletteHaptics.tick() }
         }
     }
 
-    private func cancelPendingHover() {
-        pendingHoverTask?.cancel()
-        pendingHoverTask = nil
-        pendingHoverRow = nil
-    }
-
-    /// Tracking areas receive movement even when a SwiftUI overlay is visually above this AppKit
-    /// view. Verify the window's real hit-test target so menus cannot leak
-    /// hover into rows underneath them.
+    /// Overlays must block hover feedback for the rows underneath them
     private func pointerHitsTable(at point: NSPoint) -> Bool {
         guard let contentView = window?.contentView else { return false }
         let pointInWindow = convert(point, to: nil)
