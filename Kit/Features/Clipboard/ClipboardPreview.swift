@@ -183,9 +183,9 @@ struct ClipboardPreview: View {
                     isPresented: Binding(
                         get: { vm.imageQuickLookOpen },
                         set: { vm.imageQuickLookOpen = $0 }
-                    )
+                    ),
+                    onActions: { vm.openActions(for: item.id) }
                 )
-                .allowsHitTesting(false)
             }
         }
     }

@@ -16,6 +16,7 @@ struct ImageQuickLookAnchor: NSViewRepresentable {
     var url: URL?
     var highlights: [CGRect] = []
     @Binding var isPresented: Bool
+    var onActions: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -26,6 +27,7 @@ struct ImageQuickLookAnchor: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? ImageQuickLookAnchorView)?.onActions = onActions
         context.coordinator.anchorView = nsView
         let presented = _isPresented
         ImageQuickLookSession.shared.sync(
@@ -48,8 +50,25 @@ struct ImageQuickLookAnchor: NSViewRepresentable {
 }
 
 private final class ImageQuickLookAnchorView: NSView {
+    var onActions: (() -> Void)?
     private var dismissalMonitor: Any?
     private var dismissingButton: Int?
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard let event = NSApp.currentEvent, isSecondaryClick(event) else { return nil }
+        return super.hitTest(point)
+    }
+
+    override func rightMouseDown(with event: NSEvent) { onActions?() }
+
+    override func mouseDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.control) { onActions?() }
+    }
+
+    private func isSecondaryClick(_ event: NSEvent) -> Bool {
+        event.type == .rightMouseDown
+            || (event.type == .leftMouseDown && event.modifierFlags.contains(.control))
+    }
 
     isolated deinit {
         if let dismissalMonitor { NSEvent.removeMonitor(dismissalMonitor) }
@@ -98,6 +117,10 @@ private final class ImageQuickLookAnchorView: NSView {
         }
         guard event.type == .leftMouseDown || event.type == .rightMouseDown,
             ImageQuickLookSession.shared.dismissFromPalette(self) else { return false }
+        if isSecondaryClick(event),
+            window.contentView?.hitTest(event.locationInWindow) === self {
+            return false
+        }
         // Own the whole closing click so a stationary SwiftUI button cannot reopen the preview
         dismissingButton = event.buttonNumber
         return true
