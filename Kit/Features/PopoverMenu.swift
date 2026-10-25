@@ -38,18 +38,18 @@ struct PopoverMenuItem {
         switch action {
         case .about:
             title = "About Kit"
-            icon = nil
+            icon = .symbol("info")
         case .checkForUpdates:
             title = "Check for Updates"
-            icon = nil
+            icon = .symbol("arrow.triangle.2.circlepath")
             isEnabled = AppCore.shared.updateService.canCheckForUpdates
         case .settings:
             title = "Settings…"
-            icon = nil
+            icon = .symbol("gearshape")
             shortcut = "⌘,"
         case .quit:
             title = "Quit Kit…"
-            icon = nil
+            icon = .symbol("power")
             shortcut = "⌘Q"
             isDestructive = true
         case .paste:
@@ -83,11 +83,11 @@ struct PopoverMenuItem {
         case .addToStack(let item):
             let currentStack = AppCore.shared.clipboardStore.stackID(for: item.id)
             title = currentStack == nil ? "Add to Stack" : "Move to Another Stack"
-            icon = nil
+            icon = .symbol(currentStack == nil ? "rectangle.stack.badge.plus" : "arrow.left.arrow.right")
             isEnabled = AppCore.shared.clipboardStore.stacks.contains { $0.id != currentStack }
         case .removeFromStack:
             title = "Remove from Stack"
-            icon = nil
+            icon = .symbol("rectangle.stack.badge.minus")
         case .assignToStack(let item, let stack):
             title = "Add to Stack"
             verbatimTitle = stack.name
