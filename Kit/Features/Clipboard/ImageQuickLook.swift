@@ -134,6 +134,7 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
     static let shared = ImageQuickLookSession()
 
     private var popover: NSPopover?
+    private var retiringPopovers: [NSPopover] = []
     private weak var anchorView: NSView?
     private weak var shownAnchorView: NSView?
     private var requestedURL: URL?
@@ -143,7 +144,6 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
     private var shownURL: URL?
     private var shownSize: CGSize = .zero
     private var shownHighlights: [CGRect] = []
-    private var isClosing = false
     private var notifyWhenClosed = false
     private var reconcileScheduled = false
 
@@ -184,13 +184,16 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
     func forceClose(immediately: Bool) {
         requestedPresented = false
         notifyWhenClosed = false
-        if immediately, let popover {
-            // A close animation may already be in flight, hide its window as well
-            // changing animates alone does not finish an animation that already started.
-            popover.animates = false
-            popover.contentViewController?.view.window?.alphaValue = 0
+        if immediately {
+            let retiring = retiringPopovers
+            retiringPopovers.removeAll()
+            for popover in retiring {
+                popover.animates = false
+                popover.contentViewController?.view.window?.alphaValue = 0
+                popover.close()
+            }
         }
-        beginClose()
+        beginClose(immediately: immediately)
     }
 
     func anchorDidChange(_ view: NSView) {
@@ -199,7 +202,7 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
     }
 
     func dismissFromPalette(_ view: NSView) -> Bool {
-        guard anchorView === view, requestedPresented || shownAnchorView === view else { return false }
+        guard anchorView === view, requestedPresented else { return false }
         requestedPresented = false
         notifyWhenClosed = false
         onDismiss?()
@@ -222,7 +225,6 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
             beginClose()
             return
         }
-        guard !isClosing else { return }
         guard let anchorView, anchorView.window?.isVisible == true,
             !anchorView.bounds.isEmpty else { return }
         guard let placement = Self.placement(url: url, anchorView: anchorView) else {
@@ -267,34 +269,43 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
             relativeTo: anchorView.bounds, of: anchorView, preferredEdge: placement.edge)
     }
 
-    private func beginClose() {
+    private func beginClose(immediately: Bool = false) {
         guard let popover else {
             finishCloseWithoutPopoverIfNeeded()
             return
         }
-        guard !isClosing else { return }
-        isClosing = true
+        // Retire the outgoing popover before animating so another click can open immediately
+        self.popover = nil
+        shownAnchorView = nil
+        shownURL = nil
+        shownSize = .zero
+        shownHighlights = []
+        retiringPopovers.append(popover)
+        if immediately {
+            popover.animates = false
+            popover.contentViewController?.view.window?.alphaValue = 0
+        }
         popover.close()
+        finishCloseCycle()
     }
 
     func popoverDidClose(_ notification: Notification) {
-        guard let closedPopover = notification.object as? NSPopover,
-            closedPopover === popover
-        else { return }
+        guard let closedPopover = notification.object as? NSPopover else { return }
+        if retiringPopovers.contains(where: { $0 === closedPopover }) {
+            retiringPopovers.removeAll { $0 === closedPopover }
+            return
+        }
+        guard closedPopover === popover else { return }
 
-        let appInitiatedClose = isClosing
         popover = nil
         shownAnchorView = nil
         shownURL = nil
         shownSize = .zero
         shownHighlights = []
-        isClosing = false
 
         // Reflect an AppKit-initiated close into SwiftUI
-        if !appInitiatedClose {
-            requestedPresented = false
-            notifyWhenClosed = true
-        }
+        requestedPresented = false
+        notifyWhenClosed = true
         finishCloseCycle()
     }
 
