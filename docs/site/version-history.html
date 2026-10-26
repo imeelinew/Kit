@@ -1,658 +1,993 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light">
-<meta name="theme-color" content="#ffffff">
-<title>Kit 版本历史记录</title>
-<style>
-  :root { color-scheme: light; }
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="color-scheme" content="light" />
+        <meta name="theme-color" content="#ffffff" />
+        <title>Kit 版本历史记录</title>
+        <style>
+            :root {
+                color-scheme: light;
+            }
 
-  html { background: #fff; }
+            html {
+                background: #fff;
+            }
 
-  body {
-    margin: 0;
-    background: #fff;
-    color: #252525;
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
-                 "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-    font-size: 15px;
-    font-weight: 400;
-    line-height: 1.75;
-    font-variant-numeric: tabular-nums;
-    text-align: left;
-    -webkit-font-smoothing: antialiased;
-    text-rendering: optimizeLegibility;
-  }
+            body {
+                margin: 0;
+                background: #fff;
+                color: #252525;
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
+                    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+                    sans-serif;
+                font-size: 15px;
+                font-weight: 400;
+                line-height: 1.75;
+                font-variant-numeric: tabular-nums;
+                text-align: left;
+                -webkit-font-smoothing: antialiased;
+                text-rendering: optimizeLegibility;
+            }
 
-  main {
-    max-width: 32rem;
-    margin: 0 auto;
-    padding: 84px 24px 120px;
-  }
+            main {
+                max-width: 32rem;
+                margin: 0 auto;
+                padding: 84px 24px 120px;
+            }
 
-  section + section { margin-top: 76px; }
+            section + section {
+                margin-top: 76px;
+            }
 
-  .tag {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 6px;
-    background: #ffd740;
-    color: #252525;
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.45;
-    letter-spacing: 0.01em;
-    font-variant-numeric: tabular-nums;
-  }
+            .tag {
+                display: inline-block;
+                padding: 3px 10px;
+                border-radius: 6px;
+                background: #ffd740;
+                color: #252525;
+                font-size: 13px;
+                font-weight: 600;
+                line-height: 1.45;
+                letter-spacing: 0.01em;
+                font-variant-numeric: tabular-nums;
+            }
 
-  .date {
-    margin: 8px 0 0;
-    font-size: 12px;
-    color: #696969;
-  }
+            .date {
+                margin: 8px 0 0;
+                font-size: 12px;
+                color: #696969;
+            }
 
-  .group { margin-top: 32px; }
+            .group {
+                margin-top: 32px;
+            }
 
-  h3 {
-    margin: 0 0 10px;
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.14em;
-    color: #696969;
-  }
+            h3 {
+                margin: 0 0 10px;
+                font-size: 11px;
+                font-weight: 500;
+                letter-spacing: 0.14em;
+                color: #696969;
+            }
 
-  ul {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    counter-reset: item;
-  }
+            ul {
+                margin: 0;
+                padding: 0;
+                list-style: none;
+                counter-reset: item;
+            }
 
-  li {
-    position: relative;
-    padding-left: 1.5em;
-    counter-increment: item;
-  }
+            li {
+                position: relative;
+                padding-left: 1.5em;
+                counter-increment: item;
+            }
 
-  li::before {
-    content: counter(item) ".";
-    position: absolute;
-    left: 0;
-    color: #696969;
-  }
+            li::before {
+                content: counter(item) ".";
+                position: absolute;
+                left: 0;
+                color: #696969;
+            }
 
-  li + li { margin-top: 6px; }
+            li + li {
+                margin-top: 6px;
+            }
 
-  @media (max-width: 480px) {
-    main { padding: 64px 20px 96px; }
-    section + section { margin-top: 60px; }
-  }
-</style>
-</head>
-<body>
-<main>
+            @media (max-width: 480px) {
+                main {
+                    padding: 64px 20px 96px;
+                }
+                section + section {
+                    margin-top: 60px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <main>
+            <section>
+                <span class="tag">v0.5.0</span>
+                <p class="date">2026 年 10 月 26 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>新增「文件」类型</li>
+                        <li>支持选中预览中的部分文字进行复制</li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            图片文件统一归入文件类型，保留缩略图、快速预览、文字识别与贴图功能
+                        </li>
+                        <li>
+                            文件失效时在列表中显示标记，丢失的图片文件收为紧凑行，多文件记录支持复制仍可用的文件
+                        </li>
+                        <li>
+                            优化文件访问与权限处理，文件变化后同步刷新预览和文字索引
+                        </li>
+                        <li>
+                            列表悬停高亮与选中状态分离，移动指针不再切换当前预览
+                        </li>
+                        <li>操作菜单加入图标，优化筛选按钮的悬停反馈</li>
+                        <li>图片贴图支持拖动窗口边缘调整大小</li>
+                        <li>图片快速预览支持右键打开操作菜单</li>
+                        <li>更新应用图标</li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>修复图片快速预览关闭后无法立即重新打开的问题</li>
+                        <li>修复图片贴图缩放时可能小于最小尺寸的问题</li>
+                        <li>
+                            修复多文件预览内容溢出，与顶部按钮和底部信息区重叠的问题
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.4.5</span>
-  <p class="date">2026 年 10 月 23 日</p>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>移除 LLM 智能分类及相关 API 设置，文本分类统一使用本地规则</li>
-      <li>移除毛玻璃视觉风格选项，面板统一采用 Liquid Glass</li>
-      <li>图片快速预览改为点击打开或关闭</li>
-      <li>Stack 条目支持移动到其他 Stack 或直接移出</li>
-      <li>统一操作菜单的打开与关闭动画</li>
-      <li>移除剪贴板列表边缘溶解效果，恢复原生滚动</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复面板布局过程中滚动条短暂闪现</li>
-      <li>修复 Markdown 预览渲染完成后未及时重新排版</li>
-      <li>修复图片快速预览在布局完成前定位异常</li>
-      <li>修复关闭图片快速预览时的点击穿透与重复打开</li>
-      <li>修复指针静止时操作菜单关闭不稳定</li>
-      <li>修复剪贴板预览容器在滚动和窗口布局变化时显示异常</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.4.5</span>
+                <p class="date">2026 年 10 月 23 日</p>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            移除 LLM 智能分类及相关 API
+                            设置，文本分类统一使用本地规则
+                        </li>
+                        <li>
+                            移除毛玻璃视觉风格选项，面板统一采用 Liquid Glass
+                        </li>
+                        <li>图片快速预览改为点击打开或关闭</li>
+                        <li>Stack 条目支持移动到其他 Stack 或直接移出</li>
+                        <li>统一操作菜单的打开与关闭动画</li>
+                        <li>移除剪贴板列表边缘溶解效果，恢复原生滚动</li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>修复面板布局过程中滚动条短暂闪现</li>
+                        <li>修复 Markdown 预览渲染完成后未及时重新排版</li>
+                        <li>修复图片快速预览在布局完成前定位异常</li>
+                        <li>修复关闭图片快速预览时的点击穿透与重复打开</li>
+                        <li>修复指针静止时操作菜单关闭不稳定</li>
+                        <li>
+                            修复剪贴板预览容器在滚动和窗口布局变化时显示异常
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.4.4</span>
-  <p class="date">2026 年 10 月 20 日</p>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>面板可拖动，靠近左右与顶部预设位置时自动吸附并显示参考线</li>
-      <li>菜单项悬停时提供触感反馈，仅在指针移动时触发</li>
-      <li>面板打开速度更快</li>
-      <li>设置中的历史与图像索引选项重新分组，清除操作改用系统警告框</li>
-      <li>筛选切换加入过渡动画</li>
-      <li>设置菜单项加入齿轮图标</li>
-      <li>新增 Control-Delete 快捷键，删除操作菜单中的条目</li>
-      <li>精简剪贴板信息栏，预览区更紧凑，文本淡出范围更短</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复预览滚动条滚动到其他区域的问题，滚轮经过滚动条时正常滚动内容</li>
-      <li>修复切换预览内容后滚动条状态残留</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.4.4</span>
+                <p class="date">2026 年 10 月 20 日</p>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            面板可拖动，靠近左右与顶部预设位置时自动吸附并显示参考线
+                        </li>
+                        <li>菜单项悬停时提供触感反馈，仅在指针移动时触发</li>
+                        <li>面板打开速度更快</li>
+                        <li>
+                            设置中的历史与图像索引选项重新分组，清除操作改用系统警告框
+                        </li>
+                        <li>筛选切换加入过渡动画</li>
+                        <li>设置菜单项加入齿轮图标</li>
+                        <li>
+                            新增 Control-Delete 快捷键，删除操作菜单中的条目
+                        </li>
+                        <li>
+                            精简剪贴板信息栏，预览区更紧凑，文本淡出范围更短
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复预览滚动条滚动到其他区域的问题，滚轮经过滚动条时正常滚动内容
+                        </li>
+                        <li>修复切换预览内容后滚动条状态残留</li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.4.3</span>
-  <p class="date">2026 年 10 月 15 日</p>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>代码片段预览内嵌 JetBrains Mono 等宽字体，排版更清晰美观</li>
-      <li>预览面板采用极简细滚动条替代系统默认滚动条，并优化信息栏滚动与边缘渐变效果</li>
-      <li>支持通过 Control + 单击呼出条目操作菜单，更符合 macOS 原生操作习惯</li>
-      <li>单行条目标题调整为垂直居中对齐，列表排版更加匀称规整</li>
-      <li>全面升级复制反馈音效，提供清脆提示音、轻击双响、低沉敲击与原木敲击等多款具名选项</li>
-      <li>新增重复复制偏好设置，支持自主配置是否将重复复制的内容记录为独立新条目</li>
-      <li>优化剪贴板采集规则，自动忽略访达中复制的文件对象，避免文件路径打乱文本历史</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.4.3</span>
+                <p class="date">2026 年 10 月 15 日</p>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            代码片段预览内嵌 JetBrains Mono
+                            等宽字体，排版更清晰美观
+                        </li>
+                        <li>
+                            预览面板采用极简细滚动条替代系统默认滚动条，并优化信息栏滚动与边缘渐变效果
+                        </li>
+                        <li>
+                            支持通过 Control + 单击呼出条目操作菜单，更符合
+                            macOS 原生操作习惯
+                        </li>
+                        <li>
+                            单行条目标题调整为垂直居中对齐，列表排版更加匀称规整
+                        </li>
+                        <li>
+                            全面升级复制反馈音效，提供清脆提示音、轻击双响、低沉敲击与原木敲击等多款具名选项
+                        </li>
+                        <li>
+                            新增重复复制偏好设置，支持自主配置是否将重复复制的内容记录为独立新条目
+                        </li>
+                        <li>
+                            优化剪贴板采集规则，自动忽略访达中复制的文件对象，避免文件路径打乱文本历史
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.4.2</span>
-  <p class="date">2026 年 10 月 13 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>图片贴纸（Pin）新增半透明棋盘格背景，透明 PNG 与素材展示更清晰</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>剪贴板列表日期分组标题改为垂直居中对齐，视觉排版更规整协调</li>
-      <li>重构底层存储与粘贴传递链路，精简状态管理并提升响应性能</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复在展开图片快速预览时关闭面板偶发的选中项闪烁问题</li>
-      <li>修复列表行高亮在图层重建与无跟踪区域场景下的悬停跟踪异常</li>
-      <li>修复右键快捷菜单关闭后指针悬停状态未能即时恢复的问题</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.4.2</span>
+                <p class="date">2026 年 10 月 13 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            图片贴纸（Pin）新增半透明棋盘格背景，透明 PNG
+                            与素材展示更清晰
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            剪贴板列表日期分组标题改为垂直居中对齐，视觉排版更规整协调
+                        </li>
+                        <li>
+                            重构底层存储与粘贴传递链路，精简状态管理并提升响应性能
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复在展开图片快速预览时关闭面板偶发的选中项闪烁问题
+                        </li>
+                        <li>
+                            修复列表行高亮在图层重建与无跟踪区域场景下的悬停跟踪异常
+                        </li>
+                        <li>
+                            修复右键快捷菜单关闭后指针悬停状态未能即时恢复的问题
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.4.1</span>
-  <p class="date">2026 年 10 月 8 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>新增基于大语言模型（LLM）的智能剪贴板分类，支持配置自定义 OpenRouter 模型</li>
-      <li>新增图片文字 OCR 索引控制选项，支持自定义索引行为与按需重建</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>引入列表行缩略图缓存，并优先按需解码当前可视区域的图片，降低系统资源开销</li>
-      <li>展开图片快速预览时增加触控板触觉反馈</li>
-      <li>搜索任务支持中途即时取消，并加入拼音索引缓存以提升输入响应速度</li>
-      <li>修改剪贴板历史保留策略时增加二次确认提示；图片清理支持失败重试</li>
-      <li>将 LLM 智能分类设置项整合并入「剪贴板」设置面板</li>
-      <li>最低系统版本要求提升至 macOS 27</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.4.1</span>
+                <p class="date">2026 年 10 月 8 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            新增基于大语言模型（LLM）的智能剪贴板分类，支持配置自定义
+                            OpenRouter 模型
+                        </li>
+                        <li>
+                            新增图片文字 OCR
+                            索引控制选项，支持自定义索引行为与按需重建
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            引入列表行缩略图缓存，并优先按需解码当前可视区域的图片，降低系统资源开销
+                        </li>
+                        <li>展开图片快速预览时增加触控板触觉反馈</li>
+                        <li>
+                            搜索任务支持中途即时取消，并加入拼音索引缓存以提升输入响应速度
+                        </li>
+                        <li>
+                            修改剪贴板历史保留策略时增加二次确认提示；图片清理支持失败重试
+                        </li>
+                        <li>将 LLM 智能分类设置项整合并入「剪贴板」设置面板</li>
+                        <li>最低系统版本要求提升至 macOS 27</li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.4.0</span>
-  <p class="date">2026 年 10 月 4 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>支持图片文字 OCR 检索，本地持久化保存文本索引，无需重复识别</li>
-      <li>剪贴板历史支持按日期维度智能分组（今天、昨天、更早等），分组规则可自定义</li>
-      <li>图片预览中智能高亮标注搜索关键词匹配区域</li>
-      <li>支持通过 ⇧Enter (Shift-Return) 连续粘贴多条内容且保持面板开启</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>优化图片解码流水线：限制并发线程并支持任务取消，内存占用更平稳</li>
-      <li>面板内容与分类切换改用平滑的透明度淡入淡出过渡动画</li>
-      <li>优化图片快速预览触发时机，需持续悬停以避免掠过时误触发</li>
-      <li>精简键盘快捷键，移除容易误触的 Backspace 删除与空格键快速预览</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复指针在列表静止悬停时意外抢占键盘焦点选择的问题</li>
-      <li>修复陈旧的预览任务在缓存清空后重新写入旧数据的问题</li>
-      <li>修复 Markdown 预览在排版渲染尚未完成前短暂闪烁未成形内容的问题</li>
-      <li>修复剪贴板列表在触控板横向滑动手势下的边缘回弹滚动</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.4.0</span>
+                <p class="date">2026 年 10 月 4 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            支持图片文字 OCR
+                            检索，本地持久化保存文本索引，无需重复识别
+                        </li>
+                        <li>
+                            剪贴板历史支持按日期维度智能分组（今天、昨天、更早等），分组规则可自定义
+                        </li>
+                        <li>图片预览中智能高亮标注搜索关键词匹配区域</li>
+                        <li>
+                            支持通过 ⇧Enter (Shift-Return)
+                            连续粘贴多条内容且保持面板开启
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            优化图片解码流水线：限制并发线程并支持任务取消，内存占用更平稳
+                        </li>
+                        <li>
+                            面板内容与分类切换改用平滑的透明度淡入淡出过渡动画
+                        </li>
+                        <li>
+                            优化图片快速预览触发时机，需持续悬停以避免掠过时误触发
+                        </li>
+                        <li>
+                            精简键盘快捷键，移除容易误触的 Backspace
+                            删除与空格键快速预览
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复指针在列表静止悬停时意外抢占键盘焦点选择的问题
+                        </li>
+                        <li>
+                            修复陈旧的预览任务在缓存清空后重新写入旧数据的问题
+                        </li>
+                        <li>
+                            修复 Markdown
+                            预览在排版渲染尚未完成前短暂闪烁未成形内容的问题
+                        </li>
+                        <li>
+                            修复剪贴板列表在触控板横向滑动手势下的边缘回弹滚动
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.3.1</span>
-  <p class="date">2026 年 9 月 30 日</p>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>简化删除撤销机制并仅保留最近单次操作，确保预览状态更新轻量稳定</li>
-      <li>优化 TypeSafe AI 分类提示词与规则，进一步提升分类准确率</li>
-      <li>TypeSafe API 密钥本地安全持久化至应用配置中</li>
-      <li>在「实验功能」设置中补充 TypeSafe 智能分类功能说明与使用提示</li>
-      <li>在关于页面新增开源第三方许可协议声明 (Licenses)</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复在面板搜索框中输入拼音/日文组合态 (Composition) 被意外打断的问题</li>
-      <li>修复静态行刷新时剪贴板单元格视图被频繁重建导致的微卡顿</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.3.1</span>
+                <p class="date">2026 年 9 月 30 日</p>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            简化删除撤销机制并仅保留最近单次操作，确保预览状态更新轻量稳定
+                        </li>
+                        <li>
+                            优化 TypeSafe AI
+                            分类提示词与规则，进一步提升分类准确率
+                        </li>
+                        <li>TypeSafe API 密钥本地安全持久化至应用配置中</li>
+                        <li>
+                            在「实验功能」设置中补充 TypeSafe
+                            智能分类功能说明与使用提示
+                        </li>
+                        <li>在关于页面新增开源第三方许可协议声明 (Licenses)</li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复在面板搜索框中输入拼音/日文组合态 (Composition)
+                            被意外打断的问题
+                        </li>
+                        <li>
+                            修复静态行刷新时剪贴板单元格视图被频繁重建导致的微卡顿
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.3.0</span>
-  <p class="date">2026 年 9 月 28 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>支持使用 ⌘Z 快速撤销误删的剪贴板历史条目</li>
-      <li>引入实验性 TypeSafe AI 智能内容分类，精准识别富文本与数据类型</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>调整菜单栏应用主菜单结构，原设置项精简替换为「关于」面板</li>
-      <li>优化搜索框占位提示文本渲染，改用原生 SwiftUI 覆盖层</li>
-      <li>优化预览浮窗展示逻辑，自适应检测屏幕左侧或下方的可用空间居优呈现</li>
-      <li>优化键盘导航平滑度，待列表行动画执行完毕后再执行跟随滚动</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复右键菜单或子菜单关闭后，搜索框失去输入焦点与闪烁光标的问题</li>
-      <li>修复无系统菜单栏常驻状态下，文本输入框无法响应标准编辑快捷键的问题</li>
-      <li>使用安全文本字段重构 API Key 输入框，修复按键无法键入的问题</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.3.0</span>
+                <p class="date">2026 年 9 月 28 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>支持使用 ⌘Z 快速撤销误删的剪贴板历史条目</li>
+                        <li>
+                            引入实验性 TypeSafe AI
+                            智能内容分类，精准识别富文本与数据类型
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            调整菜单栏应用主菜单结构，原设置项精简替换为「关于」面板
+                        </li>
+                        <li>
+                            优化搜索框占位提示文本渲染，改用原生 SwiftUI 覆盖层
+                        </li>
+                        <li>
+                            优化预览浮窗展示逻辑，自适应检测屏幕左侧或下方的可用空间居优呈现
+                        </li>
+                        <li>
+                            优化键盘导航平滑度，待列表行动画执行完毕后再执行跟随滚动
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复右键菜单或子菜单关闭后，搜索框失去输入焦点与闪烁光标的问题
+                        </li>
+                        <li>
+                            修复无系统菜单栏常驻状态下，文本输入框无法响应标准编辑快捷键的问题
+                        </li>
+                        <li>
+                            使用安全文本字段重构 API Key
+                            输入框，修复按键无法键入的问题
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.2.4</span>
-  <p class="date">2026 年 9 月 26 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>支持通过退格键 (Delete/Backspace) 快速删除选中的剪贴板条目</li>
-      <li>新增可选的触控板触觉反馈 (Haptics)，列表滑动与切换操作更具实体感</li>
-      <li>新增全局快捷键快速切换纯文本、图片、链接等内容筛选类型</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>重构面板层级动画，视图切换更加轻盈流畅</li>
-      <li>支持单击剪贴板列表项直接将内容粘贴至前台目标应用</li>
-      <li>优化图片在列表行内的缩略图尺寸与宽高比例，预览更直观</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复重复使用已有剪贴板条目时历史排序被打乱的问题</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.2.4</span>
+                <p class="date">2026 年 9 月 26 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            支持通过退格键 (Delete/Backspace)
+                            快速删除选中的剪贴板条目
+                        </li>
+                        <li>
+                            新增可选的触控板触觉反馈
+                            (Haptics)，列表滑动与切换操作更具实体感
+                        </li>
+                        <li>
+                            新增全局快捷键快速切换纯文本、图片、链接等内容筛选类型
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>重构面板层级动画，视图切换更加轻盈流畅</li>
+                        <li>
+                            支持单击剪贴板列表项直接将内容粘贴至前台目标应用
+                        </li>
+                        <li>
+                            优化图片在列表行内的缩略图尺寸与宽高比例，预览更直观
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复重复使用已有剪贴板条目时历史排序被打乱的问题
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.2.3</span>
-  <p class="date">2026 年 9 月 25 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>新增在「剪贴板历史」与「收藏堆栈 (Stacks)」之间快速切换的快捷键</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>精简贴纸浮窗 (Pinned Cards) 的工具栏交互，将尺寸重置按钮移至右上角</li>
-      <li>移除贴纸浮窗的自定义标题与跨进程持久化，回归极简纯净体验</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复应用图标在旧版本 macOS 浅色模式下偶尔显示白色方块底色衬底的问题</li>
-      <li>修复在设置中切换语言偏好后，窗口标题未能同步更新语言的问题</li>
-      <li>统一贴纸卡片缩放锚点，修复多次缩放时窗口位置漂移的问题</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.2.3</span>
+                <p class="date">2026 年 9 月 25 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            新增在「剪贴板历史」与「收藏堆栈
+                            (Stacks)」之间快速切换的快捷键
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            精简贴纸浮窗 (Pinned Cards)
+                            的工具栏交互，将尺寸重置按钮移至右上角
+                        </li>
+                        <li>
+                            移除贴纸浮窗的自定义标题与跨进程持久化，回归极简纯净体验
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复应用图标在旧版本 macOS
+                            浅色模式下偶尔显示白色方块底色衬底的问题
+                        </li>
+                        <li>
+                            修复在设置中切换语言偏好后，窗口标题未能同步更新语言的问题
+                        </li>
+                        <li>
+                            统一贴纸卡片缩放锚点，修复多次缩放时窗口位置漂移的问题
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.2.2</span>
-  <p class="date">2026 年 9 月 25 日</p>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>将「自动检查更新」选项移入「关于」面板</li>
-      <li>设置界面侧边栏全面采用精致的 Lucide 风格线性图标</li>
-      <li>面板响应机制优化为在快捷键按下 (Key Down) 瞬间立即呼出，首帧呈现更迅速</li>
-      <li>全新设计的 App 图标，完美适配 macOS 现代设计规范</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复新版 macOS 系统下设置侧栏选中背景高亮丢失的样式问题</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.2.2</span>
+                <p class="date">2026 年 9 月 25 日</p>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>将「自动检查更新」选项移入「关于」面板</li>
+                        <li>
+                            设置界面侧边栏全面采用精致的 Lucide 风格线性图标
+                        </li>
+                        <li>
+                            面板响应机制优化为在快捷键按下 (Key Down)
+                            瞬间立即呼出，首帧呈现更迅速
+                        </li>
+                        <li>
+                            全新设计的 App 图标，完美适配 macOS 现代设计规范
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复新版 macOS
+                            系统下设置侧栏选中背景高亮丢失的样式问题
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.2.1</span>
-  <p class="date">2026 年 9 月 24 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>智能识别剪贴板中的本地文件路径，支持在访达 (Finder) 中快速定位显示</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>设置窗口重构为 macOS 原生分栏视图 (Split View) 结构</li>
-      <li>面板在展示前预先完成排版计算与首帧渲染，彻底消除呼出时的闪烁感</li>
-      <li>优化剪贴板列表项的标题排版与类型图标呈现</li>
-      <li>将详情预览中的文本设为只读不可选中，避免误触文本选中状态</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复快捷菜单弹出时仍能误框选预览区文本的问题</li>
-      <li>全面补全应用更名 Kit 后的多语言本地化翻译</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.2.1</span>
+                <p class="date">2026 年 9 月 24 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            智能识别剪贴板中的本地文件路径，支持在访达 (Finder)
+                            中快速定位显示
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            设置窗口重构为 macOS 原生分栏视图 (Split View) 结构
+                        </li>
+                        <li>
+                            面板在展示前预先完成排版计算与首帧渲染，彻底消除呼出时的闪烁感
+                        </li>
+                        <li>优化剪贴板列表项的标题排版与类型图标呈现</li>
+                        <li>
+                            将详情预览中的文本设为只读不可选中，避免误触文本选中状态
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>修复快捷菜单弹出时仍能误框选预览区文本的问题</li>
+                        <li>全面补全应用更名 Kit 后的多语言本地化翻译</li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.2.0</span>
-  <p class="date">2026 年 9 月 23 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>引入「堆栈 (Stacks)」功能：支持对高频使用的剪贴板条目进行分组整理与收藏</li>
-      <li>支持在面板中手动新建纯文本便签条目</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>应用正式更名为 Kit，确立轻量、优雅的全新品牌形象</li>
-      <li>面板引入精致通透的流体玻璃 (Liquid Glass) 半透明磨砂材质</li>
-      <li>捕获新复制内容时，状态栏图标提供轻盈的旋转动画与视觉反馈</li>
-      <li>剪贴板监听暂停状态支持在应用重启后自动保留</li>
-      <li>精简功能架构，移除早期的「Past」实验面板及冗余视觉主题切换</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.2.0</span>
+                <p class="date">2026 年 9 月 23 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            引入「堆栈
+                            (Stacks)」功能：支持对高频使用的剪贴板条目进行分组整理与收藏
+                        </li>
+                        <li>支持在面板中手动新建纯文本便签条目</li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            应用正式更名为 Kit，确立轻量、优雅的全新品牌形象
+                        </li>
+                        <li>
+                            面板引入精致通透的流体玻璃 (Liquid Glass)
+                            半透明磨砂材质
+                        </li>
+                        <li>
+                            捕获新复制内容时，状态栏图标提供轻盈的旋转动画与视觉反馈
+                        </li>
+                        <li>剪贴板监听暂停状态支持在应用重启后自动保留</li>
+                        <li>
+                            精简功能架构，移除早期的「Past」实验面板及冗余视觉主题切换
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.1.9</span>
-  <p class="date">2026 年 8 月 30 日</p>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>规范 macOS AppIcon 原生资源目录配置，优化各分辨率下的渲染表现与构建体积</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>提升应用打包与 Sparkle 自动更新分发的兼容性与稳定性</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.1.9</span>
+                <p class="date">2026 年 8 月 30 日</p>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            规范 macOS AppIcon
+                            原生资源目录配置，优化各分辨率下的渲染表现与构建体积
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            提升应用打包与 Sparkle 自动更新分发的兼容性与稳定性
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.1.8</span>
-  <p class="date">2026 年 8 月 21 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>搜索框右侧新增类型筛选器，支持按文本、富文本、图片等类型快速过滤</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>更新应用图标设计与多分辨率资产；集成单元测试套件与 CI 自动化流水线</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复类型筛选菜单中出现当前历史中不存在的内容分类的问题</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.1.8</span>
+                <p class="date">2026 年 8 月 21 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            搜索框右侧新增类型筛选器，支持按文本、富文本、图片等类型快速过滤
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            更新应用图标设计与多分辨率资产；集成单元测试套件与
+                            CI 自动化流水线
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复类型筛选菜单中出现当前历史中不存在的内容分类的问题
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.1.7</span>
-  <p class="date">2026 年 8 月 18 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>新增常驻菜单栏图标，复制内容时伴随细腻的图标旋转动画与可选声音反馈</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>列表悬停操作引入「安全三角区 (Safe Triangle)」鼠标防误触算法，斜向移动更加自如</li>
-      <li>全面润色设置界面文案，并引入 Lucide 图标集</li>
-      <li>优化贴纸卡片文本字号自适应缩放与滚动位置保存机制</li>
-      <li>移除旧版自动 Spotlight 聚焦逻辑，保持界面焦点干净可控</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复目标粘贴应用的小图标在特定分辨率下渲染模糊或缺失的问题</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.1.7</span>
+                <p class="date">2026 年 8 月 18 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            新增常驻菜单栏图标，复制内容时伴随细腻的图标旋转动画与可选声音反馈
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            列表悬停操作引入「安全三角区 (Safe
+                            Triangle)」鼠标防误触算法，斜向移动更加自如
+                        </li>
+                        <li>全面润色设置界面文案，并引入 Lucide 图标集</li>
+                        <li>
+                            优化贴纸卡片文本字号自适应缩放与滚动位置保存机制
+                        </li>
+                        <li>
+                            移除旧版自动 Spotlight
+                            聚焦逻辑，保持界面焦点干净可控
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复目标粘贴应用的小图标在特定分辨率下渲染模糊或缺失的问题
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.1.6</span>
-  <p class="date">2026 年 8 月 17 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>贴纸功能拓展：支持将纯文本片段与超链接一键钉在屏幕最上层</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>全面校对与润色设置项说明文案</li>
-      <li>增强搜索框焦点管理与面板内联重命名交互的稳定性</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复贴纸卡片在放大缩放时窗口边框偶尔溢出屏幕可见区域的问题</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.1.6</span>
+                <p class="date">2026 年 8 月 17 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            贴纸功能拓展：支持将纯文本片段与超链接一键钉在屏幕最上层
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>全面校对与润色设置项说明文案</li>
+                        <li>增强搜索框焦点管理与面板内联重命名交互的稳定性</li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复贴纸卡片在放大缩放时窗口边框偶尔溢出屏幕可见区域的问题
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.1.5</span>
-  <p class="date">2026 年 8 月 16 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>贴纸卡片交互升级：支持自定义标题、内联重命名以及贴边隐藏</li>
-      <li>支持自定义贴纸卡片的窗口透明度与磨砂背景模糊强度</li>
-      <li>贴纸卡片采用统一规范的文本字号排版</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>优化面板内联重命名交互，并进一步理清搜索框的聚焦时序</li>
-      <li>重构偏好设置架构，拆分为更清晰的「剪贴板」专页与功能分组</li>
-      <li>应用重启后自动恢复先前处于打开状态的贴纸卡片</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复在快捷键录制状态下按下 ⌘W 快捷键意外关闭设置窗口的问题</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.1.5</span>
+                <p class="date">2026 年 8 月 16 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            贴纸卡片交互升级：支持自定义标题、内联重命名以及贴边隐藏
+                        </li>
+                        <li>
+                            支持自定义贴纸卡片的窗口透明度与磨砂背景模糊强度
+                        </li>
+                        <li>贴纸卡片采用统一规范的文本字号排版</li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            优化面板内联重命名交互，并进一步理清搜索框的聚焦时序
+                        </li>
+                        <li>
+                            重构偏好设置架构，拆分为更清晰的「剪贴板」专页与功能分组
+                        </li>
+                        <li>应用重启后自动恢复先前处于打开状态的贴纸卡片</li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复在快捷键录制状态下按下 ⌘W
+                            快捷键意外关闭设置窗口的问题
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.1.4</span>
-  <p class="date">2026 年 8 月 15 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>支持将 Markdown 文档与代码高亮文本独立钉在屏幕上</li>
-      <li>新增贴纸窗口默认尺寸偏好设置与专用管理快捷键</li>
-      <li>新增「打开面板时自动聚焦搜索框」偏好设置</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>Markdown 预览组件深度集成代码块多语言语法高亮</li>
-      <li>加固剪贴板 I/O 读取流水线，支持在快速滚动时即时取消失效的预览渲染任务</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复在全屏 Space 工作区切换时贴纸浮窗未能按预期隐藏的问题</li>
-      <li>修复 Markdown 文章排版中内联代码片段的语法分类误判</li>
-      <li>修复在搜索框开头输入空格时导致检索结果意外为空的问题</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.1.4</span>
+                <p class="date">2026 年 8 月 15 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            支持将 Markdown 文档与代码高亮文本独立钉在屏幕上
+                        </li>
+                        <li>新增贴纸窗口默认尺寸偏好设置与专用管理快捷键</li>
+                        <li>新增「打开面板时自动聚焦搜索框」偏好设置</li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>Markdown 预览组件深度集成代码块多语言语法高亮</li>
+                        <li>
+                            加固剪贴板 I/O
+                            读取流水线，支持在快速滚动时即时取消失效的预览渲染任务
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复在全屏 Space
+                            工作区切换时贴纸浮窗未能按预期隐藏的问题
+                        </li>
+                        <li>
+                            修复 Markdown 文章排版中内联代码片段的语法分类误判
+                        </li>
+                        <li>
+                            修复在搜索框开头输入空格时导致检索结果意外为空的问题
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.1.3</span>
-  <p class="date">2026 年 8 月 12 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>新增 Markdown 完整 AST 预览，原生支持 GFM 表格与代码语法高亮</li>
-      <li>支持用户自定义唤醒剪贴板面板的全局快捷键</li>
-      <li>新增贴纸功能 (Pin to Screen)：可将剪贴板图片独立钉在桌面浮动显示</li>
-      <li>集成 Sparkle 2 自动更新机制，支持静默检测与安全版本升级</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>优化剪贴板图片采集算法，引入智能去重与格式校验</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复空格键快速预览 (Quick Look) 的触发时序与防抖控制</li>
-      <li>修复直接从访达 (Finder) 拷贝文件时图片提取失败的问题</li>
-      <li>修复复杂 Markdown 表格表头解析异常的问题</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.1.3</span>
+                <p class="date">2026 年 8 月 12 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            新增 Markdown 完整 AST 预览，原生支持 GFM
+                            表格与代码语法高亮
+                        </li>
+                        <li>支持用户自定义唤醒剪贴板面板的全局快捷键</li>
+                        <li>
+                            新增贴纸功能 (Pin to
+                            Screen)：可将剪贴板图片独立钉在桌面浮动显示
+                        </li>
+                        <li>
+                            集成 Sparkle 2
+                            自动更新机制，支持静默检测与安全版本升级
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>优化剪贴板图片采集算法，引入智能去重与格式校验</li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复空格键快速预览 (Quick Look) 的触发时序与防抖控制
+                        </li>
+                        <li>
+                            修复直接从访达 (Finder) 拷贝文件时图片提取失败的问题
+                        </li>
+                        <li>修复复杂 Markdown 表格表头解析异常的问题</li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.1.2</span>
-  <p class="date">2026 年 8 月 6 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>设置窗口新增「关于」面板，并支持按 ⌘W 标准快捷键关闭</li>
-      <li>支持在列表中按空格键对图片进行 Quick Look 快速预览</li>
-      <li>增强网址识别能力，完整 HTTP/HTTPS 链接自动归类为专属「链接」类型</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>优化剪贴板历史的时间排序模型，并增加日期分组层级</li>
-      <li>文本预览组件底层迁移至 AppKit 原生组件，支持标准文本编辑与快捷键操作</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>修复</h3>
-    <ul>
-      <li>修复在偏好设置中切换应用语言后界面文案未实时刷新的问题</li>
-      <li>修复菜单栏弹出窗口中前台目标应用图标显示过期的问题</li>
-      <li>修复鼠标点击列表项后按回车键无法自动回填粘贴的问题</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.1.2</span>
+                <p class="date">2026 年 8 月 6 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            设置窗口新增「关于」面板，并支持按 ⌘W 标准快捷键关闭
+                        </li>
+                        <li>
+                            支持在列表中按空格键对图片进行 Quick Look 快速预览
+                        </li>
+                        <li>
+                            增强网址识别能力，完整 HTTP/HTTPS
+                            链接自动归类为专属「链接」类型
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            优化剪贴板历史的时间排序模型，并增加日期分组层级
+                        </li>
+                        <li>
+                            文本预览组件底层迁移至 AppKit
+                            原生组件，支持标准文本编辑与快捷键操作
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复在偏好设置中切换应用语言后界面文案未实时刷新的问题
+                        </li>
+                        <li>
+                            修复菜单栏弹出窗口中前台目标应用图标显示过期的问题
+                        </li>
+                        <li>
+                            修复鼠标点击列表项后按回车键无法自动回填粘贴的问题
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.1.1</span>
-  <p class="date">2026 年 8 月 3 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>支持中文全拼与简拼搜索，并在结果中精准高亮匹配字符</li>
-      <li>支持在预览详情面板中划选任意文本片段并直接复制</li>
-      <li>智能识别剪贴板中的主流编程语言代码，并提供语法高亮</li>
-      <li>支持自适应跟随 macOS 深色/浅色外观，并可按需接管系统剪贴板历史</li>
-      <li>提供简体中文与英文多语言界面，支持在设置中自由切换</li>
-      <li>剪贴板列表项清晰展示复制来源应用的原始图标与名称</li>
-    </ul>
-  </div>
-  <div class="group">
-    <h3>改进</h3>
-    <ul>
-      <li>剪贴板历史采用持久化存储方案，遇系统异常退出亦可完整恢复</li>
-      <li>全量历史检索全面移至后台异步线程，彻底解决打字搜索时的掉帧卡顿</li>
-      <li>重构偏好设置界面，采用符合 macOS 人机交互规范的单栏分组布局</li>
-    </ul>
-  </div>
-</section>
+            <section>
+                <span class="tag">v0.1.1</span>
+                <p class="date">2026 年 8 月 3 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            支持中文全拼与简拼搜索，并在结果中精准高亮匹配字符
+                        </li>
+                        <li>支持在预览详情面板中划选任意文本片段并直接复制</li>
+                        <li>
+                            智能识别剪贴板中的主流编程语言代码，并提供语法高亮
+                        </li>
+                        <li>
+                            支持自适应跟随 macOS
+                            深色/浅色外观，并可按需接管系统剪贴板历史
+                        </li>
+                        <li>
+                            提供简体中文与英文多语言界面，支持在设置中自由切换
+                        </li>
+                        <li>
+                            剪贴板列表项清晰展示复制来源应用的原始图标与名称
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            剪贴板历史采用持久化存储方案，遇系统异常退出亦可完整恢复
+                        </li>
+                        <li>
+                            全量历史检索全面移至后台异步线程，彻底解决打字搜索时的掉帧卡顿
+                        </li>
+                        <li>
+                            重构偏好设置界面，采用符合 macOS
+                            人机交互规范的单栏分组布局
+                        </li>
+                    </ul>
+                </div>
+            </section>
 
-<section>
-  <span class="tag">v0.1.0</span>
-  <p class="date">2026 年 7 月 31 日</p>
-  <div class="group">
-    <h3>新功能</h3>
-    <ul>
-      <li>Kit 初始版本正式发布：提供开箱即用的剪贴板历史管理、全局快捷键呼出面板、高清图片缩略图预览、开机自启与辅助功能引导</li>
-    </ul>
-  </div>
-</section>
-
-</main>
-</body>
+            <section>
+                <span class="tag">v0.1.0</span>
+                <p class="date">2026 年 7 月 31 日</p>
+                <div class="group">
+                    <h3>新功能</h3>
+                    <ul>
+                        <li>
+                            Kit
+                            初始版本正式发布：提供开箱即用的剪贴板历史管理、全局快捷键呼出面板、高清图片缩略图预览、开机自启与辅助功能引导
+                        </li>
+                    </ul>
+                </div>
+            </section>
+        </main>
+    </body>
 </html>
