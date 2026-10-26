@@ -155,7 +155,8 @@ final class ClipboardItemCellView: NSTableCellView {
             thumbnailView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             titleTrailingConstraint,
             missingFileIndicator.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            missingFileIndicator.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            // Match the optical center of the vertically adjusted title glyphs
+            missingFileIndicator.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor, constant: -1),
             missingFileIndicator.widthAnchor.constraint(equalToConstant: 14),
             missingFileIndicator.heightAnchor.constraint(equalToConstant: 14),
             titleLabel.heightAnchor.constraint(equalToConstant: Theme.Size.rowIcon),
