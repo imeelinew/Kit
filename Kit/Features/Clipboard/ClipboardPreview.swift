@@ -455,7 +455,7 @@ private struct ClipboardFileCollectionPreview: View {
                     }
                 }
             }
-            .frame(height: height)
+            .frame(minHeight: 0, idealHeight: height, maxHeight: height)
             .background(Color.primary.opacity(0.025))
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         }
@@ -689,6 +689,9 @@ private final class ClipboardPreviewPane: NSView, PreviewSelectionOwner {
     private func prepare(_ hosting: NSHostingController<AnyView>) {
         hosting.sizingOptions = []
         hosting.safeAreaRegions = []
+        // A hosted renderer must not draw over the header or information region
+        hosting.view.wantsLayer = true
+        hosting.view.layer?.masksToBounds = true
     }
 
     func update(kind: ClipboardItem.Kind, informationHeight: CGFloat, reduceMotion: Bool,

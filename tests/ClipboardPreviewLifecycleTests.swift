@@ -124,7 +124,49 @@ enum ClipboardPreviewLifecycleTests {
         print("PASS: real popover teardown, shortcut hide, reentrant close, settled hidden tree")
     }
 
+    private static func multiFilePreviewLayout() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("kit-file-layout-\(UUID())")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let urls = (0..<8).map { root.appendingPathComponent("preview-file-\($0).txt") }
+        for url in urls { try Data("fixture".utf8).write(to: url) }
+        let store = ClipboardStore(directory: root.appendingPathComponent("store"))
+        let item = store.addFiles(urls, sourceBundleID: nil)!
+        let core = AppCore(clipboardStore: store)
+        defer { withExtendedLifetime(core) {} }
+        let hosting = NSHostingView(rootView: ClipboardPreview(
+            item: item, vm: core.palette, store: store, settings: core.settings))
+        hosting.sizingOptions = []
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 280),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = hosting
+        defer { window.close() }
+        func descendants(_ view: NSView) -> [NSView] {
+            [view] + view.subviews.flatMap { descendants($0) }
+        }
+        for height: CGFloat in [280, 160, 420] {
+            window.setContentSize(NSSize(width: 420, height: height))
+            hosting.layoutSubtreeIfNeeded()
+            await settle()
+            hosting.layoutSubtreeIfNeeded()
+            let pane = descendants(hosting).first { String(describing: type(of: $0)) == "ClipboardPreviewPane" }!
+            let content = pane.subviews.first!
+            let title = pane.subviews.compactMap { $0 as? NSTextField }.first!
+            let scroll = descendants(content).compactMap { $0 as? NSScrollView }.first!
+            let viewport = pane.convert(scroll.bounds, from: scroll)
+            precondition(viewport.minY >= -1 && viewport.maxY <= title.frame.minY + 1,
+                         "The file scroll viewport stays above the information region at every pane height")
+            precondition(scroll.contentSize.height > 0 && scroll.documentView!.frame.height > scroll.contentSize.height,
+                         "A constrained multi-file preview scrolls internally instead of expanding outside its pane")
+            precondition(content.layer?.masksToBounds == true,
+                         "Hosted preview content cannot draw into adjacent palette regions")
+        }
+        print("PASS: multi-file preview viewport, internal scrolling and clipping across pane sizes")
+    }
+
     static func run() async throws {
+        try await multiFilePreviewLayout()
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("kit-preview-lifecycle-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }
