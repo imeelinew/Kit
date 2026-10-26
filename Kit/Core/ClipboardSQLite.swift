@@ -5,7 +5,7 @@ let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 enum ClipboardSQLite {
     static let imageBackedPredicate =
-        "kind = 'image' AND (image_path IS NOT NULL OR file_urls IS NOT NULL)"
+        "((kind = 'image' AND image_path IS NOT NULL) OR (kind = 'file' AND file_is_image = 1 AND file_urls IS NOT NULL))"
 
     static func transaction(in db: OpaquePointer?, _ body: () -> Bool) -> Bool {
         guard sqlite3_exec(db, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { return false }
@@ -44,7 +44,7 @@ enum ClipboardSQLite {
         return ClipboardItem(
             id: id, kind: storedKind, text: columnString(stmt, 2), imagePath: imagePath,
             imageFingerprint: columnString(stmt, 6),
-            fileURLs: fileURLs,
+            fileURLs: fileURLs, fileIsImage: sqlite3_column_int(stmt, 15) != 0,
             lastCopiedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4)),
             sourceBundleID: columnString(stmt, 5), customTitle: columnString(stmt, 7),
             firstCopiedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 8)),
@@ -130,7 +130,13 @@ extension ClipboardSQLite {
         }
 
         private func migrateFileURLs() -> Bool {
-            migrateColumns([("file_urls", "TEXT"), ("file_bookmarks", "BLOB"), ("file_signature", "TEXT")]) { true }
+            migrateColumns([("file_urls", "TEXT"), ("file_bookmarks", "BLOB"), ("file_signature", "TEXT"),
+                ("file_is_image", "INTEGER NOT NULL DEFAULT 0")]) {
+                execute("""
+                    UPDATE items SET file_is_image = 1, kind = 'file'
+                    WHERE kind = 'image' AND file_urls IS NOT NULL AND image_path IS NULL
+                    """)
+            }
         }
 
         private func migrateColumns(
@@ -258,8 +264,9 @@ extension ClipboardSQLite {
               INSERT INTO image_ocr_fts(rowid, ocr_text)
               SELECT new.rowid, new.ocr_text WHERE new.ocr_text IS NOT NULL;
             END;
-            CREATE INDEX IF NOT EXISTS items_pending_image_ocr ON items(created_at)
-              WHERE (kind = 'image' AND (image_path IS NOT NULL OR file_urls IS NOT NULL)) AND
+            DROP INDEX IF EXISTS items_pending_image_ocr;
+            CREATE INDEX IF NOT EXISTS items_pending_image_ocr_v2 ON items(created_at)
+              WHERE \(ClipboardSQLite.imageBackedPredicate) AND
                 (ocr_status IS NULL OR (ocr_status = 'failed' AND ocr_attempts < \(ClipboardImageTextRecognition.maxAttempts)));
             """
     }

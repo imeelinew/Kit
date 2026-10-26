@@ -156,12 +156,12 @@ final class ClipboardPreviewPayload {
             } else if item.isFileBacked {
                 if details.fileAvailability.allSatisfy({ $0 == .missing }) {
                     details.contentState = .notFound
-                } else if item.kind == .image || !details.fileAvailability.contains(.available) {
+                } else if item.hasImagePreview || !details.fileAvailability.contains(.available) {
                     details.contentState = .unavailablePreview
                 } else {
                     details.contentState = .ready
                 }
-            } else if item.kind == .image {
+            } else if item.hasImagePreview {
                 details.contentState = imageURL.map {
                     ClipboardFileAccess.availability(of: $0) == .missing
                 } == true ? .notFound : .unavailablePreview
@@ -232,7 +232,7 @@ struct ClipboardPreview: View {
             ClipboardInfoSection(item: $0, details: payload?.details ?? .init(), store: store, settings: settings)
         }
         ClipboardPreviewContainer(
-            itemID: item?.id, kind: item?.kind, informationHeight: information?.contentHeight ?? 0,
+            itemID: item?.id, kind: item.map { $0.hasImagePreview ? .image : $0.kind }, informationHeight: information?.contentHeight ?? 0,
             reduceMotion: reduceMotion,
             content: { onLayoutChange in
                 Group { if let item { content(for: item, payload: payload, onLayoutChange: onLayoutChange) } }
@@ -287,7 +287,7 @@ struct ClipboardPreview: View {
     }
 
     private var imageHighlightURL: URL? {
-        guard let item, item.kind == .image,
+        guard let item, item.hasImagePreview,
             !ClipboardImageTextRecognition.normalizedText(query).isEmpty
         else { return nil }
         return store.imageURL(for: item)
@@ -298,29 +298,7 @@ struct ClipboardPreview: View {
         for item: ClipboardItem, payload: ClipboardPreviewPayload?,
         onLayoutChange: @escaping () -> Void
     ) -> some View {
-        switch item.kind {
-        case .text, .path, .link:
-            ClipboardTextPreview(text: item.text ?? "", query: query).equatable()
-        case .markdown:
-            if settings.renderMarkdown {
-                MarkdownPreview(source: item.text ?? "", query: query, onRender: onLayoutChange)
-            } else {
-                ClipboardTextPreview(text: item.text ?? "", query: query).equatable()
-            }
-        case .code:
-            CodePreview(code: item.text ?? "", query: query)
-        case .file:
-            if let state = payload?.details.contentState,
-                state == .notFound || state == .unavailablePreview
-            {
-                ClipboardUnavailablePreview(symbol: "doc", state: state)
-            } else if item.fileURLs.count == 1 {
-                ClipboardFilePreview(url: item.fileURLs[0])
-            } else {
-                ClipboardFileCollectionPreview(
-                    urls: item.fileURLs, availability: payload?.details.fileAvailability ?? [])
-            }
-        case .image:
+        if item.hasImagePreview {
             let imageURL = store.imageURL(for: item)
             let highlights = imageURL.flatMap { url in
                 ImageSearchHighlightPayload.cached(for: url)
@@ -352,6 +330,32 @@ struct ClipboardPreview: View {
                     ),
                     onActions: { vm.openActions(for: item.id) }
                 )
+            }
+        } else {
+            switch item.kind {
+            case .text, .path, .link:
+                ClipboardTextPreview(text: item.text ?? "", query: query).equatable()
+            case .markdown:
+                if settings.renderMarkdown {
+                    MarkdownPreview(source: item.text ?? "", query: query, onRender: onLayoutChange)
+                } else {
+                    ClipboardTextPreview(text: item.text ?? "", query: query).equatable()
+                }
+            case .code:
+                CodePreview(code: item.text ?? "", query: query)
+            case .file:
+                if let state = payload?.details.contentState,
+                    state == .notFound || state == .unavailablePreview
+                {
+                    ClipboardUnavailablePreview(symbol: "doc", state: state)
+                } else if item.fileURLs.count == 1 {
+                    ClipboardFilePreview(url: item.fileURLs[0])
+                } else {
+                    ClipboardFileCollectionPreview(
+                        urls: item.fileURLs, availability: payload?.details.fileAvailability ?? [])
+                }
+            case .image:
+                EmptyView()
             }
         }
     }
@@ -893,6 +897,11 @@ private struct ClipboardInfoSection: View {
             }
             if details.contentState == .loading || details.fileBytes != nil { rows.append(sizeRow) }
         case .file:
+            if item.fileIsImage, details.contentState == .loading || details.pixelSize != nil {
+                rows.append(InfoRow(label: "Dimensions", value: details.pixelSize.map {
+                    "\(Int($0.width))×\(Int($0.height))"
+                } ?? "—"))
+            }
             if item.fileURLs.count > 1 {
                 rows.append(
                     InfoRow(

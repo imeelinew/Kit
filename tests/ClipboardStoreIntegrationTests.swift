@@ -25,6 +25,7 @@ enum ClipboardStoreIntegrationTests {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
+        try await imageFileCategoryMigration(in: root.appendingPathComponent("file-category"))
         try await metadataContracts(in: root.appendingPathComponent("metadata"))
         try await stackContracts(in: root.appendingPathComponent("stacks"))
         try await fileAndImageContracts(in: root.appendingPathComponent("files"))
@@ -33,6 +34,80 @@ enum ClipboardStoreIntegrationTests {
         try await undoEdgeContracts(in: root.appendingPathComponent("undo"))
         try await nonresidentHistory(in: root.appendingPathComponent("history-window"))
         try await imageOCRTimestampRoundTrip(in: root.appendingPathComponent("ocr-precision"))
+    }
+
+    @MainActor
+    private static func imageFileCategoryMigration(in root: URL) async throws {
+        let directory = root.appendingPathComponent("store")
+        let imageURL = root.appendingPathComponent("photo.png")
+        let textURL = root.appendingPathComponent("note.txt")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let data = try pngData(red: 30, green: 80, blue: 140)
+        try data.write(to: imageURL)
+        try Data("file fixture".utf8).write(to: textURL)
+        var imageFile: ClipboardItem!
+        var groupID: ClipboardItem.ID!
+        var ownedID: ClipboardItem.ID!
+        var stackID: ClipboardStack.ID!
+        do {
+            let store = makeStore(in: directory)
+            imageFile = store.addFiles([imageURL], sourceBundleID: "fixture")!
+            groupID = store.addFiles([imageURL, textURL], sourceBundleID: "fixture")!.id
+            await store.addImage(data, sourceBundleID: "fixture")
+            ownedID = store.items.first { $0.kind == .image }!.id
+            let stack = store.createStack(name: "Images")!
+            stackID = stack.id
+            store.assign(imageFile.id, to: stack.id)
+            try TestSupport.expect(imageFile.kind == .file && imageFile.typeLabel == "Image File",
+                                   "A captured image file has file identity and an image-file label")
+            let files = await store.searchAsync("", kind: .file, after: nil, limit: 10)
+            let images = await store.searchAsync("", kind: .image, after: nil, limit: 10)
+            try TestSupport.expect(Set(files.items.map(\.id)) == Set([imageFile.id, groupID!])
+                                   && images.items.map(\.id) == [ownedID!],
+                                   "Single image files and file groups share the file filter while owned images remain separate")
+        }
+        // Recreate the preceding schema and its image-kind file row
+        try executeDatabase(in: directory, """
+            UPDATE items SET kind = 'image', custom_title = 'Saved photo', copy_count = 7
+            WHERE id = '\(imageFile.id.uuidString)';
+            DROP INDEX items_pending_image_ocr_v2;
+            ALTER TABLE items DROP COLUMN file_is_image;
+            """)
+        try FileManager.default.removeItem(at: imageURL)
+        let reopened = makeStore(in: directory)
+        let migrated = reopened.item(id: imageFile.id)!
+        try TestSupport.expect(migrated.kind == .file && migrated.fileIsImage && migrated.hasImagePreview,
+                               "Legacy image references migrate without needing the source to exist")
+        try TestSupport.expect(migrated.id == imageFile.id && migrated.fileURLs == imageFile.fileURLs
+                               && migrated.customTitle == "Saved photo" && migrated.copyCount == 7
+                               && migrated.firstCopiedAt.timeIntervalSince1970 == imageFile.firstCopiedAt.timeIntervalSince1970
+                               && reopened.stackID(for: migrated.id) == stackID,
+                               "Migration preserves identity, paths, title, copy metadata and stack membership")
+        try TestSupport.expect(reopened.item(id: ownedID)!.kind == .image
+                               && !reopened.item(id: groupID)!.hasImagePreview,
+                               "Migration leaves stored image payloads and ordinary groups intact")
+        try TestSupport.expect(reopened.imageTextIndexImageCount() == 2,
+                               "Both owned images and image-capable files remain eligible for OCR")
+        try TestSupport.expect(reopened.remove(migrated), "Migrated image files can be deleted from history")
+        let restored = reopened.undoLastDeletion()
+        try TestSupport.expect(restored?.kind == .file && restored?.fileIsImage == true,
+                               "Undo preserves file identity and image capabilities")
+        try data.write(to: imageURL)
+        let recopied = reopened.addFiles([imageURL], sourceBundleID: "fixture")!
+        try TestSupport.expect(recopied.id == imageFile.id && recopied.kind == .file && recopied.hasImagePreview,
+                               "Recopy reuses the migrated row and preserves its file category")
+        let core = AppCore(clipboardStore: reopened)
+        defer { withExtendedLifetime(core) {} }
+        let vm = PaletteViewModel(core: core)
+        try await TestSupport.eventually("The migrated image file becomes selectable") {
+            vm.searchReady && vm.selectedItem?.id == recopied.id
+        }
+        vm.openActions(for: recopied.id)
+        try TestSupport.expect(vm.menuActions.contains(.pinToScreen(vm.selectedItem!)),
+                               "Image files retain the pin action after category migration")
+        vm.closeMenu()
+        vm.toggleImageQuickLook(for: recopied.id)
+        try TestSupport.expect(vm.imageQuickLookOpen, "Image files retain Quick Look after category migration")
     }
 
     @MainActor
@@ -314,7 +389,7 @@ enum ClipboardStoreIntegrationTests {
             throw FixtureFailure.invalidFixture("file-backed image was not created")
         }
         try TestSupport.expect(
-            fileImage.kind == .image && fileImage.imagePath == nil
+            fileImage.kind == .file && fileImage.hasImagePreview && fileImage.imagePath == nil
                 && store.imageURL(for: fileImage) == imageFileURL.standardizedFileURL,
             "single image file remains externally owned")
         try TestSupport.expect(store.remove(fileImage), "file-backed image can be removed")

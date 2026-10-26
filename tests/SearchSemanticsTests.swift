@@ -78,7 +78,7 @@ enum SearchSemanticsTests {
             firstCopiedAt: firstCopy, copyCount: 4, imageOCR: ocr)
 
         let recopied = original.recopied(at: nextCopy, sourceBundleID: "com.example.new")
-        try TestSupport.expect(recopied.id == originalID && recopied.kind == .image,
+        try TestSupport.expect(recopied.id == originalID && recopied.kind == .file && recopied.hasImagePreview,
                                "Recopy preserves identity and kind")
         try TestSupport.expect(
             recopied.text == original.text && recopied.imagePath == original.imagePath
@@ -516,7 +516,7 @@ private extension ClipboardItem {
     func withCustomTitle(_ customTitle: String) -> ClipboardItem {
         ClipboardItem(
             id: id, kind: kind, text: text, imagePath: imagePath,
-            imageFingerprint: imageFingerprint, fileURLs: fileURLs,
+            imageFingerprint: imageFingerprint, fileURLs: fileURLs, fileIsImage: fileIsImage,
             lastCopiedAt: lastCopiedAt, sourceBundleID: sourceBundleID,
             customTitle: customTitle, firstCopiedAt: firstCopiedAt,
             copyCount: copyCount, imageOCR: imageOCR)

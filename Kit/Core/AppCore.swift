@@ -265,7 +265,7 @@ final class AppCore {
     }
 
     func pinToScreen(_ item: ClipboardItem, dismissPalette: Bool = true) {
-        guard item.kind == .image, let url = clipboardStore.imageURL(for: item) else { return }
+        guard item.hasImagePreview, let url = clipboardStore.imageURL(for: item) else { return }
         startTransfer { [weak self] in
             guard let self else { return }
             let access: FileAccessLease?

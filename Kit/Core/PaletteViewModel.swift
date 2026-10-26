@@ -258,7 +258,7 @@ final class PaletteViewModel {
     }
 
     func canCopy(_ item: ClipboardItem) -> Bool {
-        if item.kind == .image,
+        if item.hasImagePreview,
             currentPreview(for: item)?.details.contentState == .notFound
         { return false }
         guard let count = copyableFileCount(for: item) else { return true }
@@ -282,10 +282,10 @@ final class PaletteViewModel {
                 .pasteKeepingOpen(item),
                 .copy(item),
             ]
-            if item.kind == .image {
+            if item.hasImagePreview {
                 actions.append(.pinToScreen(item))
             }
-            if item.kind == .image || item.kind == .file || item.kind == .path {
+            if item.hasImagePreview || item.kind == .file || item.kind == .path {
                 actions.append(.revealInFinder(item))
             }
             if !core.clipboardStore.stacks.isEmpty {
@@ -389,7 +389,7 @@ final class PaletteViewModel {
     }
 
     func toggleImageQuickLook(for itemID: ClipboardItem.ID) {
-        guard selectedID == itemID, searchReady, !menuOpen, selectedItem?.kind == .image else { return }
+        guard selectedID == itemID, searchReady, !menuOpen, selectedItem?.hasImagePreview == true else { return }
         imageQuickLookOpen.toggle()
     }
 
@@ -537,12 +537,12 @@ final class PaletteViewModel {
             overlay = overlay == .actions(id) ? .none : .actions(id)
             menuSelection = 0
         case .pinToScreen:
-            guard searchReady, let item = actionTarget, item.kind == .image else { return true }
+            guard searchReady, let item = actionTarget, item.hasImagePreview else { return true }
             overlay = .none
             core.pinToScreen(item)
         case .revealInFinder:
             guard searchReady, let item = actionTarget,
-                item.kind == .image || item.kind == .file || item.kind == .path else { return true }
+                item.hasImagePreview || item.kind == .file || item.kind == .path else { return true }
             overlay = .none
             core.revealClipboardItem(item)
         case .cycleStack(let delta):
@@ -622,7 +622,7 @@ final class PaletteViewModel {
             guard canCopy(item) else { return }
             core.copyToClipboard(item)
         case .pinToScreen(let item):
-            guard item.kind == .image else { return }
+            guard item.hasImagePreview else { return }
             core.pinToScreen(item)
         case .revealInFinder(let item):
             core.revealClipboardItem(item)

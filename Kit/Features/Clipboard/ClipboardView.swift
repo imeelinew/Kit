@@ -120,6 +120,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         private var rows: [ClipboardTableRow] = []
         private var itemRowIndex: [ClipboardItem.ID: Int] = [:]
+        private var missingFileIDs: Set<ClipboardItem.ID> = []
         private var selectedID: ClipboardItem.ID?
         private var query = ""
         private var locale = Locale.current
@@ -555,10 +556,22 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             rowHeight(at: row)
         }
 
+        private func updateFileStatus(_ missing: Bool, for id: ClipboardItem.ID) {
+            guard missingFileIDs.contains(id) != missing else { return }
+            if missing { missingFileIDs.insert(id) } else { missingFileIDs.remove(id) }
+            guard let row = itemRowIndex[id], rows.indices.contains(row),
+                case .item(let item) = rows[row], item.hasImagePreview, let tableView else { return }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0
+                tableView.noteHeightOfRows(withIndexesChanged: IndexSet(integer: row))
+            }
+        }
+
         private func rowHeight(at row: Int) -> CGFloat {
             guard rows.indices.contains(row) else { return 0 }
             switch rows[row] {
-            case .item(let item): return ClipboardItemCellView.rowHeight(for: item)
+            case .item(let item):
+                return ClipboardItemCellView.rowHeight(for: item, fileMissing: missingFileIDs.contains(item.id))
             case .header: return row == 0 ? 24 : 32
             case .more: return 32
             }
@@ -588,7 +601,11 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                     selected: item.id == selectedID,
                     query: query,
                     imageURL: store?.imageURL(for: item),
-                    locale: locale, store: store
+                    locale: locale, store: store,
+                    fileMissing: missingFileIDs.contains(item.id),
+                    onFileStatusChange: { [weak self] missing in
+                        self?.updateFileStatus(missing, for: item.id)
+                    }
                 )
                 view.setHovered((tableView as? ClipboardTableView)?.hoveredRow == row, animated: false)
                 return view
@@ -749,7 +766,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 let indexes = ahead + behind
                 let urls = indexes.compactMap { index -> URL? in
                     guard !NSLocationInRange(index, visible), case .item(let item) = self.rows[index],
-                        item.kind == .image else { return nil }
+                        item.hasImagePreview else { return nil }
                     return self.store?.imageURL(for: item)
                 }
                 self.thumbnailPrefetcher.update(Array(urls.prefix(12)))

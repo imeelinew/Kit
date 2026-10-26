@@ -480,7 +480,7 @@ enum ImageInfrastructureTests {
         let copyCount = baselineItem.copyCount
         let expectedPath = source.standardizedFileURL
         try TestSupport.expect(
-            baselineItem.kind == .image,
+            baselineItem.kind == .file && baselineItem.hasImagePreview,
             "The external PNG is classified as an image item")
         try TestSupport.expect(
             !expectedPath.path.hasPrefix(storeDirectory.standardizedFileURL.path + "/"),
@@ -653,7 +653,7 @@ enum ImageInfrastructureTests {
         let payload = await ClipboardPreviewPayload.load(
             for: item, imageURL: source, store: store)
         try TestSupport.expect(
-            item.kind == .image && payload.image == nil
+            item.kind == .file && item.hasImagePreview && payload.image == nil
                 && payload.details.contentState == .unavailablePreview,
             "Readable non-PNG bytes report an unavailable image preview"
         )

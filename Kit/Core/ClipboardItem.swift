@@ -26,6 +26,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     let imageFingerprint: String?
     /// Ordered source file URLs captured as one clipboard entry.
     let fileURLs: [URL]
+    private(set) var fileIsImage: Bool
     let firstCopiedAt: Date
     private(set) var lastCopiedAt: Date
     private(set) var copyCount: Int
@@ -33,7 +34,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     private(set) var sourceBundleID: String?
     /// User-assigned list title. Nil means the visible title is derived from the copied content.
     let customTitle: String?
-    /// Persistent OCR metadata. Image rows keep `text` nil and remain image clipboard entries.
+    /// OCR metadata belongs to either a stored image or an image-capable file reference
     private(set) var imageOCR: ClipboardImageOCR?
 
     init(text: String, kind: Kind, sourceBundleID: String?) {
@@ -52,16 +53,17 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
 
     init(
         id: UUID, kind: Kind, text: String?, imagePath: String?, imageFingerprint: String?,
-        fileURLs: [URL] = [], lastCopiedAt: Date, sourceBundleID: String?,
+        fileURLs: [URL] = [], fileIsImage: Bool = false, lastCopiedAt: Date, sourceBundleID: String?,
         customTitle: String? = nil, firstCopiedAt: Date? = nil, copyCount: Int = 1,
         imageOCR: ClipboardImageOCR? = nil
     ) {
         self.id = id
-        self.kind = kind
+        self.kind = fileURLs.isEmpty ? kind : .file
         self.text = text
         self.imagePath = imagePath
         self.imageFingerprint = imageFingerprint
         self.fileURLs = fileURLs
+        self.fileIsImage = fileURLs.count == 1 && (fileIsImage || kind == .image)
         self.firstCopiedAt = firstCopiedAt ?? lastCopiedAt
         self.lastCopiedAt = lastCopiedAt
         self.copyCount = copyCount
@@ -72,8 +74,11 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
 
     var isFileBacked: Bool { !fileURLs.isEmpty }
 
+    /// Preview capabilities do not determine the clipboard payload category
+    var hasImagePreview: Bool { kind == .image || (isFileBacked && fileIsImage) }
+
     var typeLabel: String {
-        fileURLs.count > 1 ? "Files" : kind.typeLabel
+        fileURLs.count > 1 ? "Files" : fileIsImage ? "Image File" : kind.typeLabel
     }
 
     /// An external recopy reuses the entry with a fresh copy time and source application.
@@ -87,7 +92,13 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
 
     func withKind(_ kind: Kind) -> ClipboardItem {
         var copy = self
-        copy.kind = kind
+        copy.kind = isFileBacked ? .file : kind
+        return copy
+    }
+
+    func withFileImagePreview(_ enabled: Bool) -> ClipboardItem {
+        var copy = self
+        copy.fileIsImage = isFileBacked && fileURLs.count == 1 && enabled
         return copy
     }
 
@@ -125,7 +136,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     /// Latin-letter queries also match Mandarin pinyin (full spelling or initials) so `nihao` / `nh` can find `你好`.
     func matches(_ query: String, includeImageText: Bool = true) -> Bool {
         if matches(query, in: customTitle) { return true }
-        if includeImageText, kind == .image,
+        if includeImageText, hasImagePreview,
             matches(ClipboardImageTextRecognition.normalizedText(query), in: imageOCR?.text)
         { return true }
         guard let text else { return false }

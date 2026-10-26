@@ -114,6 +114,14 @@ enum FileLifecycleTests {
         let item = store!.addFiles([source], sourceBundleID: nil)!
         await store!.waitForImageOCR()
         try TestSupport.expect(store!.item(id: item.id)?.imageOCR?.text == "old searchable text", "Initial OCR is persisted")
+        let fileMatches = await store!.searchAsync("old searchable", kind: .file, after: nil, limit: 10)
+        let imageMatches = await store!.searchAsync("old searchable", kind: .image, after: nil, limit: 10)
+        try TestSupport.expect(fileMatches.items.map(\.id) == [item.id] && imageMatches.items.isEmpty,
+                               "Image-file OCR is searchable in Files rather than Images")
+        store!.setImageTextSearchEnabled(false)
+        let disabledMatches = await store!.searchAsync("old searchable", kind: .file, after: nil, limit: 10)
+        try TestSupport.expect(disabledMatches.items.isEmpty, "Disabling OCR also excludes image-file OCR matches")
+        store!.setImageTextSearchEnabled(true)
         try write(Data("new searchable text".utf8), to: source)
         await store!.refreshFileReferences()
         await store!.waitForImageOCR()
