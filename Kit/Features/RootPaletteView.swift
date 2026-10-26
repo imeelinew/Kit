@@ -39,10 +39,29 @@ struct RootPaletteView: View {
 
     @MainActor
     private var menuItems: [PopoverMenuItem] {
-        vm.menuActions.map {
-            PopoverMenuItem(
-                action: $0, target: vm.pasteTarget, kindFilter: vm.kindFilter,
+        vm.menuActions.map { action in
+            var menuItem = PopoverMenuItem(
+                action: action, target: vm.pasteTarget, kindFilter: vm.kindFilter,
                 stackFilter: vm.stackFilter)
+            switch action {
+            case .paste(let item):
+                menuItem.isEnabled = menuItem.isEnabled && vm.canCopy(item)
+                if let count = partialCopyableFileCount(for: item) {
+                    menuItem.verbatimTitle = availableFilesTitle(
+                        "Paste %@ Available Files", count: count)
+                }
+            case .pasteKeepingOpen(let item):
+                menuItem.isEnabled = menuItem.isEnabled && vm.canCopy(item)
+            case .copy(let item):
+                menuItem.isEnabled = menuItem.isEnabled && vm.canCopy(item)
+                if let count = partialCopyableFileCount(for: item) {
+                    menuItem.verbatimTitle = availableFilesTitle(
+                        "Copy %@ Available Files", count: count)
+                }
+            default:
+                break
+            }
+            return menuItem
         }
     }
 
@@ -199,13 +218,13 @@ struct RootPaletteView: View {
                     if let path = vm.pasteTarget?.iconPath {
                         MenuFileIcon(path: path)
                     }
-                    Text(vm.pasteTarget?.pasteTitle ?? LocalizedStringKey("Paste"))
+                    primaryPasteTitle
                         .font(Theme.Typography.bar)
                         .foregroundStyle(.primary)
                     KeyCapChip(text: "↵", style: .outline)
                 }
             }
-            .disabled(!vm.canPaste)
+            .disabled(!canPasteSelectedItem)
             BarButton(pressed: showActions, action: { vm.handle(.toggleActions) }) {
                 HStack(spacing: Theme.Spacing.sm) {
                     Text("Actions")
@@ -223,6 +242,43 @@ struct RootPaletteView: View {
         }
         .padding(Theme.Spacing.xs)
         .frosted(in: Capsule())
+    }
+
+    @MainActor
+    private var canPasteSelectedItem: Bool {
+        vm.canPaste && (vm.selectedItem.map { vm.canCopy($0) } ?? true)
+    }
+
+    @ViewBuilder
+    private var primaryPasteTitle: some View {
+        if let item = vm.selectedItem,
+            let count = partialCopyableFileCount(for: item)
+        {
+            Text("Paste \(formattedAvailableFileCount(count)) Available Files")
+        } else {
+            Text(vm.pasteTarget?.pasteTitle ?? LocalizedStringKey("Paste"))
+        }
+    }
+
+    @MainActor
+    private func partialCopyableFileCount(for item: ClipboardItem) -> Int? {
+        guard let count = vm.copyableFileCount(for: item),
+            count > 0,
+            count < item.fileURLs.count
+        else { return nil }
+        return count
+    }
+
+    @MainActor
+    private func formattedAvailableFileCount(_ count: Int) -> String {
+        count.formatted(.number.locale(settings.language.locale))
+    }
+
+    @MainActor
+    private func availableFilesTitle(_ key: String, count: Int) -> String {
+        String(
+            format: AppLocalization.string(key, locale: settings.language.locale),
+            formattedAvailableFileCount(count))
     }
 
     private func activateMenuItem(_ index: Int) {

@@ -15,7 +15,13 @@ final class ClipboardPreviewPayload {
     private let fileVersions: [UInt64]
     private let fileAccess: FileAccessLease?
 
+    enum ContentState: Sendable, Equatable {
+        case loading, ready, notFound, unavailablePreview
+    }
+
     struct Details: Sendable {
+        var contentState: ContentState = .loading
+        var fileAvailability: [ClipboardFileAccess.Availability] = []
         var characters: Int?
         var words: Int?
         var pixelSize: CGSize?
@@ -55,6 +61,13 @@ final class ClipboardPreviewPayload {
             && fileVersions == item.fileURLs.map { ImageThumbnail.fileVersion(for: $0) }
     }
 
+    var availableFileCount: Int? {
+        guard !fileVersions.isEmpty, details.fileAvailability.count == fileVersions.count else { return nil }
+        return details.fileAvailability.filter { $0 == .available }.count
+    }
+
+    var requiresFilePermission: Bool { details.fileAvailability.contains(.needsPermission) }
+
     static func cached(for item: ClipboardItem) -> ClipboardPreviewPayload? {
         guard let payload = cache.object(forKey: item.id as NSUUID), payload.matches(item)
         else { return nil }
@@ -86,6 +99,7 @@ final class ClipboardPreviewPayload {
         let detailsTask = Task.detached(priority: .userInitiated) {
             var details = Details()
             guard !Task.isCancelled else { return details }
+            details.fileAvailability = item.fileURLs.map { ClipboardFileAccess.availability(of: $0) }
             if let text = item.text {
                 details.characters = text.utf16.count
                 var count = 0
@@ -128,8 +142,26 @@ final class ClipboardPreviewPayload {
             } else {
                 image = nil
             }
+            var details = await detailsTask.value
+            if image != nil {
+                details.contentState = .ready
+            } else if item.isFileBacked {
+                if details.fileAvailability.allSatisfy({ $0 == .missing }) {
+                    details.contentState = .notFound
+                } else if item.kind == .image || !details.fileAvailability.contains(.available) {
+                    details.contentState = .unavailablePreview
+                } else {
+                    details.contentState = .ready
+                }
+            } else if item.kind == .image {
+                details.contentState = imageURL.map {
+                    ClipboardFileAccess.availability(of: $0) == .missing
+                } == true ? .notFound : .unavailablePreview
+            } else {
+                details.contentState = .ready
+            }
             return ClipboardPreviewPayload(
-                item: item, image: image, details: await detailsTask.value,
+                item: item, image: image, details: details,
                 imageURL: imageURL, imageVersion: imageVersion,
                 fileVersions: fileVersions, fileAccess: access)
         } onCancel: {
@@ -207,6 +239,7 @@ struct ClipboardPreview: View {
                 for: item, imageURL: store.imageURL(for: item), store: store)
             guard !Task.isCancelled else { return }
             loadedPayload = payload
+            vm.acceptPreview(payload)
         }
         .task(id: vm.isPreviewActive && item?.isFileBacked == true ? item.map {
             FileRefreshID(itemID: $0.id, copiedAt: $0.lastCopiedAt)
@@ -267,10 +300,15 @@ struct ClipboardPreview: View {
         case .code:
             CodePreview(code: item.text ?? "", query: query)
         case .file:
-            if item.fileURLs.count == 1 {
+            if let state = payload?.details.contentState,
+                state == .notFound || state == .unavailablePreview
+            {
+                ClipboardUnavailablePreview(symbol: "doc", state: state)
+            } else if item.fileURLs.count == 1 {
                 ClipboardFilePreview(url: item.fileURLs[0])
             } else {
-                ClipboardFileCollectionPreview(urls: item.fileURLs)
+                ClipboardFileCollectionPreview(
+                    urls: item.fileURLs, availability: payload?.details.fileAvailability ?? [])
             }
         case .image:
             let imageURL = store.imageURL(for: item)
@@ -286,8 +324,8 @@ struct ClipboardPreview: View {
                         vm.toggleImageQuickLook(for: item.id)
                     }
                 } else {
-                    Image(systemName: "photo").font(.system(.largeTitle))
-                        .symbolRenderingMode(.hierarchical).foregroundStyle(.tertiary)
+                    ClipboardUnavailablePreview(
+                        symbol: "photo", state: payload?.details.contentState ?? .loading)
                 }
             }
             // Anchor to the preview image's fitted bounds, not the full preview pane, so the
@@ -304,6 +342,35 @@ struct ClipboardPreview: View {
                 )
             }
         }
+    }
+}
+
+/// The whole status group fills the allocated preview region, not the information pane
+private struct ClipboardUnavailablePreview: View {
+    let symbol: String
+    let state: ClipboardPreviewPayload.ContentState
+
+    var body: some View {
+        VStack(spacing: Theme.Spacing.md) {
+            Image(systemName: symbol)
+                .font(.system(size: 32, weight: .regular))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.tertiary)
+            if state == .notFound {
+                Text("File Not Found")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .fixedSize()
+            } else if state == .unavailablePreview {
+                Text("Unable to Preview")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .fixedSize()
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .id(state)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -327,39 +394,55 @@ private struct ClipboardFilePreview: View {
 
 private struct ClipboardFileCollectionPreview: View {
     let urls: [URL]
+    let availability: [ClipboardFileAccess.Availability]
+    @Environment(\.locale) private var locale
+
+    private var availableCount: Int? {
+        guard availability.count == urls.count, !availability.contains(.needsPermission) else { return nil }
+        return availability.filter { $0 == .available }.count
+    }
 
     private var height: CGFloat {
         min(320, CGFloat(urls.count) * 50)
     }
 
     var body: some View {
-        ScrollView(.vertical) {
-            LazyVStack(spacing: 0) {
-                ForEach(urls, id: \.self) { url in
-                    HStack(spacing: Theme.Spacing.md) {
-                        ClipboardFileIcon(url: url, size: 28)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(url.lastPathComponent)
-                                .font(.system(size: 12, weight: .medium))
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Text(url.path)
-                                .font(.system(size: 10))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            if let count = availableCount, count < urls.count {
+                Text(String(
+                    format: AppLocalization.string("%@ Files, %@ Available", locale: locale),
+                    urls.count.formatted(.number.locale(locale)), count.formatted(.number.locale(locale))))
+                    .font(.system(size: 13, weight: .medium))
+            }
+            ScrollView(.vertical) {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(urls.enumerated()), id: \.offset) { index, url in
+                        HStack(spacing: Theme.Spacing.md) {
+                            ClipboardFileIcon(url: url, size: 28)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(url.lastPathComponent)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Text(availability.indices.contains(index) && availability[index] == .missing
+                                    ? AppLocalization.string("File Not Found", locale: locale) : url.path)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                            Spacer(minLength: 0)
                         }
-                        Spacer(minLength: 0)
+                        .padding(.horizontal, Theme.Spacing.sm)
+                        .frame(height: 50)
+                        .accessibilityElement(children: .combine)
                     }
-                    .padding(.horizontal, Theme.Spacing.sm)
-                    .frame(height: 50)
-                    .accessibilityElement(children: .combine)
                 }
             }
+            .frame(height: height)
+            .background(Color.primary.opacity(0.025))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         }
-        .frame(height: height)
-        .background(Color.primary.opacity(0.025))
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 }
 
@@ -779,8 +862,7 @@ private struct ClipboardInfoSection: View {
         {
             rows.append(InfoRow(label: "Stack", value: stack.name))
         }
-        // Reserve both rows from the first frame, including missing/unreadable files.
-        // Finishing a decode changes values, never the available image height.
+        // Keep loading geometry stable, then omit metadata that a finished load cannot provide
         switch item.kind {
         case .text, .markdown, .code, .link, .path:
             rows.append(InfoRow(label: "Characters", value: details.characters.map {
@@ -793,10 +875,12 @@ private struct ClipboardInfoSection: View {
             if item.isFileBacked {
                 rows.append(filePathRow)
             }
-            rows.append(InfoRow(label: "Dimensions", value: details.pixelSize.map {
-                "\(Int($0.width))×\(Int($0.height))"
-            } ?? "—"))
-            rows.append(sizeRow)
+            if details.contentState == .loading || details.pixelSize != nil {
+                rows.append(InfoRow(label: "Dimensions", value: details.pixelSize.map {
+                    "\(Int($0.width))×\(Int($0.height))"
+                } ?? "—"))
+            }
+            if details.contentState == .loading || details.fileBytes != nil { rows.append(sizeRow) }
         case .file:
             if item.fileURLs.count > 1 {
                 rows.append(
@@ -805,7 +889,7 @@ private struct ClipboardInfoSection: View {
                             .number.locale(settings.language.locale))))
             }
             rows.append(filePathRow)
-            rows.append(sizeRow)
+            if details.contentState == .loading || details.fileBytes != nil { rows.append(sizeRow) }
         }
         Self.timestampFormatter.locale = settings.language.locale
         if item.copyCount > 1 {

@@ -41,7 +41,7 @@ enum ClipboardFileAccess {
         return bookmarks
     }
 
-    enum Availability: Sendable {
+    enum Availability: Sendable, Equatable {
         case available, missing, needsPermission, unavailable
     }
 

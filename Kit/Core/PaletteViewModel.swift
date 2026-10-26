@@ -239,6 +239,32 @@ final class PaletteViewModel {
         return results.first { $0.id == selectedID }
     }
 
+    /// Accept only the current selection and source version, including asynchronous completions
+    func acceptPreview(_ payload: ClipboardPreviewPayload) {
+        guard let item = selectedItem, payload.matches(item) else { return }
+        if preparedPreview !== payload { preparedPreview = payload }
+    }
+
+    private func currentPreview(for item: ClipboardItem) -> ClipboardPreviewPayload? {
+        if let preparedPreview, preparedPreview.matches(item) { return preparedPreview }
+        return ClipboardPreviewPayload.cached(for: item)
+    }
+
+    func copyableFileCount(for item: ClipboardItem) -> Int? {
+        guard item.isFileBacked, let payload = currentPreview(for: item),
+            !payload.requiresFilePermission
+        else { return nil }
+        return payload.availableFileCount
+    }
+
+    func canCopy(_ item: ClipboardItem) -> Bool {
+        if item.kind == .image,
+            currentPreview(for: item)?.details.contentState == .notFound
+        { return false }
+        guard let count = copyableFileCount(for: item) else { return true }
+        return count > 0
+    }
+
     var canPaste: Bool {
         pasteTarget != nil && core.hasPasteTarget
     }
@@ -436,8 +462,10 @@ final class PaletteViewModel {
         let actions = menuActions
         guard actions.indices.contains(index) else { return }
         switch actions[index] {
-        case .paste, .pasteKeepingOpen:
-            guard canPaste else { return }
+        case .paste(let item), .pasteKeepingOpen(let item):
+            guard canPaste, canCopy(item) else { return }
+        case .copy(let item):
+            guard canCopy(item) else { return }
         default:
             break
         }
@@ -473,15 +501,15 @@ final class PaletteViewModel {
         case .activate:
             if menuOpen {
                 activateMenuItem(at: menuSelection)
-            } else if searchReady, canPaste, let item = selectedItem {
+            } else if searchReady, canPaste, let item = selectedItem, canCopy(item) {
                 core.paste(item)
             }
         case .pasteKeepingOpen:
-            guard searchReady, canPaste, !isNamingStack, let item = actionTarget else { return true }
+            guard searchReady, canPaste, !isNamingStack, let item = actionTarget, canCopy(item) else { return true }
             closeMenu()
             core.pasteKeepingWindowOpen(item)
         case .copy:
-            guard searchReady, let item = actionTarget else { return true }
+            guard searchReady, let item = actionTarget, canCopy(item) else { return true }
             overlay = .none
             core.copyToClipboard(item)
         case .delete:
@@ -585,10 +613,13 @@ final class PaletteViewModel {
         case .quit:
             core.requestQuit()
         case .paste(let item):
+            guard canCopy(item) else { return }
             core.paste(item)
         case .pasteKeepingOpen(let item):
+            guard canCopy(item) else { return }
             core.pasteKeepingWindowOpen(item)
         case .copy(let item):
+            guard canCopy(item) else { return }
             core.copyToClipboard(item)
         case .pinToScreen(let item):
             guard item.kind == .image else { return }

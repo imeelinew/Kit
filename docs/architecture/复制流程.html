@@ -1,0 +1,1875 @@
+<title>Kit 复制流程</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root{
+  color-scheme:light;
+  --bg:#f4f7fa;
+  --surface:#ffffff;
+  --surface-2:#f7fafc;
+  --surface-3:#eef3f7;
+  --ink:#20364b;
+  --ink-2:#365167;
+  --muted:#627a8e;
+  --line:#dce5ed;
+  --line-strong:#c3d1dd;
+  --accent:#236c70;
+  --accent-2:#18585c;
+  --accent-soft:#e1ecec;
+  --file:#8a5a12;
+  --file-soft:#f6ecd9;
+  --ok:#2b6b4f;
+  --ok-soft:#e3f0e9;
+  --warn:#8a5a12;
+  --warn-soft:#f6ecd9;
+  --danger:#a33a32;
+  --danger-soft:#f7e6e3;
+  --code-bg:#eef4f6;
+  --selection:rgba(32,54,75,.10);
+  --glass:rgba(255,255,255,.78);
+  --glass-line:rgba(255,255,255,.66);
+  --shadow:0 26px 60px -30px rgba(24,48,64,.38);
+  --wall-base:#dfe8ee;
+  --wall-a:#bcd8d2;
+  --wall-b:#ead0bd;
+  --wall-c:#cfc9e8;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --serif:"New York",ui-serif,"Songti SC","Noto Serif SC",serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0f151b;
+    --surface:#151d25;
+    --surface-2:#1a242e;
+    --surface-3:#22303c;
+    --ink:#e6edf3;
+    --ink-2:#c4d0db;
+    --muted:#93a5b5;
+    --line:#2a3743;
+    --line-strong:#3a4a58;
+    --accent:#6fc0bd;
+    --accent-2:#8ed4d1;
+    --accent-soft:#183230;
+    --file:#e0b06a;
+    --file-soft:#322716;
+    --ok:#7fd0aa;
+    --ok-soft:#173126;
+    --warn:#e0b06a;
+    --warn-soft:#322716;
+    --danger:#f0928a;
+    --danger-soft:#3a211e;
+    --code-bg:#18242c;
+    --selection:rgba(230,237,243,.12);
+    --glass:rgba(21,29,37,.82);
+    --glass-line:rgba(255,255,255,.08);
+    --shadow:0 26px 70px -28px rgba(0,0,0,.65);
+    --wall-base:#1c2730;
+    --wall-a:#2d4a4a;
+    --wall-b:#4a352a;
+    --wall-c:#3c3550;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0f151b;
+  --surface:#151d25;
+  --surface-2:#1a242e;
+  --surface-3:#22303c;
+  --ink:#e6edf3;
+  --ink-2:#c4d0db;
+  --muted:#93a5b5;
+  --line:#2a3743;
+  --line-strong:#3a4a58;
+  --accent:#6fc0bd;
+  --accent-2:#8ed4d1;
+  --accent-soft:#183230;
+  --file:#e0b06a;
+  --file-soft:#322716;
+  --ok:#7fd0aa;
+  --ok-soft:#173126;
+  --warn:#e0b06a;
+  --warn-soft:#322716;
+  --danger:#f0928a;
+  --danger-soft:#3a211e;
+  --code-bg:#18242c;
+  --selection:rgba(230,237,243,.12);
+  --glass:rgba(21,29,37,.82);
+  --glass-line:rgba(255,255,255,.08);
+  --shadow:0 26px 70px -28px rgba(0,0,0,.65);
+  --wall-base:#1c2730;
+  --wall-a:#2d4a4a;
+  --wall-b:#4a352a;
+  --wall-c:#3c3550;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+body{
+  margin:0;
+  background-color:var(--bg);
+  background-image:radial-gradient(circle at 14% -8%,var(--accent-soft),transparent 36%),radial-gradient(circle at 92% 2%,var(--file-soft),transparent 28%);
+  color:var(--ink);
+  font:15px/1.68 var(--sans);
+  -webkit-font-smoothing:antialiased;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.page{max-width:1180px;margin:0 auto;padding-block:20px 72px}
+a{color:var(--accent)}
+code,.mono{font-family:var(--mono);font-size:.92em}
+button,select,textarea,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:3px}
+.masthead{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:38px 0 26px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:15px}
+.brand-mark{width:46px;height:46px;border-radius:13px;background:var(--ink);color:var(--surface);display:grid;place-items:center;font-weight:700;font-size:24px;letter-spacing:-.04em;flex:none}
+h1{font-size:clamp(30px,4.4vw,46px);line-height:1.04;letter-spacing:-.035em;font-weight:650;margin:0}
+.meta-row{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+.chip{display:inline-flex;align-items:center;gap:6px;font:10px/1.4 var(--mono);color:var(--muted);background:var(--surface-2);border:1px solid var(--line);padding:4px 8px;border-radius:99px;white-space:nowrap}
+.chip strong{font-weight:600;color:var(--ink-2)}
+.chip .dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.toc{position:sticky;top:0;z-index:20;display:flex;gap:3px;align-items:center;padding:9px 0;margin-bottom:6px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(18px);overflow-x:auto;scrollbar-width:none}
+.toc::-webkit-scrollbar{display:none}
+.toc a{flex:none;text-decoration:none;color:var(--muted);padding:7px 12px;border-radius:99px;font-size:13px;transition:background .16s,color .16s}
+.toc a:hover{background:var(--surface-2);color:var(--ink)}
+.toc a.active{background:var(--accent-soft);color:var(--accent)}
+.toc-note{margin-left:auto;padding-left:14px;font:10px/1 var(--mono);color:var(--muted);white-space:nowrap;letter-spacing:.06em}
+.sec{padding:54px 0 58px;border-top:1px solid var(--line);scroll-margin-top:72px}
+.sec:first-of-type{border-top:0}
+.sec-head{display:grid;gap:9px;margin-bottom:26px;max-width:900px}
+.eyebrow{font:10px/1.2 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+h2{font-size:clamp(24px,3.1vw,34px);line-height:1.14;letter-spacing:-.028em;margin:0;font-weight:650;text-wrap:balance}
+.thesis{font-family:var(--serif);font-size:clamp(18px,2.1vw,23px);line-height:1.45;color:var(--ink-2);margin:0;max-width:64ch;text-wrap:balance}
+.lead{font-size:13px;color:var(--muted);margin:0;max-width:70ch}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px}
+.mini-label{font:10px/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.rail{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.stage{position:relative;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 12px 10px;color:inherit;transition:border-color .16s,background .16s,transform .16s}
+.stage::after{content:"";position:absolute;right:-8px;top:50%;width:8px;height:1px;background:var(--line-strong)}
+.stage:last-child::after{display:none}
+.stage:hover{border-color:var(--line-strong)}
+.stage[aria-pressed="true"]{border-color:var(--accent);background:var(--surface);box-shadow:inset 0 0 0 1px var(--accent)}
+.stage-num{display:block;font:9px/1 var(--mono);color:var(--muted);letter-spacing:.12em}
+.stage-name{display:block;font-weight:600;font-size:14px;margin-top:3px;letter-spacing:-.01em}
+.stage-meta{display:block;font:9px/1.4 var(--mono);color:var(--muted);margin-top:4px;overflow-wrap:anywhere}
+.stage-detail{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:15px;padding:20px;display:grid;grid-template-columns:1.25fr .85fr;gap:26px}
+.detail-block{min-width:0}
+.detail-list{list-style:none;padding:0;margin:8px 0 0;display:grid;gap:7px;font-size:13px;color:var(--ink-2)}
+.detail-list li{position:relative;padding-left:17px}
+.detail-list li::before{content:"→";position:absolute;left:0;color:var(--accent);font-family:var(--mono);font-size:11px;top:2px}
+.detail-list.reject li::before{content:"×";color:var(--danger)}
+.ref-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.ref{font:10px/1.4 var(--mono);color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:3px 6px}
+.lanes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+.lane{display:block;text-decoration:none;color:inherit;background:var(--surface);border:1px solid var(--line);border-top:3px solid var(--line-strong);border-radius:12px;padding:14px 15px 13px;transition:transform .16s,border-color .16s}
+.lane:hover{transform:translateY(-1px);border-color:var(--line-strong)}
+.lane.file{border-top-color:var(--file)}
+.lane.image{border-top-color:var(--accent)}
+.lane h3{margin:0;font-size:15px;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+.lane p{margin:6px 0 9px;font-size:12px;color:var(--muted);line-height:1.55}
+.lane .lane-out{font:10px/1.5 var(--mono);color:var(--ink-2);display:flex;gap:6px;flex-wrap:wrap}
+.lane .lane-out span{background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:2px 5px}
+.gate-strip{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin-top:14px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px}
+.gate-pill{display:inline-flex;align-items:center;gap:6px;font:10px/1.4 var(--mono);color:var(--ink-2);background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:4px 8px}
+.gate-pill .x{color:var(--danger);font-weight:700}
+.gate-note{font-size:11px;color:var(--muted);margin-left:auto}
+.sandbox{display:grid;grid-template-columns:330px minmax(0,1fr);gap:16px;align-items:start}
+.sample-pane{background:var(--surface);border:1px solid var(--line);border-radius:15px;padding:12px;position:sticky;top:64px}
+.pane-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:2px 4px 8px}
+.pane-head span:last-child{font:9px/1.4 var(--mono);color:var(--muted)}
+.sample-list{display:grid;gap:2px;max-height:356px;overflow:auto;padding-right:2px}
+.sample{display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px;align-items:center;width:100%;text-align:left;background:transparent;border:1px solid transparent;border-radius:8px;padding:6px 7px;color:inherit}
+.sample:hover{background:var(--surface-2)}
+.sample[aria-pressed="true"]{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 22%,transparent)}
+.sample .s-label{font-size:12px;font-weight:550;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sample .s-text{font:9px/1.4 var(--mono);color:var(--muted);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sample .tile{width:24px;height:24px}
+.custom-wrap{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.custom-wrap label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px}
+textarea{width:100%;min-height:106px;resize:vertical;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);color:var(--ink);padding:9px 10px;font:11px/1.55 var(--mono)}
+.check{display:flex;align-items:center;gap:7px;margin-top:8px;font-size:11px;color:var(--muted)}
+.check input{accent-color:var(--accent);width:14px;height:14px}
+.result-pane{display:grid;gap:12px;min-width:0}
+.outcome{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:13px;padding:18px 18px 17px;display:flex;gap:14px;align-items:flex-start}
+.outcome.warn{border-left-color:var(--warn)}
+.outcome.danger{border-left-color:var(--danger)}
+.outcome .tile{width:38px;height:38px;flex:none}
+.outcome .tile svg{width:20px;height:20px}
+.outcome .kicker{font:9px/1.2 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.outcome h3{margin:3px 0 0;font-size:20px;line-height:1.2;letter-spacing:-.02em;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.outcome h3 code{font-size:11px;color:var(--muted);font-weight:400;background:var(--surface-2);border:1px solid var(--line);padding:2px 6px;border-radius:5px}
+.outcome p{margin:7px 0 0;font-size:12px;color:var(--muted);line-height:1.55}
+.ladder{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.ladder-row{display:grid;grid-template-columns:30px minmax(0,1fr) 72px;gap:10px;align-items:center;padding:9px 12px;border-top:1px solid var(--line)}
+.ladder-row:first-child{border-top:0}
+.ladder-row .rung{font:10px/1 var(--mono);color:var(--muted)}
+.ladder-row .rung-name{font-size:12px;font-weight:600;display:block}
+.ladder-row .rung-rule{font-size:10px;color:var(--muted);display:block;margin-top:1px}
+.ladder-row .rung-detail{font:9px/1.4 var(--mono);color:var(--muted);grid-column:2/3;margin-top:-4px;overflow-wrap:anywhere}
+.ladder-row.pass{background:color-mix(in srgb,var(--accent-soft) 55%,var(--surface))}
+.ladder-row.skip{opacity:.62}
+.status-tag{justify-self:end;font:9px/1.4 var(--mono);padding:2px 6px;border-radius:99px;white-space:nowrap}
+.status-tag.pass{color:var(--accent);background:var(--accent-soft)}
+.status-tag.fail{color:var(--muted);background:var(--surface-2)}
+.status-tag.skip{color:var(--muted);background:var(--surface-2)}
+.entry-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.entry-row{display:flex;align-items:center;gap:10px;padding:10px 13px;border-bottom:1px solid var(--line);min-height:44px}
+.entry-row .row-title{font-size:13px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.entry-row .row-meta{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.entry-cols{display:grid;grid-template-columns:1.15fr .85fr}
+.entry-preview{padding:13px;border-right:1px solid var(--line);min-height:176px;min-width:0}
+.entry-info{padding:10px 13px 12px;min-width:0}
+.preview-text{font-size:12px;line-height:1.6;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere;max-height:176px;overflow:auto;margin:0}
+.preview-code{font:11px/1.6 var(--mono);background:var(--code-bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:176px;overflow:auto;margin:0}
+.preview-path{font:11px/1.6 var(--mono);color:var(--ink-2);overflow-wrap:anywhere;word-break:break-all;max-height:176px;overflow:auto}
+.preview-note{font-size:10px;color:var(--muted);margin-top:8px}
+.md-h{font-size:15px;font-weight:650;margin:0 0 6px}
+.md-li{position:relative;padding-left:14px;font-size:12px;line-height:1.6;margin:2px 0}
+.md-li::before{content:"•";position:absolute;left:2px;color:var(--accent)}
+.md-p{font-size:12px;line-height:1.6;margin:0 0 6px;color:var(--ink-2)}
+.md-code{font:10px/1.5 var(--mono);background:var(--code-bg);border-radius:7px;padding:7px 8px;white-space:pre-wrap;margin:5px 0;overflow-wrap:anywhere}
+.info-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:5px 3px;border-top:1px solid var(--line);font-size:11px;line-height:1.4}
+.info-row:first-child{border-top:0}
+.info-row .i-label{color:var(--muted);flex:none}
+.info-row .i-value{text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink-2)}
+.info-row .i-value.mono{font-size:10px}
+.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:15px}
+.fact{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:9px 11px;min-width:0}
+.fact b{display:block;font:9px/1.3 var(--mono);color:var(--muted);font-weight:500;letter-spacing:.06em;margin-bottom:3px}
+.fact span{font-size:11px;line-height:1.45;color:var(--ink-2);display:block}
+.figure{background:var(--surface);border:1px solid var(--line);border-radius:15px;padding:16px 16px 13px;margin-bottom:18px}
+.figure-scroll{overflow-x:auto;scrollbar-width:thin}
+.figure svg.decision{display:block;min-width:760px;width:100%;height:auto}
+.figure figcaption{font-size:11px;color:var(--muted);margin-top:7px;line-height:1.5}
+.fig-node{fill:var(--surface-2);stroke:var(--line-strong);stroke-width:1}
+.fig-node.out-file{fill:var(--file-soft);stroke:var(--file)}
+.fig-node.out-image{fill:var(--accent-soft);stroke:var(--accent)}
+.fig-diamond{fill:var(--surface);stroke:var(--line-strong);stroke-width:1}
+.fig-text{fill:var(--ink);font-size:12px;font-family:var(--sans);font-weight:600}
+.fig-sub{fill:var(--muted);font-size:9px;font-family:var(--mono)}
+.fig-cond{fill:var(--ink-2);font-size:10px;font-family:var(--mono)}
+.fig-edge{stroke:var(--line-strong);stroke-width:1.2;fill:none}
+.fig-edge.file{stroke:var(--file)}
+.fig-edge.image{stroke:var(--accent)}
+.scenario-bar{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 12px}
+.scenario{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:6px 11px;font-size:12px;color:var(--ink-2)}
+.scenario:hover{border-color:var(--line-strong)}
+.scenario[aria-pressed="true"]{background:var(--file-soft);border-color:var(--file);color:var(--file)}
+.scenario .tile{width:18px;height:18px;background:transparent}
+.scenario svg{width:13px;height:13px}
+.palette-stage{border-radius:22px;padding:clamp(12px,2.4vw,28px);background:
+  radial-gradient(circle at 12% 18%,var(--wall-a),transparent 42%),
+  radial-gradient(circle at 86% 12%,var(--wall-b),transparent 40%),
+  radial-gradient(circle at 68% 92%,var(--wall-c),transparent 46%),
+  var(--wall-base);
+  border:1px solid var(--line);overflow:hidden}
+.palette{background:var(--glass);border:1px solid var(--glass-line);border-radius:20px;box-shadow:var(--shadow);overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-height:430px;backdrop-filter:blur(28px) saturate(1.12)}
+.pal-head{display:flex;align-items:center;gap:12px;padding:12px 16px 7px;border-bottom:1px solid color-mix(in srgb,var(--ink) 8%,transparent)}
+.pal-search{font-size:20px;font-weight:500;letter-spacing:-.025em;color:var(--muted);flex:1;min-width:0}
+.pal-pills{display:flex;gap:6px;flex:none}
+.pal-pill{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--ink-2);background:color-mix(in srgb,var(--surface) 68%,transparent);border:1px solid color-mix(in srgb,var(--ink) 10%,transparent);border-radius:99px;padding:5px 8px;white-space:nowrap}
+.pal-pill svg{width:12px;height:12px}
+.pal-body{display:grid;grid-template-columns:minmax(0,290fr) minmax(0,460fr);min-height:0}
+.pal-list{padding:7px;border-right:1px solid color-mix(in srgb,var(--ink) 8%,transparent);overflow:auto;min-width:0}
+.pal-section{font-size:10px;color:var(--muted);padding:6px 9px 4px;font-weight:500}
+.pal-row{display:flex;align-items:center;gap:9px;min-height:36px;padding:4px 8px;border-radius:8px;font-size:12px;color:var(--ink);margin-bottom:1px}
+.pal-row.is-selected{background:var(--selection)}
+.pal-row .row-title{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:450}
+.tile{width:24px;height:24px;border-radius:6px;background:color-mix(in srgb,var(--ink) 8%,transparent);display:grid;place-items:center;flex:none;color:var(--ink-2);overflow:hidden}
+.tile svg{width:15px;height:15px;display:block}
+.pal-row.image-card{height:92px;flex-direction:column;align-items:stretch;position:relative;padding:8px;gap:2px}
+.pal-row.image-card .thumb{position:static;width:100%;height:56px;flex:none;border-radius:6px;overflow:hidden;background:var(--surface-3)}
+.pal-row.image-card .row-title{margin-top:auto;padding-right:0;font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pal-preview{display:grid;grid-template-rows:minmax(0,1fr) auto;min-width:0;min-height:0}
+.pal-content{padding:16px;display:flex;align-items:center;justify-content:center;min-height:190px;overflow:auto}
+.pal-info{border-top:1px solid color-mix(in srgb,var(--ink) 8%,transparent);padding:7px 12px 11px;max-height:205px;overflow:auto}
+.info-head{font-size:11px;color:var(--muted);padding:3px 3px 6px;font-weight:500}
+.pal-info .info-row{font-size:10px;border-top-color:color-mix(in srgb,var(--ink) 7%,transparent);padding:4px 3px}
+.pal-info .info-row:nth-child(odd){background:color-mix(in srgb,var(--ink) 3%,transparent);border-radius:4px}
+.pal-foot{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid color-mix(in srgb,var(--ink) 8%,transparent);background:color-mix(in srgb,var(--surface) 32%,transparent)}
+.menu-orb{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--surface) 65%,transparent);border:1px solid color-mix(in srgb,var(--ink) 8%,transparent)}
+.menu-orb span{display:block;width:12px;height:1.4px;background:var(--muted);box-shadow:0 4px 0 var(--muted);border-radius:2px}
+.foot-actions{margin-left:auto;display:flex;align-items:center;gap:5px;padding:4px;border-radius:99px;background:color-mix(in srgb,var(--surface) 58%,transparent);border:1px solid color-mix(in srgb,var(--ink) 7%,transparent)}
+.foot-btn{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--ink-2);padding:5px 8px;border-radius:99px;white-space:nowrap}
+.foot-btn.primary{color:var(--ink)}
+.foot-btn .finder{width:15px;height:15px;border-radius:4px;background:linear-gradient(135deg,#7fb7ee,#3d7bd0);color:#fff;font:700 8px/15px var(--sans);text-align:center}
+kbd{font:9px/1 var(--mono);color:var(--muted);border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);border-radius:4px;padding:2px 4px;min-width:15px;display:inline-grid;place-items:center}
+.big-file{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;min-width:0;max-width:100%}
+.fileglyph{position:relative;display:grid;place-items:center;color:var(--muted);width:100%;height:100%}
+.fileglyph svg{width:100%;height:100%;display:block}
+.fileglyph.folder{color:var(--file)}
+.fileglyph.image{color:var(--accent)}
+.fileglyph.pdf{color:var(--danger)}
+.fileglyph .glyph-label{position:absolute;bottom:23%;font:600 6px/1 var(--sans);color:var(--danger);letter-spacing:.01em}
+.fileglyph.big .glyph-label{font-size:12px}
+.big-file .glyph-box{width:72px;height:72px}
+.big-file .name{font-size:13px;font-weight:550;max-width:230px;overflow-wrap:anywhere;line-height:1.4}
+.file-collection{width:100%;max-height:188px;overflow:auto;border-radius:9px;background:color-mix(in srgb,var(--ink) 3%,transparent);padding:3px}
+.fc-row{display:flex;align-items:center;gap:9px;height:50px;padding:0 8px;border-radius:6px}
+.fc-row+.fc-row{border-top:1px solid color-mix(in srgb,var(--ink) 6%,transparent)}
+.fc-row .glyph-box{width:28px;height:28px;flex:none}
+.fc-row .fc-text{min-width:0}
+.fc-row .fc-name{display:block;font-size:11px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fc-row .fc-path{display:block;font:9px/1.4 var(--mono);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.preview-image{width:min(100%,330px);aspect-ratio:16/10;border-radius:9px;overflow:hidden;box-shadow:0 8px 22px -14px rgba(0,0,0,.45);border:1px solid color-mix(in srgb,var(--ink) 10%,transparent)}
+.art{width:100%;height:100%;display:block}
+.src-icon{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:4px;background:color-mix(in srgb,var(--ink) 14%,var(--surface));color:var(--ink-2);font:700 7px/1 var(--sans);margin-right:4px;vertical-align:-3px}
+.src-icon.src-blue{background:linear-gradient(135deg,#8cc4f5,#4b86d8);color:#fff}
+.src-icon.src-slate{background:linear-gradient(135deg,#68798a,#34495c);color:#fff}
+.src-icon.src-amber{background:linear-gradient(135deg,#f0c476,#c88a2d);color:#3a2608}
+.src-icon.src-indigo{background:linear-gradient(135deg,#a7a2f0,#5f58c8);color:#fff}
+.file-detail-grid{display:grid;grid-template-columns:1.35fr .8fr;gap:13px;margin-top:15px}
+.detail-card{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:15px;min-width:0}
+.detail-card h3{margin:0 0 8px;font-size:12px;letter-spacing:-.01em}
+.fact-line{display:grid;grid-template-columns:80px minmax(0,1fr);gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:11px;line-height:1.5;color:var(--ink-2)}
+.fact-line:first-of-type{border-top:0}
+.fact-line b{font:9px/1.5 var(--mono);color:var(--muted);font-weight:500}
+.menu-list{list-style:none;padding:0;margin:0}
+.menu-item{display:flex;align-items:center;gap:8px;padding:6px 7px;border-radius:7px;font-size:11px;color:var(--ink-2)}
+.menu-item:hover{background:var(--surface-2)}
+.menu-item .mi-icon{width:18px;height:18px;display:grid;place-items:center;color:var(--muted);flex:none}
+.menu-item .mi-icon svg{width:14px;height:14px}
+.menu-item .shortcut{margin-left:auto;font:9px/1 var(--mono);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:2px 4px}
+.menu-item.danger{color:var(--danger)}
+.menu-note{font-size:10px;color:var(--muted);margin:8px 0 0;line-height:1.5}
+.caption{font-size:11px;color:var(--muted);margin:9px 2px 0;line-height:1.55}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:15px}
+.compare-card{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:14px 15px}
+.compare-card h3{margin:0 0 7px;font-size:13px;display:flex;align-items:center;gap:7px}
+.compare-card p{margin:0;font-size:11px;color:var(--muted);line-height:1.6}
+.compare-card .tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.compare-card .tags span{font:9px/1.4 var(--mono);background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:2px 5px}
+.state-chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(136px,1fr));gap:7px;margin-bottom:13px}
+.state-chip{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:11px;color:var(--ink-2);text-align:left}
+.state-chip:hover{border-color:var(--line-strong)}
+.state-chip[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--surface)}
+.state-chip .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
+.state-chip[data-tone="ok"] .dot{background:var(--ok)}
+.state-chip[data-tone="warn"] .dot{background:var(--warn)}
+.state-chip[data-tone="danger"] .dot{background:var(--danger)}
+.state-chip[data-tone="accent"] .dot{background:var(--accent)}
+.state-layout{display:grid;grid-template-columns:1.12fr .88fr;gap:13px;align-items:start}
+.state-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:17px;min-width:0}
+.state-card h3{margin:8px 0 3px;font-size:18px;letter-spacing:-.02em}
+.state-card .state-summary{margin:0 0 13px;font-size:12px;color:var(--muted);line-height:1.55}
+.status-pill{display:inline-flex;align-items:center;gap:6px;font:9px/1.4 var(--mono);padding:3px 7px;border-radius:99px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2)}
+.status-pill.ok{color:var(--ok);background:var(--ok-soft);border-color:color-mix(in srgb,var(--ok) 24%,transparent)}
+.status-pill.warn{color:var(--warn);background:var(--warn-soft);border-color:color-mix(in srgb,var(--warn) 24%,transparent)}
+.status-pill.danger{color:var(--danger);background:var(--danger-soft);border-color:color-mix(in srgb,var(--danger) 24%,transparent)}
+.status-pill.accent{color:var(--accent);background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 24%,transparent)}
+.state-rows{display:grid;gap:0}
+.state-row{display:grid;grid-template-columns:54px minmax(0,1fr);gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:11px;line-height:1.55;color:var(--ink-2)}
+.state-row b{font:9px/1.6 var(--mono);color:var(--muted);font-weight:500}
+.state-visual{background:
+  radial-gradient(circle at 14% 8%,var(--wall-a),transparent 46%),
+  radial-gradient(circle at 88% 16%,var(--wall-b),transparent 44%),
+  var(--wall-base);
+  border:1px solid var(--line);border-radius:14px;padding:15px;display:grid;place-items:center;min-height:360px}
+.mini-pal{width:100%;max-width:330px;background:var(--glass);border:1px solid var(--glass-line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;backdrop-filter:blur(20px)}
+.mini-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 11px;font-size:10px;color:var(--muted);border-bottom:1px solid color-mix(in srgb,var(--ink) 8%,transparent)}
+.mini-pill{font-size:8px;border:1px solid color-mix(in srgb,var(--ink) 12%,transparent);border-radius:99px;padding:3px 6px;background:color-mix(in srgb,var(--surface) 55%,transparent)}
+.mini-row{display:flex;align-items:center;gap:8px;padding:8px 10px;font-size:11px;font-weight:500}
+.mini-row .row-title{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini-preview{border-top:1px solid color-mix(in srgb,var(--ink) 8%,transparent);padding:13px;min-height:128px;display:grid;place-items:center}
+.mini-note{font:9px/1.5 var(--mono);color:var(--muted);padding:7px 10px;border-top:1px solid color-mix(in srgb,var(--ink) 8%,transparent);text-align:center}
+.alert-bubble{margin:9px;padding:9px 10px;border-radius:9px;background:var(--warn-soft);color:var(--warn);font-size:10px;line-height:1.5;display:flex;gap:7px;align-items:flex-start}
+.alert-bubble.danger{background:var(--danger-soft);color:var(--danger)}
+.alert-bubble svg{width:13px;height:13px;flex:none;margin-top:1px}
+.access-dialog{margin:9px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px;box-shadow:0 12px 30px -18px rgba(0,0,0,.35)}
+.access-dialog .ad-title{font-size:11px;font-weight:600;margin:0 0 4px}
+.access-dialog .ad-text{font-size:9px;color:var(--muted);margin:0}
+.access-dialog .ad-buttons{display:flex;justify-content:flex-end;gap:5px;margin-top:9px}
+.access-dialog .ad-btn{font-size:9px;border:1px solid var(--line);background:var(--surface-2);border-radius:5px;padding:3px 7px;color:var(--ink-2)}
+.access-dialog .ad-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.cred-flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-top:14px}
+.cred-step{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:12px;min-width:0}
+.cred-step .n{font:9px/1 var(--mono);color:var(--accent);letter-spacing:.1em}
+.cred-step h3{margin:6px 0 4px;font-size:12px}
+.cred-step p{margin:0;font-size:10px;color:var(--muted);line-height:1.55}
+.gate-figure{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:7px;margin-bottom:14px}
+.gate-box{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px;min-width:0}
+.gate-box::after{content:"→";position:absolute;right:-6px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--muted);background:var(--bg);padding:0 1px;z-index:1}
+.gate-box:last-child::after{display:none}
+.gate-box .g-num{font:8px/1 var(--mono);color:var(--muted)}
+.gate-box .g-name{display:block;font-size:11px;font-weight:600;margin-top:3px}
+.gate-box .g-note{display:block;font-size:9px;color:var(--muted);line-height:1.45;margin-top:3px}
+.gate-box.stop{border-color:color-mix(in srgb,var(--danger) 42%,var(--line))}
+.sim{display:grid;gap:12px}
+.sim-top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:12px}
+.mode-tabs{display:flex;gap:2px;background:var(--surface-2);padding:3px;border-radius:9px;flex:none}
+.mode-tab{font-size:11px;background:transparent;border:0;border-radius:7px;padding:5px 9px;color:var(--muted)}
+.mode-tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.sim-toggles{display:flex;flex-wrap:wrap;gap:6px}
+.switch{display:inline-flex;align-items:center;gap:6px;font-size:10px;padding:4px 8px;border:1px solid var(--line);border-radius:99px;background:var(--surface-2);color:var(--ink-2);white-space:nowrap}
+.switch input{accent-color:var(--accent);width:13px;height:13px;margin:0}
+.switch.is-off{opacity:.62}
+.switch.is-na{opacity:.42}
+.sim-payload{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--muted)}
+.sim-payload select{font-size:10px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);padding:4px 6px;color:var(--ink)}
+.primary{background:var(--accent);border:1px solid var(--accent);color:#fff;border-radius:8px;padding:7px 13px;font-size:11px;font-weight:600;margin-left:auto;white-space:nowrap}
+.primary:hover{background:var(--accent-2);border-color:var(--accent-2)}
+.sim-steps{list-style:none;padding:0;margin:0;background:var(--surface);border:1px solid var(--line);border-radius:13px;overflow:hidden}
+.sim-step{display:grid;grid-template-columns:24px 110px minmax(0,1fr) 58px;gap:9px;align-items:center;padding:8px 12px;border-top:1px solid var(--line);font-size:11px;min-height:38px}
+.sim-step:first-child{border-top:0}
+.sim-step .idx{font:9px/1 var(--mono);color:var(--muted)}
+.sim-step .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sim-step .detail{color:var(--muted);font-size:10px;line-height:1.4;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sim-step .status{justify-self:end;font:8px/1.4 var(--mono);padding:2px 5px;border-radius:99px;white-space:nowrap}
+.status.done{color:var(--ok);background:var(--ok-soft)}
+.status.fail{color:var(--danger);background:var(--danger-soft)}
+.status.skip{color:var(--muted);background:var(--surface-2)}
+.status.pending{color:var(--muted);background:transparent;border:1px dashed var(--line)}
+.sim-outcome{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:12px;padding:13px 15px;display:flex;gap:11px;align-items:flex-start}
+.sim-outcome.fail{border-left-color:var(--danger)}
+.sim-outcome .o-icon{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:var(--ok-soft);color:var(--ok);flex:none}
+.sim-outcome.fail .o-icon{background:var(--danger-soft);color:var(--danger)}
+.sim-outcome .o-icon svg{width:15px;height:15px}
+.sim-outcome h3{margin:0;font-size:13px}
+.sim-outcome p{margin:3px 0 0;font-size:10px;color:var(--muted);line-height:1.55}
+.sim-outcome .o-alert{font:9px/1.5 var(--mono);color:var(--danger);margin-top:4px}
+.alert-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px;margin-top:15px}
+.alert-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px 12px;min-width:0}
+.alert-card .a-when{font:8px/1.4 var(--mono);letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+.alert-card .a-text{display:block;font-size:11px;font-weight:600;color:var(--danger);margin:4px 0 3px;overflow-wrap:anywhere}
+.alert-card p{margin:0;font-size:10px;color:var(--muted);line-height:1.5}
+.matrix-tabs{display:flex;gap:5px;margin-bottom:12px;flex-wrap:wrap}
+.matrix-tab{font-size:11px;background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:6px 11px;color:var(--muted)}
+.matrix-tab[aria-selected="true"]{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 30%,transparent);color:var(--accent)}
+.table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:13px}
+table{border-collapse:collapse;width:100%;min-width:680px;font-size:11px;line-height:1.5}
+th{text-align:left;font:8px/1.4 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:9px 12px;border-bottom:1px solid var(--line);background:var(--surface-2);font-weight:500;white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+td:first-child{color:var(--ink);font-weight:550}
+td code{font-size:10px;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:1px 4px;color:var(--ink-2);overflow-wrap:anywhere}
+.result-ok{color:var(--ok);font-weight:600}
+.result-no{color:var(--danger);font-weight:600}
+.result-skip{color:var(--muted)}
+footer{border-top:1px solid var(--line);padding:22px 0 10px;color:var(--muted);font-size:10px}
+.foot-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:22px}
+.foot-grid h3{margin:0 0 6px;font:9px/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.foot-grid p{margin:0;line-height:1.6}
+.ref-list{display:flex;flex-wrap:wrap;gap:5px;margin:0;padding:0;list-style:none}
+.ref-list li{font:9px/1.4 var(--mono);background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:2px 5px;overflow-wrap:anywhere}
+.empty-state{padding:20px;text-align:center;color:var(--muted);font-size:12px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media (max-width:980px){
+  .sandbox{grid-template-columns:1fr}
+  .sample-pane{position:static}
+  .sample-list{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .file-detail-grid,.state-layout{grid-template-columns:1fr}
+  .cred-flow{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .gate-figure{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .gate-box:nth-child(3n)::after{display:none}
+}
+@media (max-width:760px){
+  .sec{padding:40px 0 44px}
+  .masthead{padding:26px 0 20px}
+  .toc-note{display:none}
+  .rail{grid-auto-flow:column;grid-auto-columns:minmax(148px,1fr);grid-template-columns:none;overflow-x:auto;padding-bottom:5px;scrollbar-width:thin}
+  .stage::after{display:none}
+  .stage-detail{grid-template-columns:1fr;gap:18px}
+  .lanes{grid-template-columns:1fr}
+  .entry-cols{grid-template-columns:1fr}
+  .entry-preview{border-right:0;border-bottom:1px solid var(--line)}
+  .pal-body{grid-template-columns:1fr}
+  .pal-list{border-right:0;border-bottom:1px solid color-mix(in srgb,var(--ink) 8%,transparent);max-height:260px}
+  .pal-content{min-height:170px}
+  .pal-info{max-height:190px}
+  .palette{min-height:0}
+  .state-visual{min-height:320px}
+  .compare{grid-template-columns:1fr}
+  .foot-grid{grid-template-columns:1fr}
+  .sim-step{grid-template-columns:20px minmax(0,1fr) auto;gap:6px 8px}
+  .sim-step .idx{grid-column:1;grid-row:1}
+  .sim-step .name{grid-column:2;grid-row:1}
+  .sim-step .status{grid-column:3;grid-row:1;justify-self:end}
+  .sim-step .detail{white-space:normal;grid-column:2/4;grid-row:2}
+  .primary{margin-left:0}
+  .sim-top{align-items:flex-start}
+}
+@media (max-width:520px){
+  .palette-stage{padding:8px;border-radius:16px}
+  .palette{border-radius:14px}
+  .pal-search{font-size:17px}
+  .pal-pill:last-child{display:none}
+  .sample-list{grid-template-columns:1fr}
+  .gate-figure{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .gate-box:nth-child(2n)::after{display:none}
+  .gate-box:nth-child(3n)::after{display:block}
+  .fact-line{grid-template-columns:70px minmax(0,1fr)}
+  .state-row{grid-template-columns:48px minmax(0,1fr)}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+
+</style>
+<div class="page">
+  <header class="masthead">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">K</div>
+      <div>
+        <h1>Kit 复制流程</h1>
+        <div class="meta-row">
+          <span class="chip"><span class="dot"></span>本地规则分类</span>
+          <span class="chip"><strong>b56f208</strong></span>
+          <span class="chip">7 种类型</span>
+          <span class="chip">文件优先</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="toc" aria-label="章节">
+    <a href="#flow">流程</a>
+    <a href="#types">类型</a>
+    <a href="#files">文件</a>
+    <a href="#states">状态</a>
+    <a href="#paste">交付</a>
+    <a href="#matrix">测试</a>
+    <span class="toc-note">ClipboardTextClassifier</span>
+  </nav>
+
+  <main>
+    <section class="sec" id="flow">
+      <div class="sec-head">
+        <div class="eyebrow">01 · 流程</div>
+        <h2>一次复制，六道关</h2>
+        <p class="thesis">观察先于分类，闸门先于一切</p>
+      </div>
+
+      <div class="rail" role="group" aria-label="捕获流水线">
+        <button class="stage" type="button" data-stage="0" aria-pressed="true">
+          <span class="stage-num">01</span>
+          <span class="stage-name">观察</span>
+          <span class="stage-meta">changeCount · 100 ms</span>
+        </button>
+        <button class="stage" type="button" data-stage="1" aria-pressed="false">
+          <span class="stage-num">02</span>
+          <span class="stage-name">闸门</span>
+          <span class="stage-meta">shouldCapture</span>
+        </button>
+        <button class="stage" type="button" data-stage="2" aria-pressed="false">
+          <span class="stage-num">03</span>
+          <span class="stage-name">快照</span>
+          <span class="stage-meta">readSnapshot</span>
+        </button>
+        <button class="stage" type="button" data-stage="3" aria-pressed="false">
+          <span class="stage-num">04</span>
+          <span class="stage-name">归一化</span>
+          <span class="stage-meta">files › image › text</span>
+        </button>
+        <button class="stage" type="button" data-stage="4" aria-pressed="false">
+          <span class="stage-num">05</span>
+          <span class="stage-name">分类</span>
+          <span class="stage-meta">file kind · text kind</span>
+        </button>
+        <button class="stage" type="button" data-stage="5" aria-pressed="false">
+          <span class="stage-num">06</span>
+          <span class="stage-name">落库</span>
+          <span class="stage-meta">dedupe · publish</span>
+        </button>
+      </div>
+
+      <div class="stage-detail" id="stageDetail" aria-live="polite"></div>
+
+      <div class="lanes">
+        <a class="lane file" href="#files">
+          <h3><span class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/></svg></span>文件引用</h3>
+          <p>粘贴板出现 fileURL 或旧版文件名列表时走这里, 不进入文本分类器</p>
+          <div class="lane-out"><span>fileURLs</span><span>.file</span><span>.image 文件背书</span></div>
+        </a>
+        <a class="lane image" href="#types">
+          <h3><span class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-6 6"/></svg></span>图像数据</h3>
+          <p>PNG 优先, 再试 TIFF 与其他图像 UTI, 最后用 NSImage 兜底</p>
+          <div class="lane-out"><span>fingerprint</span><span>PNG blob</span><span>OCR</span></div>
+        </a>
+        <a class="lane text" href="#types">
+          <h3><span class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 7h14M5 12h10M5 17h12"/></svg></span>文本</h3>
+          <p>非空且不超过 8 MB 的 UTF-8 文本, 交给本地规则分类器</p>
+          <div class="lane-out"><span>link</span><span>path</span><span>code</span><span>markdown</span><span>text</span></div>
+        </a>
+      </div>
+
+      <div class="gate-strip">
+        <span class="gate-pill"><span class="x">×</span>com.eli.Kit.internal</span>
+        <span class="gate-pill"><span class="x">×</span>Concealed / Transient / is-sensitive</span>
+        <span class="gate-pill"><span class="x">×</span>禁用应用</span>
+        <span class="gate-pill"><span class="x">×</span>暂停期间</span>
+        <span class="gate-note">暂停时忽略期间变化, 恢复后不补录</span>
+      </div>
+    </section>
+    <section class="sec" id="types">
+      <div class="sec-head">
+        <div class="eyebrow">02 · 类型</div>
+        <h2>分类器只处理文本</h2>
+        <p class="thesis">顺序固定：链接 → 路径 → 代码 → Markdown → 文本</p>
+      </div>
+
+      <div class="sandbox">
+        <aside class="sample-pane">
+          <div class="pane-head"><span class="mini-label">文本样本</span><span>12 个</span></div>
+          <div class="sample-list" id="sampleList" role="group" aria-label="文本样本"></div>
+          <div class="custom-wrap">
+            <label for="customText">自定义文本</label>
+            <textarea id="customText" spellcheck="false" placeholder="粘贴任何文本"></textarea>
+            <label class="check"><input type="checkbox" id="pathExists" checked>模拟该路径在磁盘存在</label>
+          </div>
+        </aside>
+
+        <div class="result-pane">
+          <div class="outcome" id="typeOutcome" aria-live="polite"></div>
+          <div class="ladder" id="typeLadder" aria-label="判定阶梯"></div>
+          <div class="entry-card" id="typeEntry"></div>
+          <p class="caption">代码只检查前 12,000 个字符, 并忽略 Markdown 行文中的内联代码示例 · 路径判定需要文件真实存在, 网页演示用开关模拟</p>
+        </div>
+      </div>
+
+      <div class="facts">
+        <div class="fact"><b>链接</b><span>整段只能是一个带主机的 http(s) URL, 句中链接仍是文本</span></div>
+        <div class="fact"><b>路径</b><span>单行绝对路径或 file URL, 目标必须在磁盘上存在</span></div>
+        <div class="fact"><b>代码</b><span>JSON、shebang、独立围栏、强语法、独立调用或特征评分 ≥ 3</span></div>
+        <div class="fact"><b>Markdown</b><span>只有可见标记才算, 纯段落仍是纯文本</span></div>
+      </div>
+
+      <div class="compare">
+        <div class="compare-card">
+          <h3><span class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/></svg></span>复制文件</h3>
+          <p>粘贴板带 fileURL, 条目保存 fileURLs 与只读安全作用域书签, 交付时写回文件引用</p>
+          <div class="tags"><span>kind file / image</span><span>isFileBacked</span><span>file_urls</span><span>bookmarks</span></div>
+        </div>
+        <div class="compare-card">
+          <h3><span class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 20V9a3 3 0 0 1 3-3h5"/><path d="m12 3 3 3-3 3"/><circle cx="6" cy="20" r="1.5"/></svg></span>复制路径文本</h3>
+          <p>粘贴板只有字符串, 分类器发现它是存在的路径, 条目只保存 text, 交付时写回文本</p>
+          <div class="tags"><span>kind path</span><span>text</span><span>无书签</span><span>在 Finder 中显示</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="sec" id="files">
+      <div class="sec-head">
+        <div class="eyebrow">03 · 文件</div>
+        <h2>先看数量，再看内容类型</h2>
+        <p class="thesis">文件在文本分类器之前分流, 单个图像文件仍然是文件背书</p>
+      </div>
+
+      <figure class="figure">
+        <div class="figure-scroll">
+          <svg class="decision" viewBox="0 0 900 260" role="img" aria-label="文件类型判定树：多个文件为 file，单个目录为 file，单个图像为 image，其余为 file">
+            <defs>
+              <marker id="arr" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--line-strong)"/></marker>
+              <marker id="arr-file" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--file)"/></marker>
+              <marker id="arr-image" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0 L7,4 L0,8 z" fill="var(--accent)"/></marker>
+            </defs>
+            <rect class="fig-node" x="14" y="103" width="132" height="54" rx="10"/>
+            <text class="fig-text" x="80" y="126" text-anchor="middle">文件引用</text>
+            <text class="fig-sub" x="80" y="143" text-anchor="middle">fileURLs</text>
+            <line class="fig-edge" x1="146" y1="130" x2="188" y2="130" marker-end="url(#arr)"/>
+
+            <polygon class="fig-diamond" points="190,130 260,97 330,130 260,163"/>
+            <text class="fig-text" x="260" y="127" text-anchor="middle">数量 &gt; 1</text>
+            <text class="fig-sub" x="260" y="143" text-anchor="middle">urls.count &gt; 1</text>
+
+            <line class="fig-edge" x1="330" y1="130" x2="378" y2="130" marker-end="url(#arr)"/>
+            <text class="fig-cond" x="348" y="120" text-anchor="middle">否</text>
+            <line class="fig-edge file" x1="260" y1="163" x2="260" y2="210" marker-end="url(#arr-file)"/>
+            <text class="fig-cond" x="269" y="187">是</text>
+
+            <polygon class="fig-diamond" points="380,130 450,97 520,130 450,163"/>
+            <text class="fig-text" x="450" y="127" text-anchor="middle">是目录</text>
+            <text class="fig-sub" x="450" y="143" text-anchor="middle">isDirectory</text>
+
+            <line class="fig-edge" x1="520" y1="130" x2="568" y2="130" marker-end="url(#arr)"/>
+            <text class="fig-cond" x="537" y="120" text-anchor="middle">否</text>
+            <line class="fig-edge file" x1="450" y1="163" x2="450" y2="210" marker-end="url(#arr-file)"/>
+            <text class="fig-cond" x="459" y="187">是</text>
+
+            <polygon class="fig-diamond" points="570,130 640,97 710,130 640,163"/>
+            <text class="fig-text" x="640" y="127" text-anchor="middle">图像 UTI</text>
+            <text class="fig-sub" x="640" y="143" text-anchor="middle">conforms(.image)</text>
+
+            <line class="fig-edge image" x1="640" y1="97" x2="640" y2="62" marker-end="url(#arr-image)"/>
+            <text class="fig-cond" x="649" y="84">是</text>
+            <line class="fig-edge file" x1="640" y1="163" x2="640" y2="210" marker-end="url(#arr-file)"/>
+            <text class="fig-cond" x="649" y="187">否</text>
+
+            <rect class="fig-node out-file" x="190" y="212" width="140" height="32" rx="8"/>
+            <text class="fig-text" x="260" y="232" text-anchor="middle">file · 多个文件</text>
+            <rect class="fig-node out-file" x="380" y="212" width="140" height="32" rx="8"/>
+            <text class="fig-text" x="450" y="232" text-anchor="middle">file · 文件</text>
+            <rect class="fig-node out-file" x="570" y="212" width="140" height="32" rx="8"/>
+            <text class="fig-text" x="640" y="232" text-anchor="middle">file · 文件</text>
+            <rect class="fig-node out-image" x="570" y="28" width="140" height="32" rx="8"/>
+            <text class="fig-text" x="640" y="48" text-anchor="middle">image · 文件背书</text>
+          </svg>
+        </div>
+        <figcaption>kind 只决定图标、行高、预览与菜单, 所有文件条目都保留原始 fileURLs 与书签</figcaption>
+      </figure>
+
+      <div class="scenario-bar" id="scenarioBar" role="group" aria-label="文件场景"></div>
+
+      <div class="palette-stage">
+        <div class="palette" aria-label="Kit 面板界面示意">
+          <div class="pal-head">
+            <div class="pal-search">搜索</div>
+            <div class="pal-pills">
+              <span class="pal-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 7h14M5 12h10M5 17h12"/></svg>全部类型</span>
+              <span class="pal-pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/></svg>剪贴板</span>
+            </div>
+          </div>
+          <div class="pal-body">
+            <div class="pal-list" id="palList" role="list" aria-label="列表"></div>
+            <div class="pal-preview">
+              <div class="pal-content" id="palContent"></div>
+              <div class="pal-info">
+                <div class="info-head">信息</div>
+                <div id="palInfo"></div>
+              </div>
+            </div>
+          </div>
+          <div class="pal-foot">
+            <span class="menu-orb" aria-hidden="true"><span></span></span>
+            <div class="foot-actions">
+              <span class="foot-btn is-paste"><span class="finder" aria-hidden="true">F</span>粘贴到 Finder <kbd>↵</kbd></span>
+              <span class="foot-btn">操作 <kbd>⌘</kbd><kbd>K</kbd></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="caption" id="sceneCaption"></p>
+
+      <div class="file-detail-grid">
+        <div class="detail-card">
+          <h3>条目如何呈现</h3>
+          <div id="fileFacts"></div>
+        </div>
+        <div class="detail-card">
+          <h3>操作菜单</h3>
+          <ul class="menu-list" id="fileMenu"></ul>
+          <p class="menu-note" id="fileMenuNote"></p>
+        </div>
+      </div>
+
+      <div class="compare">
+        <div class="compare-card">
+          <h3><span class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-6 6"/></svg></span>单个图像文件</h3>
+          <p>kind 为 image, 列表用 92 px 图片卡, 预览显示真实图像, 但仍交付原始文件引用, 不是 PNG 字节</p>
+          <div class="tags"><span>row 92</span><span>OCR 可索引</span><span>可钉到屏幕上</span><span>file URL</span></div>
+        </div>
+        <div class="compare-card">
+          <h3><span class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/></svg></span>多个文件</h3>
+          <p>不论成员类型, kind 一律为 file, 类型显示多个文件, 预览改为 50 px 一行的文件集合</p>
+          <div class="tags"><span>kind file</span><span>typeLabel 多个文件</span><span>Count</span><span>按原顺序交付</span></div>
+        </div>
+      </div>
+    </section>
+    <section class="sec" id="states">
+      <div class="sec-head">
+        <div class="eyebrow">04 · 状态</div>
+        <h2>状态改变交付结果</h2>
+        <p class="thesis">路径是历史身份, 书签只是访问凭证</p>
+      </div>
+
+      <div class="state-chips" id="stateChips" role="group" aria-label="文件状态"></div>
+
+      <div class="state-layout">
+        <div class="state-card" id="stateCard" aria-live="polite"></div>
+        <div class="state-visual" id="stateVisual" aria-label="状态下的界面示意"></div>
+      </div>
+
+      <div class="cred-flow">
+        <div class="cred-step">
+          <span class="n">01</span>
+          <h3>捕获</h3>
+          <p>先把原始 NSURL 转成只读安全作用域书签, 再保存标准化路径与书签</p>
+        </div>
+        <div class="cred-step">
+          <span class="n">02</span>
+          <h3>预览</h3>
+          <p>interactive 为 false, 只解析书签与 stat, 失败静默, 不弹授权面板</p>
+        </div>
+        <div class="cred-step">
+          <span class="n">03</span>
+          <h3>交付</h3>
+          <p>按记录路径重新铸造书签, 不跟随移动到别处的旧书签, 权限不足时才弹面板</p>
+        </div>
+        <div class="cred-step">
+          <span class="n">04</span>
+          <h3>清理</h3>
+          <p>书签随条目删除、撤销或保留期清理一起消失</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec" id="paste">
+      <div class="sec-head">
+        <div class="eyebrow">05 · 交付</div>
+        <h2>三道闸门都通过，才隐藏面板</h2>
+        <p class="thesis">权限、载荷、目标按顺序检查, 任一步失败都不会悄悄吞掉操作</p>
+      </div>
+
+      <div class="gate-figure" aria-label="交付闸门顺序">
+        <div class="gate-box"><span class="g-num">01</span><span class="g-name">权限</span><span class="g-note">粘贴需要辅助功能, 复制不需要</span></div>
+        <div class="gate-box"><span class="g-num">02</span><span class="g-name">载荷</span><span class="g-note">文本、PNG、文件引用或文件租约</span></div>
+        <div class="gate-box"><span class="g-num">03</span><span class="g-name">隐藏</span><span class="g-note">载荷准备好后才隐藏面板</span></div>
+        <div class="gate-box"><span class="g-num">04</span><span class="g-name">目标</span><span class="g-note">激活并等待最多 800 ms</span></div>
+        <div class="gate-box"><span class="g-num">05</span><span class="g-name">写入与交付</span><span class="g-note">写剪贴板并合成 ⌘V</span></div>
+        <div class="gate-box"><span class="g-num">06</span><span class="g-name">历史</span><span class="g-note">成功后按设置更新顺序与次数</span></div>
+      </div>
+
+      <div class="sim">
+        <div class="sim-top">
+          <div class="mode-tabs" role="tablist" aria-label="交付方式">
+            <button class="mode-tab" type="button" role="tab" data-mode="paste" aria-selected="true">粘贴</button>
+            <button class="mode-tab" type="button" role="tab" data-mode="keep" aria-selected="false">保持窗口</button>
+            <button class="mode-tab" type="button" role="tab" data-mode="copy" aria-selected="false">复制</button>
+          </div>
+          <label class="sim-payload">载荷
+            <select id="simPayload">
+              <option value="file">文件引用 · 季度报告.pdf</option>
+              <option value="imageFile">图片文件 · 封面.png</option>
+              <option value="image">托管图像 · 截屏</option>
+              <option value="text">文本 · 发布说明</option>
+            </select>
+          </label>
+          <div class="sim-toggles">
+            <label class="switch" id="swPermission"><input type="checkbox" id="simPermission" checked>辅助功能</label>
+            <label class="switch" id="swFile"><input type="checkbox" id="simFile" checked>文件路径可用</label>
+            <label class="switch" id="swTarget"><input type="checkbox" id="simTarget" checked>目标可激活</label>
+            <label class="switch" id="swHistory"><input type="checkbox" id="simHistory" checked>操作后更新历史</label>
+          </div>
+          <button class="primary" type="button" id="runSim">运行粘贴</button>
+        </div>
+        <ol class="sim-steps" id="simSteps" aria-label="交付步骤"></ol>
+        <div class="sim-outcome" id="simOutcome" aria-live="polite"></div>
+      </div>
+
+      <div class="alert-grid">
+        <div class="alert-card">
+          <span class="a-when">单文件不可用</span>
+          <span class="a-text">文件不可用：季度报告.pdf</span>
+          <p>交互式交付或显示时, 所有 URL 都可交付之前才提示</p>
+        </div>
+        <div class="alert-card">
+          <span class="a-when">整组不可用</span>
+          <span class="a-text">文件不可用</span>
+          <p>多文件组没有任何成员可读, 准备阶段直接返回</p>
+        </div>
+        <div class="alert-card">
+          <span class="a-when">授权失败</span>
+          <span class="a-text">无法访问 季度报告.pdf</span>
+          <p>授权面板里选了别的文件, 或授权后仍无读权限</p>
+        </div>
+        <div class="alert-card">
+          <span class="a-when">写入失败</span>
+          <span class="a-text">无法复制文件</span>
+          <p>writeObjects 没有把文件引用写进剪贴板</p>
+        </div>
+        <div class="alert-card">
+          <span class="a-when">权限缺失</span>
+          <span class="a-text">系统辅助功能授权提示</span>
+          <p>粘贴前触发, 复制不需要辅助功能</p>
+        </div>
+      </div>
+    </section>
+    <section class="sec" id="matrix">
+      <div class="sec-head">
+        <div class="eyebrow">06 · 测试</div>
+        <h2>每条规则都有断言</h2>
+        <p class="thesis">分类、文件生命周期与捕获边界来自现有测试</p>
+      </div>
+
+      <div class="matrix-tabs" role="tablist" aria-label="测试矩阵">
+        <button class="matrix-tab" type="button" role="tab" data-matrix="text" aria-selected="false">文本分类</button>
+        <button class="matrix-tab" type="button" role="tab" data-matrix="file" aria-selected="true">文件生命周期</button>
+        <button class="matrix-tab" type="button" role="tab" data-matrix="capture" aria-selected="false">捕获边界</button>
+      </div>
+
+      <div class="table-wrap" data-matrix-panel="text" hidden>
+        <table>
+          <thead><tr><th>输入</th><th>样例</th><th>结果</th><th>关键条件</th></tr></thead>
+          <tbody>
+            <tr><td>独立链接</td><td><code>https://example.com/docs?q=1</code></td><td class="result-ok">link</td><td>整段无空白, 带主机</td></tr>
+            <tr><td>句中链接</td><td><code>Read https://example.com before shipping</code></td><td class="result-no">text</td><td>出现空白即失败</td></tr>
+            <tr><td>存在的路径</td><td><code>/Users/eli/Documents/季度报告.pdf</code></td><td class="result-ok">path</td><td>单行绝对路径, stat 成功</td></tr>
+            <tr><td>不存在的路径</td><td><code>/Users/eli/Documents/不存在.txt</code></td><td class="result-no">text</td><td>文件不存在, 不误判</td></tr>
+            <tr><td>JSON 对象</td><td><code>{"name":"Kit","enabled":true}</code></td><td class="result-ok">code</td><td>JSONSerialization 可解析</td></tr>
+            <tr><td>Swift 声明</td><td><code>struct Greeting { let message: String }</code></td><td class="result-ok">code</td><td>强语法匹配</td></tr>
+            <tr><td>独立围栏</td><td><code>```swift ... ```</code></td><td class="result-ok">code</td><td>去掉围栏后为空</td></tr>
+            <tr><td>Markdown 文章</td><td>标题 + 行内代码 + 列表</td><td class="result-ok">markdown</td><td>存在可见 Markdown 标记</td></tr>
+            <tr><td>代码词句子</td><td><code>Use const when declaring a stable value</code></td><td class="result-no">text</td><td>特征评分不足 3</td></tr>
+            <tr><td>普通中文</td><td>测试、剪贴板与搜索</td><td class="result-no">text</td><td>没有结构标记</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-wrap" data-matrix-panel="file">
+        <table>
+          <thead><tr><th>场景</th><th>结果</th><th>断言</th><th>来源</th></tr></thead>
+          <tbody>
+            <tr><td>正常文件</td><td class="result-ok">可用</td><td>租约指向记录路径, 能读原始字节, 历史路径不变</td><td><code>FileLifecycleTests</code></td></tr>
+            <tr><td>文件被移动</td><td class="result-no">不可用</td><td>书签不能替代移动后的 inode, 目的地文件不被跟随</td><td><code>FileLifecycleTests</code></td></tr>
+            <tr><td>文件永久删除</td><td class="result-no">不可用</td><td>删除后不取得租约, fileURLs 保持原值</td><td><code>FileLifecycleTests</code></td></tr>
+            <tr><td>权限拒绝且非交互</td><td class="result-no">不可用</td><td>不启动授权面板, 只返回 nil</td><td><code>FileLifecycleTests</code></td></tr>
+            <tr><td>文件组部分可用</td><td class="result-ok">部分交付</td><td>只租用幸存成员, 保持原顺序, 历史仍保留全部</td><td><code>FileLifecycleTests</code></td></tr>
+            <tr><td>同路径替换</td><td class="result-ok">新字节</td><td>原路径的新文件优先于移走的旧书签</td><td><code>FileLifecycleTests</code></td></tr>
+            <tr><td>删除后重建</td><td class="result-ok">新字节</td><td>按当前路径重新铸造, 不读取已删除内容</td><td><code>FileLifecycleTests</code></td></tr>
+            <tr><td>重开数据库</td><td class="result-ok">保留</td><td>书签仍在, 两个文件都能租用, 顺序与路径不变</td><td><code>FileLifecycleTests</code></td></tr>
+            <tr><td>缩略图替换</td><td class="result-ok">版本刷新</td><td>替换或删除会改变版本, 旧解码不能被复用</td><td><code>FileLifecycleTests</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-wrap" data-matrix-panel="capture" hidden>
+        <table>
+          <thead><tr><th>条件</th><th>结果</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>Concealed / Transient / is-sensitive</td><td class="result-no">不捕获</td><td>密码管理器与系统敏感复制</td></tr>
+            <tr><td>内部写入标记</td><td class="result-no">不捕获</td><td>Kit 自身写剪贴板时打标</td></tr>
+            <tr><td>禁用应用</td><td class="result-no">不捕获</td><td>按来源 bundle ID 排除</td></tr>
+            <tr><td>Kit 选择标记</td><td class="result-ok">可捕获</td><td>来源改为 Kit, 用于界面内选择复制</td></tr>
+            <tr><td>未知来源</td><td class="result-ok">可捕获</td><td>没有 bundle ID 时不误杀</td></tr>
+            <tr><td>空白文本</td><td class="result-no">不捕获</td><td>Unicode 空白全部排除</td></tr>
+            <tr><td>文本超过 8 MB</td><td class="result-no">不捕获</td><td>按 UTF-8 字节计算</td></tr>
+            <tr><td>文件与远程 URL 混合</td><td class="result-no">整次放弃</td><td>不退回图像或文本</td></tr>
+            <tr><td>非 PNG 图像解码失败</td><td class="result-ok">回退文本</td><td>保留原始文本</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="foot-grid">
+      <div>
+        <h3>规则来源</h3>
+        <ul class="ref-list">
+          <li>ClipboardCapturePipeline.swift</li>
+          <li>ClipboardTextClassifier.swift</li>
+          <li>ClipboardStore.swift</li>
+          <li>ClipboardFileAccess.swift</li>
+          <li>ClipboardTableCells.swift</li>
+          <li>ClipboardPreview.swift</li>
+          <li>Paster.swift</li>
+          <li>PasteTransaction.swift</li>
+        </ul>
+      </div>
+      <div>
+        <h3>说明</h3>
+        <p>页面中的面板、菜单与提示为界面示意, 数据来自当前实现与测试, 字体与图标为网页近似</p>
+      </div>
+    </div>
+  </footer>
+</div>
+<script>
+(() => {
+'use strict';
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+const esc = value => String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const fmt = n => new Intl.NumberFormat('zh-CN').format(n);
+
+function headTruncate(text, max) {
+  const chars = [...text];
+  if (chars.length <= max) return text;
+  return '…' + chars.slice(-max).join('');
+}
+function middleTruncate(text, max) {
+  const chars = [...text];
+  if (chars.length <= max) return text;
+  const left = Math.ceil(max / 2) - 1;
+  const right = Math.floor(max / 2) - 1;
+  return chars.slice(0, left).join('') + '…' + chars.slice(-right).join('');
+}
+function countWords(text) {
+  let count = 0, inWord = false;
+  for (const ch of text) {
+    const separator = /\s/.test(ch);
+    if (!separator && !inWord) count += 1;
+    inWord = !separator;
+  }
+  return count;
+}
+
+const SVG = {
+  text: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 7h14M5 12h10M5 17h12"/></svg>',
+  markdown: '<svg viewBox="0 0 24 24" fill="none"><text x="12" y="18" text-anchor="middle" font-size="18" font-family="ui-monospace,monospace" font-weight="600" fill="currentColor">#</text></svg>',
+  code: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m8 7-5 5 5 5M16 7l5 5-5 5"/></svg>',
+  link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m10.5 13.5 3-3"/><path d="M9 16.5 7.5 18a3.5 3.5 0 0 1-5-5l3-3a3.5 3.5 0 0 1 5 0"/><path d="M15 7.5 16.5 6a3.5 3.5 0 0 1 5 5l-3 3a3.5 3.5 0 0 1-5 0"/></svg>',
+  path: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20V9a3 3 0 0 1 3-3h5"/><path d="m12 3 3 3-3 3"/><circle cx="6" cy="20" r="1.5"/></svg>',
+  image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-6 6"/></svg>',
+  file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/></svg>',
+  folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  paste: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6v3H9z"/><path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>',
+  pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l-1 6 4 3v2H6v-2l4-3z"/><path d="M12 14v7"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>',
+  warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 21h20z"/><path d="M12 9v5M12 17v1"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"/></svg>'
+};
+
+function kindTile(kind) {
+  return '<span class="tile" aria-hidden="true">' + (SVG[kind] || SVG.text) + '</span>';
+}
+function fileGlyph(type, big = false) {
+  const cls = big ? 'fileglyph big' : 'fileglyph';
+  if (type === 'folder') return '<span class="' + cls + ' folder" aria-hidden="true">' + SVG.folder + '</span>';
+  if (type === 'image') return '<span class="' + cls + ' image" aria-hidden="true">' + SVG.image + '</span>';
+  if (type === 'pdf') return '<span class="' + cls + ' pdf" aria-hidden="true">' + SVG.file + '<span class="glyph-label">PDF</span></span>';
+  return '<span class="' + cls + '" aria-hidden="true">' + SVG.file + '</span>';
+}
+let artSeq = 0;
+function imageArt() {
+  const id = 'art-' + (++artSeq);
+  return '<svg class="art" viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice" role="img" aria-label="图片预览示意">' +
+    '<defs><linearGradient id="' + id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#78b3aa"/><stop offset="1" stop-color="#e8c7a8"/></linearGradient></defs>' +
+    '<rect width="160" height="100" fill="url(#' + id + ')"/>' +
+    '<rect x="18" y="16" width="58" height="7" rx="3.5" fill="#fff" opacity=".72"/>' +
+    '<rect x="18" y="30" width="40" height="5" rx="2.5" fill="#fff" opacity=".42"/>' +
+    '<circle cx="120" cy="29" r="14" fill="#fff" opacity=".5"/>' +
+    '<path d="M0 82c24-18 48-8 70-18s46-4 90 12v24H0z" fill="#20364b" opacity=".18"/></svg>';
+}
+
+const STAGES = [
+  {
+    name: '观察',
+    does: ['Timer 每 100 ms 比较一次 changeCount', '变化时立刻记录来源应用 bundle ID 与 captureGeneration', '快照读取放到 detached task, 再按观察顺序串行入库'],
+    stops: ['changeCount 没变', '面板处于暂停状态', '来源应用在禁用列表', '命中敏感或内部标记'],
+    refs: ['ClipboardManager.swift:29', 'ClipboardManager.swift:50', 'ClipboardManager.swift:62']
+  },
+  {
+    name: '闸门',
+    does: ['检查粘贴板类型、来源应用与禁用应用列表', 'Kit 自身写入的 internal 标记直接拒绝', '界面内选择复制带 selection 标记, 来源记为 Kit'],
+    stops: ['com.eli.Kit.internal', 'org.nspasteboard.ConcealedType', 'org.nspasteboard.TransientType', 'com.apple.is-sensitive', '禁用应用'],
+    refs: ['ClipboardCapturePipeline.swift:74', 'ClipboardCapturePipeline.swift:87', 'CaptureBoundaryTests.swift']
+  },
+  {
+    name: '快照',
+    does: ['读取文本、文件 URL、PNG 与 TIFF 等图像表示', '文件 URL 同时抓取只读安全作用域书签', '图像 UTI 之外再用 NSImage 兜底'],
+    stops: ['读取期间 changeCount 变化', '文件类型没有产出任何 URL', '快照为空时等待下一次 tick'],
+    refs: ['ClipboardManager.swift:130', 'ClipboardManager.swift:143', 'ClipboardManager.swift:180']
+  },
+  {
+    name: '归一化',
+    does: ['顺序固定为文件引用, 图像, 文本', '文件 URL 全部标准化, 图像统一为 PNG', '文本按 UTF-8 字节检查 8 MB 上限'],
+    stops: ['文件列表里混入远程 URL', '文本只有 Unicode 空白', '文本超过 8 MB', '图像解码失败且没有文本'],
+    refs: ['ClipboardCapturePipeline.swift:33', 'ClipboardCapturePipeline.swift:42', 'ClipboardCapturePipeline.swift:50']
+  },
+  {
+    name: '分类',
+    does: ['文件先按数量、目录、图像 UTI 定 kind', '图像计算像素指纹并写入托管 PNG', '文本调用 ClipboardTextClassifier 的本地规则'],
+    stops: ['文件 kind 不经过文本分类器', '链接、路径、代码、Markdown 依次短路', '都没有命中才落到文本'],
+    refs: ['ClipboardStore.swift:1178', 'ClipboardTextClassifier.swift:18', 'ClipboardTextClassifier.swift:28']
+  },
+  {
+    name: '落库',
+    does: ['addText 与 addFiles 同步插入, addImage 先算指纹再写盘', '相同内容按来源应用去重, 图像按指纹去重', '重新复制只更新时间、次数与来源, 不新建行'],
+    stops: ['generation 已过期', 'SQLite 插入失败', '图像写盘失败后删除临时文件'],
+    refs: ['ClipboardStore.swift:228', 'ClipboardStore.swift:242', 'ClipboardStore.swift:275', 'ClipboardStore.swift:320']
+  }
+];
+
+function renderStage(index) {
+  const stage = STAGES[index];
+  if (!stage) return;
+  $$('.stage').forEach(button => button.setAttribute('aria-pressed', String(Number(button.dataset.stage) === index)));
+  const html = '<div class="detail-block">' +
+    '<div class="mini-label">' + esc(stage.name) + ' · 做什么</div>' +
+    '<ul class="detail-list">' + stage.does.map(item => '<li>' + esc(item) + '</li>').join('') + '</ul>' +
+    '</div><div class="detail-block">' +
+    '<div class="mini-label">停止或改道</div>' +
+    '<ul class="detail-list reject">' + stage.stops.map(item => '<li>' + esc(item) + '</li>').join('') + '</ul>' +
+    '<div class="ref-row">' + stage.refs.map(ref => '<span class="ref">' + esc(ref) + '</span>').join('') + '</div>' +
+    '</div>';
+  $('#stageDetail').innerHTML = html;
+}
+
+$$('.stage').forEach(button => {
+  button.addEventListener('click', () => renderStage(Number(button.dataset.stage)));
+});
+renderStage(0);
+
+const tocLinks = $$('.toc a');
+const sections = tocLinks.map(link => $(link.getAttribute('href'))).filter(Boolean);
+let spyQueued = false;
+function updateSpy() {
+  spyQueued = false;
+  const point = window.scrollY + 130;
+  let active = sections[0];
+  for (const section of sections) {
+    if (section.offsetTop <= point) active = section;
+  }
+  tocLinks.forEach(link => link.classList.toggle('active', link.getAttribute('href') === '#' + active.id));
+}
+function queueSpy() {
+  if (spyQueued) return;
+  spyQueued = true;
+  requestAnimationFrame(updateSpy);
+}
+window.addEventListener('scroll', queueSpy, { passive: true });
+window.addEventListener('resize', queueSpy);
+updateSpy();
+
+const SAMPLE_LIMIT = 12000;
+const MAX_TEXT_BYTES = 8 * 1024 * 1024;
+const CLOSED_FENCE = /^[ \t]{0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?^[ \t]{0,3}\1[ \t]*$/gm;
+const OPEN_FENCE = /^[ \t]{0,3}(`{3,}|~{3,})/m;
+const INLINE_CODE = /(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g;
+const STRONG_SYNTAX = /^\s*(?:(?:import\s+.+(?:\s+from\s+)?["'<])|(?:export\s+(?:default\s+)?)|(?:(?:const|let|var)\s+[A-Za-z_$][A-Za-z0-9_$]*\s*(?::[^=\n]+)?=)|(?:(?:func|function|def|class|struct|enum|protocol|extension|interface|type|fn)\s+[A-Za-z_][A-Za-z0-9_]*)|(?:(?:public|private|protected|internal|open|static|final|pub)\s+(?:class|struct|enum|func|fn|let|var|const)\b)|(?:#include\s*[<"])|(?:(?:SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER)\b.+\b(?:FROM|INTO|TABLE|SET)\b))/m;
+const STANDALONE_CALL = /^\s*[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*\s*\([^\n]*\)\s*;?\s*$/;
+const MARKUP = /<[A-Za-z][^>]*>[\s\S]*<\/[A-Za-z][^>]*>/;
+const MD_MARKERS = [
+  /^\s{0,3}#{1,6}\s+\S/m,
+  /^\s{0,3}(?:[-*+]|\d+[.)])\s+\S/m,
+  /^\s{0,3}>\s?/m,
+  /^\s{0,3}(?:```|~~~)/m,
+  /`[^`\n]+`/,
+  /!?\[[^\]\n]*\]\([^)\n]+\)/,
+  /(?:\*\*|__)[^\s*_][\s\S]*?(?:\*\*|__)/,
+  /^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/m,
+  /^\s*\|.+\|\s*$/m,
+  /<[A-Za-z][^>]*>/
+];
+
+function checkLink(text) {
+  if (!text) return {ok:false, why:'空文本'};
+  if (/\s/.test(text)) return {ok:false, why:'包含空白字符'};
+  let url;
+  try { url = new URL(text); } catch { return {ok:false, why:'不是合法 URL'}; }
+  if (!/^https?:$/.test(url.protocol)) return {ok:false, why:'scheme 不是 http(s)'};
+  if (!url.host) return {ok:false, why:'没有主机'};
+  return {ok:true, why:'整段是单一 http(s) URL'};
+}
+function checkPath(text, exists) {
+  if (!text) return {ok:false, why:'空文本'};
+  if (/[\r\n]/.test(text)) return {ok:false, why:'包含换行'};
+  if (/^file:\/\//i.test(text)) {
+    let url;
+    try { url = new URL(text); } catch { return {ok:false, why:'file URL 无法解析'}; }
+    if (url.host && url.host !== 'localhost') return {ok:false, why:'file URL 主机不是 localhost'};
+  } else if (!(text.startsWith('/') || text.startsWith('~/'))) {
+    return {ok:false, why:'不是绝对路径或 file URL'};
+  }
+  if (!exists) return {ok:false, why:'路径在磁盘上不存在'};
+  return {ok:true, why:'单行绝对路径且目标存在'};
+}
+function stripFenced(text) {
+  let result = text.replace(CLOSED_FENCE, '\n');
+  const match = result.match(OPEN_FENCE);
+  if (match) result = result.slice(0, match.index);
+  return result;
+}
+function stripMarkdownCode(text) {
+  return stripFenced(text).replace(INLINE_CODE, ' ');
+}
+function checkCode(raw) {
+  const sample = raw.slice(0, SAMPLE_LIMIT).trim();
+  if (sample.length < 4) return {ok:false, detail:'样本不足 4 个字符'};
+  if (sample.startsWith('#!')) return {ok:true, detail:'shebang 匹配'};
+  const first = sample[0];
+  if (first === '{' || first === '[') {
+    try {
+      const parsed = JSON.parse(sample);
+      if (parsed && typeof parsed === 'object') return {ok:true, detail:'JSON 对象或数组可解析'};
+    } catch {}
+  }
+  if ((sample.startsWith('```') || sample.startsWith('~~~')) && stripFenced(sample).trim() === '') {
+    return {ok:true, detail:'整段只有围栏代码块'};
+  }
+  const body = stripMarkdownCode(sample).trim();
+  if (body.length < 4) return {ok:false, detail:'去掉代码标记后样本不足'};
+  if (STRONG_SYNTAX.test(body)) return {ok:true, detail:'匹配强语法特征'};
+  if (STANDALONE_CALL.test(body)) return {ok:true, detail:'整段是独立调用'};
+  if (MARKUP.test(body)) return {ok:true, detail:'匹配 HTML 标记'};
+  let score = 0;
+  if (body.includes('{') && body.includes('}')) score += 1;
+  if (body.includes('=>') || body.includes('::') || body.includes('?.')) score += 1;
+  if (/;\s*$/m.test(body)) score += 1;
+  if (/\b(?:return|await|throw|guard|switch|case|while|foreach|impl|lambda)\b/.test(body)) score += 1;
+  if (/^\s{2,}\S+/m.test(body) && body.includes('\n')) score += 1;
+  if (/\b[A-Za-z_$][A-Za-z0-9_$]*\s*\([^\n)]*\)/.test(body)) score += 1;
+  return {ok: score >= 3, detail: '特征评分 ' + score + '/6' + (score >= 3 ? ' ≥ 3' : ' < 3')};
+}
+function checkMarkdown(raw) {
+  if (raw.length > MAX_TEXT_BYTES) return {ok:false, detail:'超出渲染上限'};
+  const hit = MD_MARKERS.some(pattern => pattern.test(raw));
+  return {ok:hit, detail: hit ? '检测到可见 Markdown 标记' : '没有可见 Markdown 标记'};
+}
+function classifyText(raw, pathExists) {
+  const text = raw.trim();
+  const rules = [
+    {key:'link', name:'链接', rule:'整段单一 http(s) URL'},
+    {key:'path', name:'路径', rule:'单行绝对路径, 目标存在'},
+    {key:'code', name:'代码', rule:'强语法 / JSON / 围栏 / 标记 / 评分 ≥ 3'},
+    {key:'markdown', name:'Markdown', rule:'存在可见 Markdown 标记'},
+    {key:'text', name:'文本', rule:'以上都不命中'}
+  ];
+  if (!text) {
+    return {kind:null, reason:'空白文本在归一化阶段被丢弃', trace: rules.map(item => ({...item, pass:false, skipped:true, detail:'未进入分类器'}))};
+  }
+  if (new TextEncoder().encode(raw).length > MAX_TEXT_BYTES) {
+    return {kind:null, reason:'UTF-8 字节超过 8 MB, 不捕获', trace: rules.map(item => ({...item, pass:false, skipped:true, detail:'未进入分类器'}))};
+  }
+  const link = checkLink(text);
+  const path = checkPath(text, pathExists);
+  const code = checkCode(raw);
+  const markdown = checkMarkdown(raw);
+  let kind = 'text';
+  let stop = 4;
+  if (link.ok) { kind = 'link'; stop = 0; }
+  else if (path.ok) { kind = 'path'; stop = 1; }
+  else if (code.ok) { kind = 'code'; stop = 2; }
+  else if (markdown.ok) { kind = 'markdown'; stop = 3; }
+  const details = [link.why, path.why, code.detail, markdown.detail, '以上都不命中, 落到纯文本'];
+  const trace = rules.map((item, index) => {
+    if (index < stop) return {...item, pass:false, detail:details[index]};
+    if (index === stop) return {...item, pass:true, detail:details[index]};
+    return {...item, pass:false, skipped:true, detail:'前序命中, 不再执行'};
+  });
+  return {kind, trace};
+}
+
+const TYPE_LABEL = {text:'文本', markdown:'Markdown', code:'代码', link:'链接', path:'路径', image:'图像', file:'文件'};
+const STORAGE = {
+  text:'存储在 text 字段, 预览显示原文',
+  markdown:'存储在 text 字段, 预览在设置开启时渲染 Markdown',
+  code:'存储在 text 字段, 预览使用代码排版',
+  link:'存储在 text 字段, 不下载页面内容',
+  path:'存储在 text 字段, 不产生 fileURLs 或书签'
+};
+const SAMPLES = [
+  {id:'link', label:'独立链接', text:'https://example.com/docs?q=1', source:'Safari', icon:'link'},
+  {id:'link-prose', label:'句中链接', text:'Read https://example.com before shipping', source:'备忘录', icon:'link'},
+  {id:'path', label:'存在的路径', text:'/Users/eli/Documents/季度报告.pdf', source:'终端', icon:'path', exists:true},
+  {id:'path-missing', label:'不存在的路径', text:'/Users/eli/Documents/不存在.txt', source:'终端', icon:'path', exists:false},
+  {id:'json', label:'JSON 对象', text:'{\n  "name": "Kit",\n  "enabled": true\n}', source:'Xcode', icon:'code'},
+  {id:'js', label:'JavaScript 声明', text:'const labels = items.map((item) => item.name)', source:'VS Code', icon:'code'},
+  {id:'swift', label:'Swift 声明', text:'struct Greeting {\n    let message: String\n}', source:'Xcode', icon:'code'},
+  {id:'fence', label:'围栏代码块', text:'```swift\nlet answer = 42\n```', source:'GitHub', icon:'code'},
+  {id:'md', label:'Markdown 文章', text:'# Release notes\n\nRun `npm test` before merging\n\n- Ship the build', source:'备忘录', icon:'markdown'},
+  {id:'two-links', label:'两个链接加说明', text:'https://example.com and https://openai.com', source:'备忘录', icon:'link'},
+  {id:'prose', label:'普通中文', text:'测试、剪贴板与搜索', source:'备忘录', icon:'text'},
+  {id:'code-prose', label:'代码词句子', text:'Use const when declaring a stable value', source:'备忘录', icon:'text'}
+];
+const typeState = {sampleId:'md', source:'备忘录'};
+
+function snippet(text) {
+  return text.replace(/\s+/g, ' ').trim();
+}
+function renderSamples() {
+  const list = $('#sampleList');
+  list.innerHTML = SAMPLES.map(sample => {
+    const active = typeState.sampleId === sample.id;
+    return '<button class="sample" type="button" data-sample="' + sample.id + '" aria-pressed="' + active + '">' +
+      kindTile(sample.icon) +
+      '<span><span class="s-label">' + esc(sample.label) + '</span><span class="s-text">' + esc(snippet(sample.text)) + '</span></span>' +
+      '</button>';
+  }).join('');
+  const active = list.querySelector('.sample[aria-pressed="true"]');
+  if (active) {
+    const listRect = list.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    const offset = activeRect.top - listRect.top;
+    if (offset < 0 || offset + activeRect.height > list.clientHeight) {
+      list.scrollTop += offset - 6;
+    }
+  }
+  $$('.sample', list).forEach(button => {
+    button.addEventListener('click', () => {
+      const sample = SAMPLES.find(item => item.id === button.dataset.sample);
+      if (!sample) return;
+      typeState.sampleId = sample.id;
+      typeState.source = sample.source;
+      $('#customText').value = sample.text;
+      $('#pathExists').checked = sample.exists !== false;
+      renderSamples();
+      renderType();
+    });
+  });
+}
+function rowTitleFor(kind, text) {
+  if (kind === 'link') {
+    try {
+      const url = new URL(text.trim());
+      let title = url.host.toLowerCase().startsWith('www.') ? url.host.slice(4) : url.host;
+      if (url.port) title += ':' + url.port;
+      if (url.pathname !== '/') title += url.pathname;
+      if (url.search) title += '?' + url.search.slice(1);
+      if (url.hash) title += '#' + url.hash.slice(1);
+      return title;
+    } catch { return text; }
+  }
+  if (kind === 'path') return headTruncate(text.trim(), 48);
+  const firstLine = text.split('\n')[0].trim();
+  const visible = [...firstLine].slice(0, 200).join('');
+  return firstLine.length > 200 ? visible + '…' : visible;
+}
+function inlineMarkdown(line) {
+  return line.split('`').map((part, index) => index % 2 ? '<code>' + esc(part) + '</code>' : esc(part)).join('');
+}
+function markdownPreview(raw) {
+  const lines = raw.split('\n').slice(0, 30);
+  let html = '';
+  let inFence = false;
+  for (const line of lines) {
+    if (/^\s*```/.test(line)) { inFence = !inFence; continue; }
+    if (inFence) { html += '<div class="md-code">' + esc(line) + '</div>'; continue; }
+    if (/^#{1,6}\s/.test(line)) { html += '<div class="md-h">' + inlineMarkdown(line.replace(/^#{1,6}\s/, '')) + '</div>'; continue; }
+    if (/^\s*[-*+]\s/.test(line)) { html += '<div class="md-li">' + inlineMarkdown(line.replace(/^\s*[-*+]\s/, '')) + '</div>'; continue; }
+    if (line.trim()) html += '<p class="md-p">' + inlineMarkdown(line) + '</p>';
+  }
+  return html || '<p class="preview-note">没有可预览文本</p>';
+}
+function renderType() {
+  const raw = $('#customText').value;
+  const exists = $('#pathExists').checked;
+  const result = classifyText(raw, exists);
+  const outcome = $('#typeOutcome');
+  const ladder = $('#typeLadder');
+  const entry = $('#typeEntry');
+  if (!result.kind) {
+    outcome.className = 'outcome warn';
+    outcome.innerHTML = kindTile('warning') + '<div><span class="kicker">判定结果</span><h3>不捕获 <code>nil</code></h3><p>' + esc(result.reason) + '</p></div>';
+  } else {
+    outcome.className = 'outcome';
+    outcome.innerHTML = kindTile(result.kind) + '<div><span class="kicker">判定结果</span><h3>' + esc(TYPE_LABEL[result.kind]) + ' <code>' + esc(result.kind) + '</code></h3><p>' + esc(STORAGE[result.kind]) + '</p></div>';
+  }
+  ladder.innerHTML = result.trace.map((item, index) => {
+    const cls = item.pass ? 'pass' : item.skipped ? 'skip' : '';
+    const label = item.skipped ? '跳过' : item.pass ? (item.key === 'text' ? '兜底' : '命中') : '未命中';
+    return '<div class="ladder-row ' + cls + '">' +
+      '<span class="rung">' + String(index + 1).padStart(2, '0') + '</span>' +
+      '<span><span class="rung-name">' + esc(item.name) + '</span><span class="rung-rule">' + esc(item.rule) + '</span></span>' +
+      '<span class="status-tag ' + (item.pass ? 'pass' : item.skipped ? 'skip' : 'fail') + '">' + label + '</span>' +
+      '<span class="rung-detail">' + esc(item.detail) + '</span>' +
+      '</div>';
+  }).join('');
+  if (!result.kind) {
+    entry.hidden = true;
+    entry.innerHTML = '';
+    return;
+  }
+  entry.hidden = false;
+  const kind = result.kind;
+  const title = rowTitleFor(kind, raw);
+  const source = typeState.sampleId ? typeState.source : '示例';
+  const chars = raw.length;
+  const words = countWords(raw);
+  let preview = '';
+  if (kind === 'markdown') preview = markdownPreview(raw);
+  else if (kind === 'code') preview = '<pre class="preview-code">' + esc(raw.slice(0, 900)) + '</pre>';
+  else if (kind === 'path') preview = '<div class="preview-path">' + esc(raw.trim()) + '</div>';
+  else preview = '<p class="preview-text">' + esc(raw.slice(0, 900)) + '</p>';
+  const info = [
+    ['来源', source],
+    ['类型', TYPE_LABEL[kind]],
+    ['字符数', fmt(chars)],
+    ['词数', fmt(words)],
+    ['复制时间', '今天 14:32']
+  ];
+  entry.innerHTML =
+    '<div class="entry-row">' + kindTile(kind) +
+      '<span class="row-title" title="' + esc(title) + '">' + esc(title) + '</span>' +
+      '<span class="row-meta"><span class="status-tag skip">行高 36 px</span><span class="status-tag skip">' + esc(TYPE_LABEL[kind]) + '</span></span>' +
+    '</div>' +
+    '<div class="entry-cols"><div class="entry-preview">' + preview + '</div>' +
+    '<div class="entry-info">' + info.map(([label, value]) => '<div class="info-row"><span class="i-label">' + esc(label) + '</span><span class="i-value">' + esc(value) + '</span></div>').join('') + '</div></div>';
+}
+
+$('#customText').addEventListener('input', () => {
+  typeState.sampleId = null;
+  typeState.source = '示例';
+  renderSamples();
+  renderType();
+});
+$('#pathExists').addEventListener('change', renderType);
+
+renderSamples();
+$('#customText').value = SAMPLES.find(item => item.id === typeState.sampleId).text;
+$('#pathExists').checked = true;
+renderType();
+
+const SCENARIOS = {
+  single: {
+    label: '单文件', icon: 'file', kind: 'file', typeLabel: '文件',
+    title: '季度报告.pdf', rowGlyph: 'pdf', rowHeight: 36,
+    preview: {type: 'file', glyph: 'pdf', name: '季度报告.pdf'},
+    info: [['来源', 'Finder'], ['类型', '文件'], ['路径', '/Users/eli/Documents/季度报告.pdf'], ['大小', '2 MB'], ['复制时间', '今天 14:32']],
+    facts: [['kind', 'file'], ['列表行', '36 px, 文件图标 + 文件名'], ['缩略图', 'IconCache 文件图标, 加载前 doc 占位'], ['预览', '72 px 图标 + 文件名'], ['信息', '类型 / 路径 / 大小'], ['交付', '原始 file URL, 只读书签'], ['搜索', '文件名与路径']],
+    menu: ['paste', 'keep', 'copy', 'reveal', 'delete'],
+    caption: '单文件且不是目录也不是图像 UTI → kind file, 列表用 36 px 行'
+  },
+  multi: {
+    label: '多文件', icon: 'file', kind: 'file', typeLabel: '多个文件',
+    title: '预算表.xlsx, 会议笔记.md, 封面.png', rowGlyph: 'doc', rowHeight: 36,
+    preview: {type: 'collection', files: [
+      {name: '预算表.xlsx', path: '/Users/eli/Documents/预算表.xlsx', glyph: 'doc'},
+      {name: '会议笔记.md', path: '/Users/eli/Documents/会议笔记.md', glyph: 'doc'},
+      {name: '封面.png', path: '/Users/eli/Pictures/封面.png', glyph: 'image'}
+    ]},
+    info: [['来源', 'Finder'], ['类型', '多个文件'], ['数量', '3'], ['路径', '/Users/eli/Documents/预算表.xlsx, /Users/eli/Documents/会议笔记.md, /Users/eli/Pictures/封面.png'], ['大小', '3 MB'], ['复制时间', '今天 14:31']],
+    facts: [['kind', 'file'], ['类型', '多个文件'], ['列表行', '36 px, 单个文件图标 + 文件名列表'], ['预览', '50 px 一行的文件集合'], ['信息', '数量 / 路径 / 总大小'], ['交付', '全部可用 URL, 保持原顺序'], ['部分可用', '只交付幸存成员']],
+    menu: ['paste', 'keep', 'copy', 'reveal', 'delete'],
+    caption: '多个文件 → kind file, 类型「多个文件」, 即使成员包含图片也不拆成图像'
+  },
+  imageFile: {
+    label: '图片文件', icon: 'image', kind: 'image', typeLabel: '图像',
+    title: '封面.png', rowGlyph: 'image', rowHeight: 92,
+    preview: {type: 'image'},
+    info: [['来源', 'Finder'], ['类型', '图像'], ['路径', '/Users/eli/Pictures/封面.png'], ['尺寸', '2072×1118'], ['大小', '1 MB'], ['复制时间', '今天 14:30']],
+    facts: [['kind', 'image'], ['列表行', '92 px 图片卡'], ['缩略图', '文件内容'], ['预览', '实际图像'], ['信息', '类型 / 路径 / 尺寸 / 大小'], ['交付', '原始 file URL, 不是 PNG 数据'], ['搜索', 'OCR 可索引'], ['菜单', '多出钉到屏幕上']],
+    menu: ['paste', 'keep', 'copy', 'pin', 'reveal', 'delete'],
+    caption: '单个图像文件 → kind image, 列表 92 px, 预览真实图像, 交付仍是文件引用'
+  },
+  folder: {
+    label: '文件夹', icon: 'folder', kind: 'file', typeLabel: '文件',
+    title: '设计素材', rowGlyph: 'folder', rowHeight: 36,
+    preview: {type: 'file', glyph: 'folder', name: '设计素材'},
+    info: [['来源', 'Finder'], ['类型', '文件'], ['路径', '/Users/eli/Desktop/设计素材'], ['大小', '—'], ['复制时间', '今天 14:29']],
+    facts: [['kind', 'file'], ['目录', '是'], ['列表行', '36 px, 文件夹图标'], ['预览', '72 px 文件夹图标 + 名称'], ['信息', '路径 / 大小 —'], ['交付', '文件夹 URL'], ['搜索', '名称与路径']],
+    menu: ['paste', 'keep', 'copy', 'reveal', 'delete'],
+    caption: '目录 → kind file, 图标与预览都使用文件夹, 大小显示 —'
+  },
+  pathText: {
+    label: '路径文本', icon: 'path', kind: 'path', typeLabel: '路径',
+    title: '/Users/eli/Documents/季度报告.pdf', rowGlyph: 'path', rowHeight: 36,
+    preview: {type: 'text', text: '/Users/eli/Documents/季度报告.pdf'},
+    info: [['来源', '终端'], ['类型', '路径'], ['字符数', '29'], ['词数', '1'], ['复制时间', '今天 14:28']],
+    facts: [['kind', 'path'], ['存储', '只有 text, 没有 fileURLs'], ['列表行', '36 px, 路径图标'], ['预览', '等宽路径文本'], ['信息', '字符数 / 词数'], ['交付', '文本, 不是文件引用'], ['书签', '无'], ['菜单', '在 Finder 中显示']],
+    menu: ['paste', 'keep', 'copy', 'reveal', 'delete'],
+    caption: '只有字符串没有 fileURL → kind path, 不产生书签, 交付文本'
+  }
+};
+const fileState = {scenario: 'single'};
+const MENU_ITEMS = {
+  paste: {label: '粘贴到 Finder', icon: 'paste', key: '↵'},
+  keep: {label: '粘贴并保持窗口打开', icon: 'paste', key: '⇧↵'},
+  copy: {label: '复制到剪贴板', icon: 'copy'},
+  reveal: {label: '在 Finder 中显示', icon: 'folder'},
+  pin: {label: '钉到屏幕上', icon: 'pin'},
+  delete: {label: '删除项目', icon: 'trash', danger: true}
+};
+const CONTEXT_ROWS = [
+  {kind: 'text', title: '发布检查清单, 确认截图与下载链接'},
+  {kind: 'link', title: 'example.com/docs?q=1'},
+  {kind: 'code', title: 'struct ClipboardItem'}
+];
+
+function fileIcon(kind, glyph) {
+  if (kind === 'path') return kindTile('path');
+  if (kind === 'image') return '<span class="tile" aria-hidden="true">' + SVG.image + '</span>';
+  return '<span class="tile" aria-hidden="true">' + fileGlyph(glyph) + '</span>';
+}
+function rowFor(scenario) {
+  if (scenario.kind === 'image') {
+    return '<div class="pal-row image-card is-selected" role="listitem">' +
+      '<span class="thumb">' + imageArt() + '</span>' +
+      '<span class="row-title">' + esc(scenario.title) + '</span></div>';
+  }
+  const title = scenario.kind === 'path' ? headTruncate(scenario.title, 38) : scenario.title;
+  return '<div class="pal-row is-selected" role="listitem">' +
+    fileIcon(scenario.kind, scenario.rowGlyph) +
+    '<span class="row-title" title="' + esc(scenario.title) + '">' + esc(title) + '</span></div>';
+}
+function renderScenarios() {
+  const bar = $('#scenarioBar');
+  bar.innerHTML = Object.entries(SCENARIOS).map(([key, scenario]) =>
+    '<button class="scenario" type="button" data-scenario="' + key + '" aria-pressed="' + (fileState.scenario === key) + '">' +
+    '<span class="tile" aria-hidden="true">' + (scenario.kind === 'path' ? SVG.path : scenario.kind === 'image' ? SVG.image : SVG.file) + '</span>' +
+    esc(scenario.label) + '</button>').join('');
+  $$('.scenario', bar).forEach(button => {
+    button.addEventListener('click', () => {
+      fileState.scenario = button.dataset.scenario;
+      renderScenarios();
+      renderFilePreview();
+    });
+  });
+}
+const SOURCE_TONE = {
+  Finder: 'src-blue', Safari: 'src-blue', 'VS Code': 'src-blue',
+  '终端': 'src-slate', GitHub: 'src-slate', '示例': 'src-slate',
+  '备忘录': 'src-amber', Xcode: 'src-indigo'
+};
+function renderInfoRows(rows) {
+  return rows.map(([label, value]) => {
+    let display = value;
+    let cls = 'i-value';
+    let title = '';
+    if (label === '路径') {
+      display = middleTruncate(value, 62);
+      title = ' title="' + esc(value) + '"';
+    }
+    if (label === '来源') {
+      const initial = [...value][0] || 'A';
+      const tone = SOURCE_TONE[value] || 'src-slate';
+      return '<div class="info-row"><span class="i-label">来源</span><span class="i-value"><span class="src-icon ' + tone + '" aria-hidden="true">' + esc(initial) + '</span>' + esc(value) + '</span></div>';
+    }
+    if (label === '路径' || label === '字符数') cls += ' mono';
+    return '<div class="info-row"><span class="i-label">' + esc(label) + '</span><span class="' + cls + '"' + title + '>' + esc(display) + '</span></div>';
+  }).join('');
+}
+function renderPaletteContent(scenario) {
+  const content = $('#palContent');
+  if (scenario.preview.type === 'file') {
+    content.innerHTML = '<div class="big-file"><span class="glyph-box">' + fileGlyph(scenario.preview.glyph, true) + '</span><span class="name">' + esc(scenario.preview.name) + '</span></div>';
+  } else if (scenario.preview.type === 'collection') {
+    content.innerHTML = '<div class="file-collection">' + scenario.preview.files.map(file =>
+      '<div class="fc-row"><span class="glyph-box">' + fileGlyph(file.glyph, true) + '</span><span class="fc-text"><span class="fc-name">' + esc(file.name) + '</span><span class="fc-path">' + esc(middleTruncate(file.path, 44)) + '</span></span></div>').join('') + '</div>';
+  } else if (scenario.preview.type === 'image') {
+    content.innerHTML = '<div class="preview-image">' + imageArt() + '</div>';
+  } else {
+    content.innerHTML = '<div class="preview-path">' + esc(scenario.preview.text) + '</div>';
+  }
+}
+function renderFilePreview() {
+  const scenario = SCENARIOS[fileState.scenario];
+  const rows = [rowFor(scenario)].concat(CONTEXT_ROWS.map(item =>
+    '<div class="pal-row" role="listitem">' + kindTile(item.kind) + '<span class="row-title">' + esc(item.title) + '</span></div>')).join('');
+  const yesterday = [['image', '截屏 2026-10-25'], ['markdown', 'Beta Updates…']].map(([kind, title]) =>
+    '<div class="pal-row" role="listitem">' + kindTile(kind) + '<span class="row-title">' + esc(title) + '</span></div>').join('');
+  $('#palList').innerHTML = '<div class="pal-section">今天</div>' + rows + '<div class="pal-section">昨天</div>' + yesterday;
+  renderPaletteContent(scenario);
+  $('#palInfo').innerHTML = renderInfoRows(scenario.info);
+  $('#sceneCaption').textContent = scenario.caption;
+  $('#fileFacts').innerHTML = scenario.facts.map(([label, value]) =>
+    '<div class="fact-line"><b>' + esc(label) + '</b><span>' + esc(value) + '</span></div>').join('');
+  $('#fileMenu').innerHTML = scenario.menu.map(key => {
+    const item = MENU_ITEMS[key];
+    return '<li class="menu-item' + (item.danger ? ' danger' : '') + '">' +
+      '<span class="mi-icon" aria-hidden="true">' + (SVG[item.icon] || SVG.file) + '</span>' +
+      '<span>' + esc(item.label) + '</span>' +
+      (item.key ? '<span class="shortcut">' + esc(item.key) + '</span>' : '') + '</li>';
+  }).join('');
+  $('#fileMenuNote').textContent = scenario.kind === 'image'
+    ? '图片文件仍可钉到屏幕上, 文件与文件夹没有这一项'
+    : scenario.kind === 'path'
+      ? '路径文本不是文件引用, 菜单按 path 处理'
+      : '文件与文件夹没有「钉到屏幕上」, Stack 存在时会追加「添加到 Stack」';
+}
+renderScenarios();
+renderFilePreview();
+
+const FILE_STATES = {
+  available: {
+    label: '可用', tone: 'ok', title: '路径可用',
+    summary: '记录路径可读, 交付原始 file URL',
+    rows: [
+      ['检测', 'stat 与 access(R_OK) 都成功'],
+      ['历史', '路径、顺序与书签都不变'],
+      ['预览', '真实文件图标, 大小可读'],
+      ['交付', '写入原始 file URL, 附带只读书签'],
+      ['提示', '无']
+    ],
+    visual: 'available'
+  },
+  moved: {
+    label: '路径失效', tone: 'warn', title: '文件被移动',
+    summary: '书签不会把交付目标换成移动后的文件',
+    rows: [
+      ['检测', '记录路径 stat 返回 ENOENT 或 ENOTDIR'],
+      ['历史', '保留原路径, 不自动改写到新位置'],
+      ['预览', '占位 doc 图标, 大小显示 —'],
+      ['交付', '准备阶段没有任何可交付 URL'],
+      ['提示', '文件不可用：季度报告.pdf']
+    ],
+    visual: 'missing'
+  },
+  deleted: {
+    label: '已删除', tone: 'danger', title: '文件已删除',
+    summary: '书签指向已删除内容, 不会被用来复活文件',
+    rows: [
+      ['检测', 'stat 失败, errno 为 ENOENT'],
+      ['历史', 'fileURLs 与书签保留, 路径不改写'],
+      ['预览', '占位图标, 大小 —'],
+      ['交付', '非交互取得租约返回 nil'],
+      ['提示', '文件不可用：季度报告.pdf']
+    ],
+    visual: 'missing'
+  },
+  permission: {
+    label: '需授权', tone: 'warn', title: '权限不足',
+    summary: '预览保持安静, 只有交互式交付才请求授权',
+    rows: [
+      ['检测', 'stat 或 access 返回 EACCES / EPERM'],
+      ['历史', '路径与书签不变'],
+      ['预览', 'interactive 为 false, 不弹面板'],
+      ['交付', '粘贴或显示时弹 NSOpenPanel'],
+      ['提示', '取消静默, 选错显示无法访问 %@']
+    ],
+    visual: 'permission'
+  },
+  partial: {
+    label: '部分可用', tone: 'warn', title: '文件组部分可用',
+    summary: '只交付幸存成员, 历史保留完整文件列表',
+    rows: [
+      ['检测', 'N 个 URL 中至少一个可读'],
+      ['历史', '缺失成员不删除, 顺序不变'],
+      ['预览', '全部列出, 缺失成员用占位图标'],
+      ['交付', '只租用可用子集, 保持原顺序'],
+      ['提示', '至少一个可用时不提示, 全部缺失才提示']
+    ],
+    visual: 'partial'
+  },
+  replaced: {
+    label: '已替换', tone: 'accent', title: '同路径替换',
+    summary: '原路径的新字节获胜, 旧书签不能替换交付目标',
+    rows: [
+      ['检测', '记录路径重新可读, inode 或内容变化'],
+      ['历史', '路径不变, 按当前文件重新铸造书签'],
+      ['预览', '每秒轮询版本, 图标、缩略图与大小刷新'],
+      ['交付', '读取当前路径的新字节'],
+      ['提示', '无']
+    ],
+    visual: 'replaced'
+  },
+  recopied: {
+    label: '再次复制', tone: 'accent', title: '相同文件再次复制',
+    summary: '同一来源应用与同一组 URL 会复用原条目',
+    rows: [
+      ['检测', 'file_urls 与 source_app 都匹配'],
+      ['历史', 'lastCopiedAt 更新, copyCount + 1, 来源更新'],
+      ['预览', '文件版本变化时刷新缩略图与大小'],
+      ['交付', '与首次复制相同'],
+      ['提示', '无']
+    ],
+    visual: 'recopied'
+  }
+};
+const stateUI = {id: 'available'};
+
+function renderStateChips() {
+  $('#stateChips').innerHTML = Object.entries(FILE_STATES).map(([key, item]) =>
+    '<button class="state-chip" type="button" data-state="' + key + '" data-tone="' + item.tone + '" aria-pressed="' + (stateUI.id === key) + '">' +
+    '<span class="dot" aria-hidden="true"></span>' + esc(item.label) + '</button>').join('');
+  $$('.state-chip').forEach(button => {
+    button.addEventListener('click', () => {
+      stateUI.id = button.dataset.state;
+      renderStateChips();
+      renderState();
+    });
+  });
+}
+function miniPalette(rowHtml, previewHtml, extra = '', note = '') {
+  return '<div class="mini-pal">' +
+    '<div class="mini-head"><span>搜索</span><span class="mini-pill">全部类型</span></div>' +
+    rowHtml +
+    '<div class="mini-preview">' + previewHtml + '</div>' +
+    extra +
+    (note ? '<div class="mini-note">' + esc(note) + '</div>' : '') +
+    '</div>';
+}
+function renderStateVisual(id) {
+  const item = FILE_STATES[id];
+  const row = '<div class="mini-row"><span class="tile" aria-hidden="true">' + fileGlyph(id === 'partial' ? 'doc' : id === 'recopied' ? 'pdf' : 'pdf') + '</span><span class="row-title">' + (id === 'partial' ? '预算表.xlsx, 会议笔记.md, 封面.png' : '季度报告.pdf') + '</span></div>';
+  let preview = '<div class="big-file"><span class="glyph-box">' + fileGlyph('pdf', true) + '</span><span class="name">季度报告.pdf</span></div>';
+  let extra = '';
+  let note = '';
+  if (item.visual === 'missing') {
+    preview = '<div class="big-file"><span class="glyph-box">' + fileGlyph('doc', true) + '</span><span class="name">季度报告.pdf</span><span class="mini-note">大小 —</span></div>';
+    extra = '<div class="alert-bubble">' + SVG.warning + '<span>文件不可用：季度报告.pdf</span></div>';
+    note = '提示只在交付或显示时出现';
+  } else if (item.visual === 'permission') {
+    preview = '<div class="big-file"><span class="glyph-box">' + fileGlyph('doc', true) + '</span><span class="name">季度报告.pdf</span></div>';
+    extra = '<div class="access-dialog"><p class="ad-title">允许访问 季度报告.pdf</p><p class="ad-text">Kit 需要读取这个文件才能粘贴</p><div class="ad-buttons"><span class="ad-btn">取消</span><span class="ad-btn primary">允许访问</span></div></div>';
+    note = '预览阶段不弹面板';
+  } else if (item.visual === 'partial') {
+    preview = '<div class="file-collection" style="padding:0"><div class="fc-row"><span class="glyph-box">' + fileGlyph('doc', true) + '</span><span class="fc-text"><span class="fc-name">预算表.xlsx</span><span class="fc-path">/Users/eli/Documents/预算表.xlsx</span></span></div><div class="fc-row" style="opacity:.45"><span class="glyph-box">' + fileGlyph('doc', true) + '</span><span class="fc-text"><span class="fc-name">会议笔记.md</span><span class="fc-path">不可用 · 大小 —</span></span></div><div class="fc-row"><span class="glyph-box">' + fileGlyph('image', true) + '</span><span class="fc-text"><span class="fc-name">封面.png</span><span class="fc-path">/Users/eli/Pictures/封面.png</span></span></div></div>';
+    note = '缺失成员不提示, 只交付幸存文件';
+  } else if (item.visual === 'replaced') {
+    note = '1 MB → 2 MB · 预览每秒轮询版本';
+  } else if (item.visual === 'recopied') {
+    note = '复制次数 2 · 最近复制 今天 14:35';
+  } else {
+    note = '可读取 · 2 MB';
+  }
+  $('#stateVisual').innerHTML = miniPalette(row, preview, extra, note);
+}
+function renderState() {
+  const item = FILE_STATES[stateUI.id];
+  $('#stateCard').innerHTML =
+    '<span class="status-pill ' + item.tone + '">' + esc(item.label) + '</span>' +
+    '<h3>' + esc(item.title) + '</h3>' +
+    '<p class="state-summary">' + esc(item.summary) + '</p>' +
+    '<div class="state-rows">' + item.rows.map(([label, value]) =>
+      '<div class="state-row"><b>' + esc(label) + '</b><span>' + esc(value) + '</span></div>').join('') + '</div>';
+  renderStateVisual(stateUI.id);
+}
+renderStateChips();
+renderState();
+
+const SIM_PAYLOADS = {
+  file: {isFile: true, name: '季度报告.pdf', detail: '取得文件租约, 合并当前粘贴板书签', write: '写入 file URL 与内部标记'},
+  imageFile: {isFile: true, name: '封面.png', detail: '取得文件租约, 图片文件也走文件引用', write: '写入 file URL 与内部标记'},
+  image: {isFile: false, name: '截屏', detail: '读取托管 PNG 字节', write: '写入 PNG 与内部标记'},
+  text: {isFile: false, name: '发布说明', detail: '读取 text 字段', write: '写入文本与内部标记'}
+};
+const simState = {mode: 'paste', payload: 'file', permission: true, file: true, target: true, history: true, token: 0};
+
+function buildPlan() {
+  const mode = simState.mode;
+  const payload = SIM_PAYLOADS[simState.payload];
+  const copy = mode === 'copy';
+  const keep = mode === 'keep';
+  const plan = [];
+  let failure = null;
+  let stopped = false;
+  const add = (name, detail, status) => {
+    if (stopped) {
+      plan.push({name, detail: '未执行', status: 'pending'});
+      return;
+    }
+    plan.push({name, detail, status});
+    if (status === 'fail') { stopped = true; failure = plan.length - 1; }
+  };
+  if (copy) add('辅助功能', '复制不需要辅助功能', 'skip');
+  else if (!simState.permission) add('辅助功能', '系统辅助功能授权提示', 'fail');
+  else add('辅助功能', 'AXIsProcessTrusted 通过', 'done');
+
+  if (payload.isFile && !simState.file) add('准备载荷', '文件不可用：' + payload.name, 'fail');
+  else add('准备载荷', payload.detail, 'done');
+
+  if (keep) add('隐藏面板', '保持窗口打开', 'skip');
+  else add('隐藏面板', '载荷通过后隐藏面板', 'done');
+
+  if (copy) add('目标就绪', '复制不激活目标', 'skip');
+  else if (!simState.target) add('目标就绪', '目标已退出或无法激活', 'fail');
+  else if (keep) add('目标就绪', '目标仍在运行', 'done');
+  else add('目标就绪', '激活并等待最多 800 ms', 'done');
+
+  add('写入剪贴板', payload.write, 'done');
+
+  if (copy) add('发送 ⌘V', '复制不发送按键', 'skip');
+  else add('发送 ⌘V', 'postToPid 合成 ⌘V', 'done');
+
+  if (!simState.history) add('记录历史', '操作后更新历史关闭', 'skip');
+  else if (keep) add('记录历史', '等待面板关闭后发布', 'done');
+  else add('记录历史', '顺序与复制次数更新', 'done');
+
+  let outcome;
+  if (failure !== null) {
+    const failedName = plan[failure].name;
+    if (failedName === '辅助功能') {
+      outcome = {fail: true, title: '未交付, 面板保持打开', detail: '系统辅助功能授权提示', alert: ''};
+    } else if (failedName === '准备载荷') {
+      outcome = {fail: true, title: '未交付, 面板保持打开', detail: '文件在准备阶段不可用', alert: '文件不可用：' + payload.name};
+    } else {
+      outcome = {fail: true, title: keep ? '未交付, 面板保持打开' : '未交付, 面板已重新显示', detail: '目标应用已退出或无法激活', alert: ''};
+    }
+  } else if (copy) {
+    outcome = {fail: false, title: '已写入剪贴板, 面板已隐藏', detail: simState.history ? '历史已更新' : '历史未更新', alert: ''};
+  } else if (keep) {
+    outcome = {fail: false, title: '已交付, 面板保持打开', detail: simState.history ? '历史在面板关闭后更新' : '历史未更新', alert: ''};
+  } else {
+    outcome = {fail: false, title: '已交付到 Finder, 面板已隐藏', detail: simState.history ? '历史已更新' : '历史未更新', alert: ''};
+  }
+  return {plan, failure, outcome};
+}
+function paintPlan(plan, failure, count) {
+  $('#simSteps').innerHTML = plan.map((step, index) => {
+    let status = index <= count ? step.status : 'pending';
+    let detail = step.detail;
+    if (failure !== null && index > failure) { status = 'pending'; detail = '未执行'; }
+    const statusLabel = {done: '完成', fail: '中止', skip: '不适用', pending: '待执行'}[status] || '待执行';
+    return '<li class="sim-step">' +
+      '<span class="idx">' + String(index + 1).padStart(2, '0') + '</span>' +
+      '<span class="name">' + esc(step.name) + '</span>' +
+      '<span class="detail">' + esc(detail) + '</span>' +
+      '<span class="status ' + status + '">' + statusLabel + '</span></li>';
+  }).join('');
+}
+function renderSimOutcome(outcome) {
+  const box = $('#simOutcome');
+  box.className = 'sim-outcome' + (outcome.fail ? ' fail' : '');
+  box.innerHTML = '<span class="o-icon" aria-hidden="true">' + (outcome.fail ? SVG.warning : SVG.check) + '</span>' +
+    '<div><h3>' + esc(outcome.title) + '</h3><p>' + esc(outcome.detail) + '</p>' +
+    (outcome.alert ? '<div class="o-alert">' + esc(outcome.alert) + '</div>' : '') + '</div>';
+}
+function runSim(animate = true) {
+  simState.token += 1;
+  const token = simState.token;
+  const {plan, failure, outcome} = buildPlan();
+  const revealThrough = failure === null ? plan.length - 1 : failure;
+  if (!animate || reduceMotion()) {
+    paintPlan(plan, failure, plan.length - 1);
+    renderSimOutcome(outcome);
+    return;
+  }
+  paintPlan(plan, failure, -1);
+  let index = 0;
+  function tick() {
+    if (token !== simState.token) return;
+    paintPlan(plan, failure, index);
+    if (index >= revealThrough) { renderSimOutcome(outcome); return; }
+    index += 1;
+    setTimeout(tick, 200);
+  }
+  setTimeout(tick, 100);
+}
+function syncSimControls() {
+  const copy = simState.mode === 'copy';
+  const fileApplicable = simState.payload === 'file' || simState.payload === 'imageFile';
+  const permission = $('#simPermission');
+  const file = $('#simFile');
+  const target = $('#simTarget');
+  const history = $('#simHistory');
+  permission.checked = simState.permission;
+  file.checked = simState.file;
+  target.checked = simState.target;
+  history.checked = simState.history;
+  permission.disabled = copy;
+  target.disabled = copy;
+  file.disabled = !fileApplicable;
+  $('#swPermission').classList.toggle('is-na', copy);
+  $('#swPermission').classList.toggle('is-off', !copy && !simState.permission);
+  $('#swTarget').classList.toggle('is-na', copy);
+  $('#swTarget').classList.toggle('is-off', !copy && !simState.target);
+  $('#swFile').classList.toggle('is-na', !fileApplicable);
+  $('#swFile').classList.toggle('is-off', fileApplicable && !simState.file);
+  $('#swHistory').classList.toggle('is-off', !simState.history);
+  $('#runSim').textContent = copy ? '运行复制' : '运行粘贴';
+  $$('.mode-tab').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.mode === simState.mode)));
+}
+$$('.mode-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    simState.mode = tab.dataset.mode;
+    syncSimControls();
+    runSim(false);
+  });
+});
+$('#simPayload').addEventListener('change', event => {
+  simState.payload = event.target.value;
+  syncSimControls();
+  runSim(false);
+});
+[['simPermission', 'permission'], ['simFile', 'file'], ['simTarget', 'target'], ['simHistory', 'history']].forEach(([id, key]) => {
+  $('#' + id).addEventListener('change', event => {
+    simState[key] = event.target.checked;
+    syncSimControls();
+    runSim(false);
+  });
+});
+$('#runSim').addEventListener('click', () => runSim(true));
+syncSimControls();
+runSim(false);
+
+const matrixTabs = $$('.matrix-tab');
+const matrixPanels = $$('[data-matrix-panel]');
+function selectMatrix(key) {
+  matrixTabs.forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.matrix === key)));
+  matrixPanels.forEach(panel => { panel.hidden = panel.dataset.matrixPanel !== key; });
+}
+matrixTabs.forEach(tab => tab.addEventListener('click', () => selectMatrix(tab.dataset.matrix)));
+selectMatrix('file');
+})();
+</script>
+
+
+
+
+
+
+

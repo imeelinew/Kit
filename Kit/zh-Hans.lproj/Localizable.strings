@@ -188,3 +188,13 @@
 "Unable to Access %@" = "无法访问 %@";
 
 "Unable to Copy Files" = "无法复制文件";
+
+"File Not Found" = "找不到文件";
+
+"Unable to Preview" = "无法预览";
+
+"%@ Files, %@ Available" = "%@ 个文件，%@ 个可用";
+
+"Copy %@ Available Files" = "复制 %@ 个可用文件";
+
+"Paste %@ Available Files" = "粘贴 %@ 个可用文件";

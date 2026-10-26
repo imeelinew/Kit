@@ -188,3 +188,13 @@
 "Unable to Access %@" = "Unable to Access %@";
 
 "Unable to Copy Files" = "Unable to Copy Files";
+
+"File Not Found" = "File Not Found";
+
+"Unable to Preview" = "Unable to Preview";
+
+"%@ Files, %@ Available" = "%@ Files, %@ Available";
+
+"Copy %@ Available Files" = "Copy %@ Available Files";
+
+"Paste %@ Available Files" = "Paste %@ Available Files";

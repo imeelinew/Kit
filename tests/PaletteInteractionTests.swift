@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 @testable import Kit
 
 @MainActor
@@ -165,6 +166,175 @@ enum PaletteInteractionTests {
         await store.waitForSearchMetadata()
     }
 
+    private static func previewCopyAvailability(in directory: URL) async throws {
+        ClipboardPreviewPayload.purge()
+        defer { ClipboardPreviewPayload.purge() }
+
+        let sourceDirectory = directory.appendingPathComponent("preview-sources", isDirectory: true)
+        let staleURL = sourceDirectory.appendingPathComponent("missing.txt")
+        let partialAvailableURL = sourceDirectory.appendingPathComponent("partial-available.txt")
+        let partialMissingURL = sourceDirectory.appendingPathComponent("partial-missing.txt")
+        let readyURL = sourceDirectory.appendingPathComponent("ready.txt")
+        try write(Data("missing".utf8), to: staleURL)
+        try write(Data("available".utf8), to: partialAvailableURL)
+        try write(Data("missing".utf8), to: partialMissingURL)
+        try write(Data("ready".utf8), to: readyURL)
+
+        let store = ClipboardStore(
+            directory: directory.appendingPathComponent("store", isDirectory: true),
+            maintenanceInterval: 86_400)
+        store.setImageTextSearchEnabled(false)
+        guard let stale = store.addFiles([staleURL], sourceBundleID: nil),
+              let partial = store.addFiles(
+                [partialAvailableURL, partialMissingURL], sourceBundleID: nil),
+              let readyItem = store.addFiles([readyURL], sourceBundleID: nil)
+        else {
+            throw TestSupport.Failure(description: "Preview file fixtures enter the isolated store")
+        }
+        let partialURLs = partial.fileURLs
+        try FileManager.default.removeItem(at: staleURL)
+        try FileManager.default.removeItem(at: partialMissingURL)
+
+        let core = AppCore(clipboardStore: store)
+        let vm = PaletteViewModel(core: core)
+        try await ready(vm)
+
+        vm.select(stale.id)
+        guard let selectedStale = vm.selectedItem else {
+            throw TestSupport.Failure(description: "The stale fixture becomes the current palette item")
+        }
+        let stalePayload = await ClipboardPreviewPayload.load(
+            for: selectedStale, imageURL: nil, store: store)
+        vm.acceptPreview(stalePayload)
+        try TestSupport.expect(
+            stalePayload.details.contentState == .notFound
+                && stalePayload.availableFileCount == 0
+                && vm.preparedPreview === stalePayload
+                && vm.copyableFileCount(for: selectedStale) == 0
+                && !vm.canCopy(selectedStale),
+            "A selected file item disables copy only after every file is confirmed missing"
+        )
+
+        vm.select(readyItem.id)
+        guard let selectedReady = vm.selectedItem else {
+            throw TestSupport.Failure(description: "The ready fixture becomes the current palette item")
+        }
+        try TestSupport.expect(
+            vm.preparedPreview == nil && vm.copyableFileCount(for: selectedReady) == nil
+                && vm.canCopy(selectedReady),
+            "A pending current preview does not disable a new file item"
+        )
+        vm.acceptPreview(stalePayload)
+        try TestSupport.expect(
+            vm.preparedPreview == nil && vm.canCopy(selectedReady),
+            "An asynchronously accepted payload from the prior selection cannot disable the current item"
+        )
+
+        let readyPayload = await ClipboardPreviewPayload.load(
+            for: selectedReady, imageURL: nil, store: store)
+        vm.acceptPreview(readyPayload)
+        try TestSupport.expect(
+            vm.preparedPreview === readyPayload
+                && readyPayload.availableFileCount == 1
+                && vm.copyableFileCount(for: selectedReady) == 1
+                && vm.canCopy(selectedReady),
+            "The current ready payload enables copying its available file"
+        )
+
+        try write(Data("replacement ready contents".utf8), to: readyURL)
+        guard let currentReady = vm.selectedItem else {
+            throw TestSupport.Failure(description: "The ready fixture remains selected for version refresh")
+        }
+        let refreshedPayload = await ClipboardPreviewPayload.load(
+            for: currentReady, imageURL: nil, store: store)
+        vm.select(selectedStale.id)
+        vm.select(readyItem.id)
+        vm.acceptPreview(readyPayload)
+        try TestSupport.expect(
+            !readyPayload.matches(currentReady) && vm.preparedPreview == nil,
+            "A payload from the prior source version cannot replace the current selection"
+        )
+        vm.acceptPreview(refreshedPayload)
+        try TestSupport.expect(
+            vm.preparedPreview === refreshedPayload
+                && vm.copyableFileCount(for: currentReady) == 1,
+            "The payload for the refreshed source version becomes current"
+        )
+
+        vm.select(partial.id)
+        guard let selectedPartial = vm.selectedItem else {
+            throw TestSupport.Failure(description: "The partial fixture becomes the current palette item")
+        }
+        let partialPayload = await ClipboardPreviewPayload.load(
+            for: selectedPartial, imageURL: nil, store: store)
+        vm.acceptPreview(partialPayload)
+        try TestSupport.expect(
+            partialPayload.details.fileAvailability == [.available, .missing]
+                && partialPayload.availableFileCount == 1
+                && vm.copyableFileCount(for: selectedPartial) == 1
+                && vm.canCopy(selectedPartial),
+            "A partially available group copies its one surviving file"
+        )
+        try TestSupport.expect(
+            store.item(id: partial.id)?.fileURLs == partialURLs && partialURLs.count == 2,
+            "Partial file availability preserves both original history paths"
+        )
+        await store.waitForSearchMetadata()
+    }
+
+    private static func permissionSensitiveCopy(in directory: URL) async throws {
+        guard geteuid() != 0 else { return }
+        ClipboardPreviewPayload.purge()
+        defer { ClipboardPreviewPayload.purge() }
+
+        let sourceDirectory = directory.appendingPathComponent("permission-sources", isDirectory: true)
+        let source = sourceDirectory.appendingPathComponent("restricted.txt")
+        try write(Data("restricted".utf8), to: source)
+        let store = ClipboardStore(
+            directory: directory.appendingPathComponent("store", isDirectory: true),
+            maintenanceInterval: 86_400)
+        store.setImageTextSearchEnabled(false)
+        guard let item = store.addFiles([source], sourceBundleID: nil) else {
+            throw TestSupport.Failure(description: "The permission fixture enters the isolated store")
+        }
+
+        var metadata = stat()
+        guard stat(source.path, &metadata) == 0 else {
+            throw TestSupport.Failure(description: "The permission fixture metadata is available")
+        }
+        let originalMode = metadata.st_mode & 0o777
+        guard chmod(source.path, 0o000) == 0 else {
+            throw TestSupport.Failure(description: "The permission fixture removes read access")
+        }
+        defer { _ = chmod(source.path, originalMode) }
+        guard case .needsPermission = ClipboardFileAccess.availability(of: source) else {
+            return
+        }
+
+        let core = AppCore(clipboardStore: store)
+        let vm = PaletteViewModel(core: core)
+        try await ready(vm)
+        vm.select(item.id)
+        guard let selectedItem = vm.selectedItem else {
+            throw TestSupport.Failure(description: "The permission fixture becomes the current palette item")
+        }
+        let payload = await ClipboardPreviewPayload.load(
+            for: selectedItem, imageURL: nil, store: store)
+        vm.acceptPreview(payload)
+        try TestSupport.expect(
+            payload.details.fileAvailability == [.needsPermission]
+                && payload.details.contentState == .unavailablePreview
+                && payload.requiresFilePermission
+                && payload.availableFileCount == 0,
+            "A real permission denial is reported separately from a missing file"
+        )
+        try TestSupport.expect(
+            vm.copyableFileCount(for: selectedItem) == nil && vm.canCopy(selectedItem),
+            "A permission-sensitive item stays actionable so authorization can be requested"
+        )
+        await store.waitForSearchMetadata()
+    }
+
     private static func paginationAndRaces(in directory: URL) async throws {
         let store = ClipboardStore(directory: directory)
         for index in 0..<325 {
@@ -224,10 +394,18 @@ enum PaletteInteractionTests {
         await store.waitForSearchMetadata()
     }
 
+    private static func write(_ data: Data, to url: URL) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url, options: .atomic)
+    }
+
     static func run() async throws {
         try await TestSupport.withTemporaryDirectory { root in
             try await navigation(in: root.appendingPathComponent("navigation"))
             try await naming(in: root.appendingPathComponent("naming"))
+            try await previewCopyAvailability(in: root.appendingPathComponent("preview-copy"))
+            try await permissionSensitiveCopy(in: root.appendingPathComponent("permission-copy"))
             try await paginationAndRaces(in: root.appendingPathComponent("pagination"))
         }
     }

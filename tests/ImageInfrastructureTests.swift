@@ -438,6 +438,17 @@ enum ImageInfrastructureTests {
     }
 
     @MainActor
+    private static func previewDetailsDefaults() throws {
+        let details = ClipboardPreviewPayload.Details()
+        try TestSupport.expect(
+            details.contentState == .loading
+                && details.contentState != .unavailablePreview
+                && details.fileAvailability.isEmpty,
+            "New preview details start loading without reporting a failure"
+        )
+    }
+
+    @MainActor
     private static func fileBackedPreviewLifecycle(in root: URL) async throws {
         let storeDirectory = root.appendingPathComponent("preview-store", isDirectory: true)
         let sourceDirectory = root.appendingPathComponent("preview-external", isDirectory: true)
@@ -445,6 +456,7 @@ enum ImageInfrastructureTests {
         let store = ClipboardStore(
             directory: storeDirectory, maintenanceInterval: 86_400,
             recognizeImage: { _ in .failed })
+        store.setImageTextSearchEnabled(false)
 
         ClipboardPreviewPayload.purge()
         defer {
@@ -493,6 +505,13 @@ enum ImageInfrastructureTests {
             "The initial preview reports the source PNG byte count"
         )
         try TestSupport.expect(
+            firstPayload.details.contentState == .ready
+                && firstPayload.details.fileAvailability == [.available]
+                && firstPayload.availableFileCount == 1
+                && !firstPayload.requiresFilePermission,
+            "A decodable file-backed PNG is ready and available for copying"
+        )
+        try TestSupport.expect(
             firstPayload.matches(item) && ClipboardPreviewPayload.cached(for: item) === firstPayload,
             "The initial complete payload enters the current preview cache"
         )
@@ -531,6 +550,12 @@ enum ImageInfrastructureTests {
             replacementPayload.details.fileBytes == replacement.png.count,
             "The replacement preview reports the replacement PNG byte count"
         )
+        try TestSupport.expect(
+            replacementPayload.details.contentState == .ready
+                && replacementPayload.details.fileAvailability == [.available]
+                && replacementPayload.availableFileCount == 1,
+            "A replaced file-backed PNG restores a ready copyable preview"
+        )
 
         try FileManager.default.removeItem(at: source)
         try TestSupport.expect(
@@ -550,6 +575,13 @@ enum ImageInfrastructureTests {
                 && missingPayload.details.pixelSize == nil
                 && missingPayload.details.fileBytes == nil,
             "A deleted source produces no stale preview image or metadata"
+        )
+        try TestSupport.expect(
+            missingPayload.details.contentState == .notFound
+                && missingPayload.details.fileAvailability == [.missing]
+                && missingPayload.availableFileCount == 0
+                && !missingPayload.requiresFilePermission,
+            "A deleted file-backed PNG reports not found with no copyable file"
         )
 
         let restored = image(width: 36, height: 54, red: 180, green: 30, blue: 160)
@@ -579,6 +611,12 @@ enum ImageInfrastructureTests {
             restoredPayload.details.fileBytes == restored.png.count,
             "The recreated source restores the current preview byte count"
         )
+        try TestSupport.expect(
+            restoredPayload.details.contentState == .ready
+                && restoredPayload.details.fileAvailability == [.available]
+                && restoredPayload.availableFileCount == 1,
+            "The recreated file-backed PNG restores a ready copyable preview"
+        )
 
         guard let storedItem = store.item(id: itemID) else {
             throw TestSupport.Failure(description: "The original history item remains after source changes")
@@ -591,6 +629,51 @@ enum ImageInfrastructureTests {
         try TestSupport.expect(
             storedItem.fileURLs == [expectedPath],
             "The history keeps the original standardized source path"
+        )
+    }
+
+    @MainActor
+    private static func unavailableImagePreviewStillCopies(in root: URL) async throws {
+        let storeDirectory = root.appendingPathComponent("bad-image-store", isDirectory: true)
+        let sourceDirectory = root.appendingPathComponent("bad-image-external", isDirectory: true)
+        let source = sourceDirectory.appendingPathComponent("bad.png")
+        let store = ClipboardStore(
+            directory: storeDirectory, maintenanceInterval: 86_400,
+            recognizeImage: { _ in .failed })
+        store.setImageTextSearchEnabled(false)
+        ClipboardPreviewPayload.purge()
+        defer { ClipboardPreviewPayload.purge() }
+
+        try write(Data("real bytes that are not a PNG image".utf8), to: source)
+        guard let item = store.addFiles([source], sourceBundleID: nil) else {
+            throw TestSupport.Failure(description: "The malformed PNG becomes a file-backed history item")
+        }
+        await store.waitForImageOCR()
+
+        let payload = await ClipboardPreviewPayload.load(
+            for: item, imageURL: source, store: store)
+        try TestSupport.expect(
+            item.kind == .image && payload.image == nil
+                && payload.details.contentState == .unavailablePreview,
+            "Readable non-PNG bytes report an unavailable image preview"
+        )
+        try TestSupport.expect(
+            payload.details.fileAvailability == [.available]
+                && payload.availableFileCount == 1
+                && !payload.requiresFilePermission,
+            "A preview decode failure does not mark the readable source file unavailable"
+        )
+
+        guard let historical = store.item(id: item.id),
+              let lease = ClipboardFileAccess.acquire(
+                historical, store: store, interactive: false)
+        else {
+            throw TestSupport.Failure(
+                description: "The malformed image source remains available for copying")
+        }
+        try TestSupport.expect(
+            lease.urls.map { ($0 as URL).standardizedFileURL } == [source.standardizedFileURL],
+            "A malformed preview can still lease its readable source file"
         )
     }
 
@@ -792,6 +875,7 @@ enum ImageInfrastructureTests {
     @MainActor
     static func run() async throws {
         try fingerprintFixtures()
+        try previewDetailsDefaults()
         try await TestSupport.withTemporaryDirectory { root in
             try rowCacheTickets(in: root)
             try rowCacheMutationAndRemoval(in: root)
@@ -799,11 +883,12 @@ enum ImageInfrastructureTests {
             try rowCacheByteBound(in: root)
             try await thumbnailBehavior(in: root)
             try await fileBackedPreviewLifecycle(in: root)
+            try await unavailableImagePreviewStillCopies(in: root)
             try layoutNormalization()
             try layoutMatches()
             try overlayGeometry()
             try await highlightPayloadCache()
         }
-        print("PASS: image fingerprints, row cache, thumbnails, file preview lifecycle, OCR layout")
+        print("PASS: image fingerprints, row cache, thumbnails, file preview states, OCR layout")
     }
 }
