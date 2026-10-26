@@ -87,6 +87,10 @@ final class ClipboardItemCellView: NSTableCellView {
 
     private let highlightView = HighlightView()
     private let thumbnailView = ClipboardThumbnailView()
+    private let missingFileIndicator = NSImageView()
+    private var titleTrailingConstraint: NSLayoutConstraint!
+    private var fileStatusTask: Task<Void, Never>?
+
     private let titleLabel = NSTextField(labelWithString: "")
     private var fullTitle = NSAttributedString(string: "")
     private var standardConstraints: [NSLayoutConstraint] = []
@@ -130,6 +134,16 @@ final class ClipboardItemCellView: NSTableCellView {
         addSubview(thumbnailView)
         addSubview(titleLabel)
 
+        missingFileIndicator.image = NSImage(systemSymbolName: "exclamationmark.circle", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 12, weight: .regular))
+        missingFileIndicator.contentTintColor = .secondaryLabelColor
+        missingFileIndicator.translatesAutoresizingMaskIntoConstraints = false
+        missingFileIndicator.isHidden = true
+        missingFileIndicator.setAccessibilityElement(true)
+        missingFileIndicator.setAccessibilityRole(.image)
+        addSubview(missingFileIndicator)
+        titleTrailingConstraint = titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16)
+
         NSLayoutConstraint.activate([
             highlightView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
             highlightView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
@@ -137,7 +151,11 @@ final class ClipboardItemCellView: NSTableCellView {
             highlightView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Theme.Spacing.xxs),
 
             thumbnailView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
-            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            titleTrailingConstraint,
+            missingFileIndicator.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            missingFileIndicator.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            missingFileIndicator.widthAnchor.constraint(equalToConstant: 14),
+            missingFileIndicator.heightAnchor.constraint(equalToConstant: 14),
             titleLabel.heightAnchor.constraint(equalToConstant: Theme.Size.rowIcon),
         ])
         standardConstraints = [
@@ -170,6 +188,9 @@ final class ClipboardItemCellView: NSTableCellView {
 
     override func prepareForReuse() {
         super.prepareForReuse()
+        fileStatusTask?.cancel()
+        fileStatusTask = nil
+        setFileMissing(false)
         representedID = nil
         selected = false
         hovered = false
@@ -192,6 +213,9 @@ final class ClipboardItemCellView: NSTableCellView {
     ) {
         if representedID != item.id {
             // Reused cells must never carry a previous item's highlight or pending fade.
+            fileStatusTask?.cancel()
+            fileStatusTask = nil
+            setFileMissing(false)
             representedID = item.id
             self.selected = false
             hovered = false
@@ -201,9 +225,11 @@ final class ClipboardItemCellView: NSTableCellView {
         setSelected(selected)
         updateTitle(item: item, query: query, locale: locale)
         thumbnailView.configure(item: item, imageURL: imageURL, store: store)
+        refreshFileStatus(item: item, store: store)
     }
 
     func updateTitle(item: ClipboardItem, query: String, locale: Locale) {
+        missingFileIndicator.setAccessibilityLabel(AppLocalization.string("File Not Found", locale: locale))
         let customTitle = item.customTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasCustomTitle = customTitle?.isEmpty == false
         let isImage = item.kind == .image
@@ -227,6 +253,39 @@ final class ClipboardItemCellView: NSTableCellView {
     func refreshThumbnail(item: ClipboardItem, imageURL: URL?, store: ClipboardStore? = nil) {
         guard item.isFileBacked else { return }
         thumbnailView.configure(item: item, imageURL: imageURL, store: store)
+        refreshFileStatus(item: item, store: store)
+    }
+
+    isolated deinit { fileStatusTask?.cancel() }
+
+    private func setFileMissing(_ missing: Bool) {
+        guard missingFileIndicator.isHidden == missing else { return }
+        missingFileIndicator.isHidden = !missing
+        titleTrailingConstraint.constant = missing ? -38 : -16
+        renderedTitleWidth = -1
+        needsLayout = true
+    }
+
+    private func refreshFileStatus(item: ClipboardItem, store: ClipboardStore?) {
+        guard item.isFileBacked else {
+            setFileMissing(false)
+            return
+        }
+        guard fileStatusTask == nil else { return }
+        let bookmarks = store?.fileBookmarks(for: item.id) ?? [:]
+        fileStatusTask = Task { @MainActor [weak self] in
+            let worker = Task.detached(priority: .utility) {
+                ClipboardFileReference.prepare(
+                    urls: item.fileURLs, bookmarks: bookmarks, refreshCredentials: false)
+                    .states.contains(.missing)
+            }
+            let missing = await withTaskCancellationHandler {
+                await worker.value
+            } onCancel: { worker.cancel() }
+            guard !Task.isCancelled, let self, representedID == item.id else { return }
+            fileStatusTask = nil
+            setFileMissing(missing)
+        }
     }
 
     static func rowHeight(for item: ClipboardItem) -> CGFloat {

@@ -132,6 +132,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private var onLoadMore: (() -> Void)?
         private var boundsToken: NotificationToken?
         private var fileDidChangeToken: NotificationToken?
+        private var fileStatusRefreshTask: Task<Void, Never>?
         private weak var hostedContainerView: ClipboardTableContainerView?
         private var lastScroll: ScrollIntent?
         private var pendingScrollApply: DispatchWorkItem?
@@ -489,7 +490,15 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 MainActor.assumeIsolated { self?.refreshVisibleThumbnails() }
             }
             fileDidChangeToken = NotificationToken(token, center: .default)
+            fileStatusRefreshTask = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                    self?.refreshVisibleThumbnails()
+                }
+            }
         }
+
+        isolated deinit { fileStatusRefreshTask?.cancel() }
 
         private func refreshVisibleThumbnails() {
             guard let tableView, tableView.window?.isVisible == true else { return }
