@@ -231,10 +231,14 @@ final class AppCore {
 
     func revealClipboardItem(_ item: ClipboardItem, dismissPalette: Bool = true) {
         if item.isFileBacked {
-            guard let lease = ClipboardFileAccess.acquire(item, store: clipboardStore) else { return }
-            defer { withExtendedLifetime(lease) {} }
-            if dismissPalette { hidePalette(restoreFocus: false) }
-            NSWorkspace.shared.activateFileViewerSelecting(lease.urls.map { $0 as URL })
+            startTransfer { [weak self] in
+                guard let self,
+                    let lease = await ClipboardFileAccess.acquire(item, store: self.clipboardStore),
+                    !Task.isCancelled else { return }
+                defer { withExtendedLifetime(lease) {} }
+                if dismissPalette { self.hidePalette(restoreFocus: false, cancelTransfer: false) }
+                NSWorkspace.shared.activateFileViewerSelecting(lease.urls.map { $0 as URL })
+            }
             return
         }
         let url: URL
@@ -262,14 +266,30 @@ final class AppCore {
 
     func pinToScreen(_ item: ClipboardItem, dismissPalette: Bool = true) {
         guard item.kind == .image, let url = clipboardStore.imageURL(for: item) else { return }
-        let title = item.displayTitle(locale: settings.language.locale)
-        if dismissPalette { hidePalette(restoreFocus: false) }
-        pinnedImageWindows.show(
-            itemID: item.id,
-            url: url,
-            title: title,
-            preferredLongEdge: settings.pinnedImageSize.longestEdge
-        )
+        startTransfer { [weak self] in
+            guard let self else { return }
+            let access: FileAccessLease?
+            if item.isFileBacked {
+                guard let lease = await ClipboardFileAccess.acquire(item, store: self.clipboardStore)
+                else { return }
+                access = lease
+                _ = await Task.detached { ImageThumbnail.refreshFile(at: url) }.value
+            } else {
+                access = nil
+            }
+            defer { withExtendedLifetime(access) {} }
+            guard let image = await ImageThumbnail.loadAsync(url, maxPixel: self.pinnedImageWindows.imageDecodeMaxPixel),
+                !Task.isCancelled else {
+                if !Task.isCancelled { ClipboardFileAccess.showFailure(filename: url.lastPathComponent) }
+                return
+            }
+            let title = item.displayTitle(locale: self.settings.language.locale)
+            if dismissPalette { self.hidePalette(restoreFocus: false, cancelTransfer: false) }
+            self.pinnedImageWindows.show(
+                itemID: item.id, url: url, title: title,
+                preferredLongEdge: self.settings.pinnedImageSize.longestEdge,
+                image: image)
+        }
     }
 
     private func handleCopySucceeded() {

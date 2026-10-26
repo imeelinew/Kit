@@ -97,6 +97,7 @@ final class ClipboardStore: ObservableObject {
     private var pendingSearchMetadata: [SearchMetadataUpdate] = []
     private var searchMetadataTask: Task<Void, Never>?
     private var imageOCRTask: Task<Void, Never>?
+    private var fileRefreshTask: Task<Void, Never>?
     private var thumbnailWarmTask: Task<Void, Never>?
     /// A snapshot of historical IDs; new captures never join a manual rebuild while search is off.
     private var imageOCRRebuildIDs: [ClipboardItem.ID]?
@@ -136,6 +137,7 @@ final class ClipboardStore: ObservableObject {
 
     // Isolated so teardown may touch the main-actor statement/db pointers; AppCore only ever releases the store on the main actor, so no hop.
     isolated deinit {
+        fileRefreshTask?.cancel()
         maintenanceTask?.cancel()
         blobDeletionTask?.cancel()
         imageOCRTask?.cancel()
@@ -161,6 +163,7 @@ final class ClipboardStore: ObservableObject {
         // Age passes while the app isn't running; insert-time pruning alone can't catch that.
         enforceLimits()
         startMaintenanceIfNeeded()
+        startFileRefreshIfNeeded()
         startImageOCRWorkerIfNeeded()
     }
 
@@ -241,7 +244,8 @@ final class ClipboardStore: ObservableObject {
 
     @discardableResult
     func addFiles(
-        _ fileURLs: [URL], sourceBundleID: String?, expectedGeneration: UInt64? = nil
+        _ fileURLs: [URL], sourceBundleID: String?, expectedGeneration: UInt64? = nil,
+        fileKind: ClipboardItem.Kind? = nil
     ) -> ClipboardItem? {
         if let expectedGeneration, expectedGeneration != captureGeneration { return nil }
         guard fileURLs.allSatisfy(\.isFileURL) else { return nil }
@@ -250,7 +254,8 @@ final class ClipboardStore: ObservableObject {
         for url in normalizedURLs {
             ImageThumbnail.invalidateFile(at: url)
         }
-        let kind = kind(forFileURLs: normalizedURLs)
+        let kind = fileKind ?? Self.kind(forFileURLs: normalizedURLs)
+        startFileRefreshIfNeeded()
         if let existing = fileItem(matching: normalizedURLs, sourceBundleID: sourceBundleID) {
             let resetImageOCR = existing.kind == .image || kind == .image
             var updated = existing.recopied(sourceBundleID: sourceBundleID).withKind(kind)
@@ -880,6 +885,73 @@ final class ClipboardStore: ObservableObject {
         return sqlite3_step(stmt) == SQLITE_ROW ? ClipboardSQLite.row(stmt) : nil
     }
 
+    /// Inspect persisted references too, so replacements made while Kit was closed invalidate OCR
+    func refreshFileReferences() async {
+        guard let stmt = prepare("\(Self.itemSelection) WHERE file_urls IS NOT NULL AND kind = 'image'")
+        else { return }
+        var references: [ClipboardItem] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            if let item = ClipboardSQLite.row(stmt) { references.append(item) }
+        }
+        sqlite3_finalize(stmt)
+        for item in references {
+            guard !Task.isCancelled else { return }
+            await refreshFileReference(item)
+            await Task.yield()
+        }
+    }
+
+    func refreshFileReference(_ item: ClipboardItem) async {
+        guard item.isFileBacked, item.kind == .image, let url = imageURL(for: item) else { return }
+        let generation = captureGeneration
+        let bookmarks = fileBookmarks(for: item.id)
+        let snapshot = await Task.detached(priority: .utility) {
+            let access = ClipboardFileReference.prepare(
+                urls: item.fileURLs, bookmarks: bookmarks, refreshCredentials: false)
+            let signature = ImageThumbnail.sourceSignature(for: url)
+            let changed = ImageThumbnail.refreshFile(at: url)
+            return (access.lease, signature, changed)
+        }.value
+        defer { withExtendedLifetime(snapshot.0) {} }
+        guard !Task.isCancelled, generation == captureGeneration else { return }
+        reconcileFileSource(item, signature: snapshot.1)
+        startImageOCRWorkerIfNeeded()
+        if snapshot.2 { NotificationCenter.default.post(name: ImageThumbnail.fileDidChange, object: nil) }
+    }
+
+    private func startFileRefreshIfNeeded() {
+        guard fileRefreshTask == nil else { return }
+        fileRefreshTask = Task(priority: .utility) { [weak self] in
+            while !Task.isCancelled {
+                await self?.refreshFileReferences()
+                do { try await Task.sleep(for: .seconds(15)) } catch { return }
+            }
+        }
+    }
+
+    /// Reset only derived metadata, never the historical paths or copy metadata
+    @discardableResult
+    private func reconcileFileSource(_ item: ClipboardItem, signature: String) -> Bool {
+        guard let stmt = prepare("""
+            UPDATE items SET file_signature = ?, ocr_text = NULL, ocr_status = NULL,
+                             ocr_version = NULL, ocr_attempts = 0, pinyin = ?, pinyin_initials = ?
+            WHERE id = ? AND file_urls IS ? AND file_signature IS NOT ?
+            """) else { return false }
+        defer { sqlite3_finalize(stmt) }
+        let forms = Self.searchForms(for: item, imageOCRText: nil)
+        ClipboardSQLite.bindText(signature, to: stmt, at: 1)
+        ClipboardSQLite.bindText(forms.full, to: stmt, at: 2)
+        ClipboardSQLite.bindText(forms.initials, to: stmt, at: 3)
+        ClipboardSQLite.bindText(item.id.uuidString, to: stmt, at: 4)
+        ClipboardSQLite.bindText(ClipboardSQLite.encodedFileURLs(item.fileURLs), to: stmt, at: 5)
+        ClipboardSQLite.bindText(signature, to: stmt, at: 6)
+        guard sqlite3_step(stmt) == SQLITE_DONE, sqlite3_changes(db) > 0 else { return false }
+        if let index = items.firstIndex(where: { $0.id == item.id }) {
+            items[index] = items[index].withImageOCR(nil)
+        } else { revision &+= 1 }
+        return true
+    }
+
     private func startImageOCRWorkerIfNeeded() {
         guard imageOCRTask == nil else { return }
         guard nextImageOCRItem() != nil else {
@@ -897,15 +969,48 @@ final class ClipboardStore: ObservableObject {
                 self?.refreshImageTextIndexState()
                 if Task.isCancelled || completedRebuild { self?.startImageOCRWorkerIfNeeded() }
             }
-            while !Task.isCancelled, let item = self?.nextImageOCRItem() {
+            while !Task.isCancelled, var item = self?.nextImageOCRItem() {
                 guard let generation = self?.captureGeneration else { return }
                 let result: ClipboardImageOCRResult
+                var sourceSignature: String?
+                var access: FileAccessLease?
                 if let url = self?.imageURL(for: item) {
-                    result = await recognize(url)
+                    if item.isFileBacked {
+                        let bookmarks = self?.fileBookmarks(for: item.id) ?? [:]
+                        let source = item
+                        let snapshot = await Task.detached(priority: .utility) {
+                            let prepared = ClipboardFileReference.prepare(
+                                urls: source.fileURLs, bookmarks: bookmarks, refreshCredentials: false)
+                            return (prepared.lease, ImageThumbnail.sourceSignature(for: url))
+                        }.value
+                        guard !Task.isCancelled, self?.captureGeneration == generation else { return }
+                        access = snapshot.0
+                        sourceSignature = snapshot.1
+                        self?.reconcileFileSource(item, signature: snapshot.1)
+                        guard let current = self?.loadItem(id: item.id), self?.hasSameOCRSource(current, as: item) == true
+                        else { continue }
+                        item = current
+                    }
+                    if !item.isFileBacked || access != nil {
+                        result = await recognize(url)
+                    } else { result = .failed }
+                    if let sourceSignature {
+                        let currentSignature = await Task.detached(priority: .utility) {
+                            ImageThumbnail.sourceSignature(for: url)
+                        }.value
+                        guard !Task.isCancelled else { return }
+                        if currentSignature != sourceSignature {
+                            self?.reconcileFileSource(item, signature: currentSignature)
+                            try? await Task.sleep(for: .milliseconds(25))
+                            continue
+                        }
+                    }
                 } else {
                     result = .failed
                 }
+                defer { withExtendedLifetime(access) {} }
                 guard !Task.isCancelled else { return }
+                let recognizedItem = item
                 let metadata = await Task.detached(priority: .utility) {
                     let text: String?
                     let status: ClipboardImageOCR.Status
@@ -922,19 +1027,19 @@ final class ClipboardStore: ObservableObject {
                         ClipboardImageOCR(
                             text: text, status: status,
                             version: ClipboardImageTextRecognition.version,
-                            attempts: (item.imageOCR?.attempts ?? 0) + 1),
-                        Self.searchForms(for: item, imageOCRText: text))
+                            attempts: (recognizedItem.imageOCR?.attempts ?? 0) + 1),
+                        Self.searchForms(for: recognizedItem, imageOCRText: text))
                 }.value
                 guard !Task.isCancelled else { return }
                 if self?.saveImageOCR(metadata.0, forms: metadata.1, for: item,
-                                      generation: generation) != true {
+                                      generation: generation, sourceSignature: sourceSignature) != true {
                     guard let self, let current = self.item(id: item.id) else { continue }
                     guard self.hasSameOCRSource(current, as: item) else { continue }
                     // Retry a transient database lock once, without running recognition again.
                     try? await Task.sleep(for: .seconds(1))
                     guard !Task.isCancelled else { return }
                     guard self.saveImageOCR(metadata.0, forms: metadata.1, for: item,
-                                           generation: generation) == true
+                                           generation: generation, sourceSignature: sourceSignature) == true
                     else {
                         guard let current = self.item(id: item.id) else { continue }
                         guard self.hasSameOCRSource(current, as: item) else { continue }
@@ -951,7 +1056,7 @@ final class ClipboardStore: ObservableObject {
 
     private func saveImageOCR(
         _ metadata: ClipboardImageOCR, forms: Pinyin.SearchForms,
-        for item: ClipboardItem, generation: UInt64
+        for item: ClipboardItem, generation: UInt64, sourceSignature: String? = nil
     ) -> Bool {
         guard generation == captureGeneration, let stmt = prepare("""
             UPDATE items SET ocr_text = ?, ocr_status = ?, ocr_version = ?, ocr_attempts = ?,
@@ -959,6 +1064,7 @@ final class ClipboardStore: ObservableObject {
             WHERE id = ? AND \(ClipboardSQLite.imageBackedPredicate)
               AND created_at = ? AND copy_count = ?
               AND image_path IS ? AND image_fingerprint IS ? AND file_urls IS ?
+              AND file_signature IS ?
             """)
         else { return false }
         defer { sqlite3_finalize(stmt) }
@@ -976,6 +1082,7 @@ final class ClipboardStore: ObservableObject {
         ClipboardSQLite.bindText(
             item.isFileBacked ? ClipboardSQLite.encodedFileURLs(item.fileURLs) : nil,
             to: stmt, at: 12)
+        ClipboardSQLite.bindText(sourceSignature, to: stmt, at: 13)
         guard sqlite3_step(stmt) == SQLITE_DONE, sqlite3_changes(db) == 1 else { return false }
         if let index = items.firstIndex(where: { $0.id == item.id }),
             let updated = loadItem(id: item.id)
@@ -1175,7 +1282,7 @@ final class ClipboardStore: ObservableObject {
         return item
     }
 
-    private func kind(forFileURLs urls: [URL]) -> ClipboardItem.Kind {
+    nonisolated static func kind(forFileURLs urls: [URL]) -> ClipboardItem.Kind {
         guard urls.count == 1, let url = urls.first else { return .file }
         let values = try? url.resourceValues(forKeys: [.contentTypeKey, .isDirectoryKey])
         guard values?.isDirectory != true else { return .file }

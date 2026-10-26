@@ -10,6 +10,7 @@ enum PasteTransaction {
         prepare: () async -> Payload?,
         willDeliver: () -> Void,
         targetReady: () async -> Bool,
+        validate: (Payload) async -> Bool = { _ in true },
         write: (Payload) -> Bool,
         deliver: () -> Bool,
         didDeliver: () -> Void = {}
@@ -19,6 +20,7 @@ enum PasteTransaction {
         defer { withExtendedLifetime(payload) {} }
         willDeliver()
         guard await targetReady(), !Task.isCancelled else { return false }
+        guard await validate(payload), !Task.isCancelled else { return false }
         guard write(payload) else { return false }
         guard deliver() else { return false }
         didDeliver()

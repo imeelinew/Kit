@@ -68,6 +68,25 @@ enum ImageThumbnail {
         private let lock = NSLock()
         private var clock: UInt64 = 0
         private var entries: [String: Entry] = [:]
+        private var retainedPaths: [String: Int] = [:]
+
+        func retain(_ paths: [String]) {
+            lock.withLock { for path in paths { retainedPaths[path, default: 0] += 1 } }
+        }
+
+        func release(_ paths: [String]) {
+            lock.withLock {
+                for path in paths {
+                    if let count = retainedPaths[path], count > 1 { retainedPaths[path] = count - 1 }
+                    else { retainedPaths[path] = nil }
+                }
+                if entries.count > 1024 {
+                    let removable = entries.filter { retainedPaths[$0.key] == nil }
+                        .sorted { $0.value.accessed < $1.value.accessed }
+                    for entry in removable.prefix(entries.count - 1024) { entries[entry.key] = nil }
+                }
+            }
+        }
 
         func version(for url: URL, invalidating: Bool = false) -> UInt64 {
             lock.withLock {
@@ -79,7 +98,7 @@ enum ImageThumbnail {
                     return entry.version
                 }
                 if entries[path] == nil, entries.count >= 1024,
-                    let oldest = entries.min(by: { $0.value.accessed < $1.value.accessed })?.key
+                    let oldest = entries.filter({ retainedPaths[$0.key] == nil }).min(by: { $0.value.accessed < $1.value.accessed })?.key
                 {
                     entries[oldest] = nil
                 }
@@ -100,7 +119,7 @@ enum ImageThumbnail {
                     return false
                 }
                 if entries[path] == nil, entries.count >= 1024,
-                    let oldest = entries.min(by: { $0.value.accessed < $1.value.accessed })?.key
+                    let oldest = entries.filter({ retainedPaths[$0.key] == nil }).min(by: { $0.value.accessed < $1.value.accessed })?.key
                 {
                     entries[oldest] = nil
                 }
@@ -110,7 +129,29 @@ enum ImageThumbnail {
         }
     }
 
+    /// Persistent metadata identity for mutable external sources, independent of cache eviction
+    nonisolated static func sourceSignature(for url: URL) -> String {
+        switch FileSignature.read(at: url) {
+        case .failure(let error): return "error:\(error)"
+        case .metadata(let device, let inode, let mode, let size, let seconds, let nanos,
+                       let changedSeconds, let changedNanos):
+            return "\(device):\(inode):\(mode):\(size):\(seconds):\(nanos):\(changedSeconds):\(changedNanos)"
+        }
+    }
+
     private static let fileVersions = FileVersions()
+
+    /// Active previews may contain more files than the idle version cache can hold
+    final class FileVersionLease: @unchecked Sendable {
+        private let paths: [String]
+
+        init(urls: [URL]) {
+            paths = Array(Set(urls.map { $0.standardizedFileURL.path }))
+            fileVersions.retain(paths)
+        }
+
+        deinit { fileVersions.release(paths) }
+    }
 
     static func fileVersion(for url: URL) -> UInt64 {
         if managedImageDirectories.contains(url.deletingLastPathComponent()) { return 0 }

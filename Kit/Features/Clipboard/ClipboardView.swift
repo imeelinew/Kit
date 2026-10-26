@@ -500,7 +500,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                     let view = tableView.view(
                         atColumn: 0, row: row, makeIfNecessary: false) as? ClipboardItemCellView
                 else { continue }
-                view.refreshThumbnail(item: item, imageURL: store?.imageURL(for: item))
+                view.refreshThumbnail(item: item, imageURL: store?.imageURL(for: item), store: store)
             }
         }
 
@@ -579,7 +579,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                     selected: item.id == selectedID,
                     query: query,
                     imageURL: store?.imageURL(for: item),
-                    locale: locale
+                    locale: locale, store: store
                 )
                 view.setHovered((tableView as? ClipboardTableView)?.hoveredRow == row, animated: false)
                 return view

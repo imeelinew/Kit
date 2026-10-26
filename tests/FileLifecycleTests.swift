@@ -15,35 +15,176 @@ enum FileLifecycleTests {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
-        try availableFile(in: root.appendingPathComponent("available"))
-        try movedFileIsNotFollowed(
+        try await availableFile(in: root.appendingPathComponent("available"))
+        try await movedFileIsNotFollowed(
             in: root.appendingPathComponent("moved"),
             storeDirectory: root.appendingPathComponent("moved-store"))
-        try permanentlyDeletedFileIsUnavailable(
+        try await permanentlyDeletedFileIsUnavailable(
             in: root.appendingPathComponent("deleted"),
             storeDirectory: root.appendingPathComponent("deleted-store"))
-        try permissionDeniedFileStaysSilent(
+        try await permissionDeniedFileStaysSilent(
             in: root.appendingPathComponent("permission-denied"),
             storeDirectory: root.appendingPathComponent("permission-denied-store"))
-        try partiallyAvailableGroupPreservesHistory(
+        try await partiallyAvailableGroupPreservesHistory(
             in: root.appendingPathComponent("partial"),
             storeDirectory: root.appendingPathComponent("partial-store"))
-        try replacementWinsOverMovedBookmark(
+        try await replacementWinsOverMovedBookmark(
             in: root.appendingPathComponent("replaced"),
             storeDirectory: root.appendingPathComponent("replaced-store"))
-        try replacementAfterDeletionUsesCurrentPath(
+        try await replacementAfterDeletionUsesCurrentPath(
             in: root.appendingPathComponent("recreated"),
             storeDirectory: root.appendingPathComponent("recreated-store"))
-        try reopenedStorePreservesNormalAndReplacementSemantics(
+        try await reopenedStorePreservesNormalAndReplacementSemantics(
             in: root.appendingPathComponent("reopened"),
             storeDirectory: root.appendingPathComponent("reopened-store"))
+        try await largeMissingGroup(in: root.appendingPathComponent("large-group"))
+        try await deliveryRevalidation(in: root.appendingPathComponent("delivery"))
+        try await externalOCRLifecycle(in: root.appendingPathComponent("ocr"))
+        try await externalOCRRace(in: root.appendingPathComponent("ocr-race"))
         try await thumbnailFileVersions(in: root.appendingPathComponent("thumbnails"))
 
         print("PASS: file access lifecycle, history stability, thumbnail refresh and replacement decode")
     }
 
     @MainActor
-    private static func availableFile(in root: URL) throws {
+    private static func largeMissingGroup(in root: URL) async throws {
+        let urls = (0..<1_050).map { root.appendingPathComponent("missing-\($0)") }
+        let item = ClipboardItem(
+            id: UUID(), kind: .file, text: nil, imagePath: nil, imageFingerprint: nil,
+            fileURLs: urls, lastCopiedAt: Date(), sourceBundleID: nil)
+        let payload = await ClipboardPreviewPayload.load(for: item, imageURL: nil)
+        try TestSupport.expect(payload.matches(item) && payload.availableFileCount == 0,
+                               "A group larger than the idle cache still publishes a stable missing-file preview")
+        for index in 0..<1_100 {
+            _ = ImageThumbnail.fileVersion(for: root.appendingPathComponent("unrelated-\(index)"))
+        }
+        try TestSupport.expect(payload.matches(item), "Unrelated cache churn cannot invalidate an active large group")
+        ClipboardPreviewPayload.purge()
+    }
+
+    @MainActor
+    private static func deliveryRevalidation(in root: URL) async throws {
+        let first = root.appendingPathComponent("first.txt")
+        let second = root.appendingPathComponent("second.txt")
+        try write(Data("original".utf8), to: first)
+        try write(Data("second".utf8), to: second)
+        let store = makeStore(in: root.appendingPathComponent("store"))
+        let item = store.addFiles([first, second], sourceBundleID: nil)!
+        let lease = await ClipboardFileAccess.acquire(item, store: store, interactive: false)!
+        let initiallyValid = await lease.isCurrent()
+        try TestSupport.expect(initiallyValid, "An unchanged prepared group is deliverable")
+        try write(Data("replacement".utf8), to: first)
+        let replacementValid = await lease.isCurrent()
+        try TestSupport.expect(!replacementValid, "Replacing a prepared source invalidates the pending delivery")
+        let fresh = await ClipboardFileAccess.acquire(item, store: store, interactive: false)!
+        let freshValid = await fresh.isCurrent()
+        try TestSupport.expect(freshValid, "A new action prepares the current replacement")
+        try FileManager.default.removeItem(at: second)
+        let deletionValid = await fresh.isCurrent()
+        try TestSupport.expect(!deletionValid, "Losing a member during activation aborts the prepared group")
+        let surviving = await ClipboardFileAccess.acquire(item, store: store, interactive: false)!
+        try TestSupport.expect(surviving.urls.count == 1, "A subsequent action can prepare the surviving member")
+        let cancelled = Task { @MainActor in
+            await Task.yield()
+            return await ClipboardFileAccess.acquire(item, store: store, interactive: false)
+        }
+        cancelled.cancel()
+        let cancelledLease = await cancelled.value
+        try TestSupport.expect(cancelledLease == nil, "Cancelled access cannot produce a deliverable lease")
+
+        let link = root.appendingPathComponent("link.txt")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: first)
+        let linkItem = store.addFiles([link], sourceBundleID: nil)!
+        let linkLease = await ClipboardFileAccess.acquire(linkItem, store: store, interactive: false)!
+        try FileManager.default.removeItem(at: link)
+        try write(Data("new target".utf8), to: second)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: second)
+        let linkValid = await linkLease.isCurrent()
+        try TestSupport.expect(!linkValid, "Retargeting a symlink invalidates its prepared source identity")
+    }
+
+    @MainActor
+    private static func externalOCRLifecycle(in root: URL) async throws {
+        let source = root.appendingPathComponent("mutable.png")
+        let directory = root.appendingPathComponent("store")
+        try write(Data("old searchable text".utf8), to: source)
+        var store: ClipboardStore? = ClipboardStore(directory: directory, recognizeImage: { url in
+            .recognized((try? String(contentsOf: url, encoding: .utf8)) ?? "")
+        })
+        let item = store!.addFiles([source], sourceBundleID: nil)!
+        await store!.waitForImageOCR()
+        try TestSupport.expect(store!.item(id: item.id)?.imageOCR?.text == "old searchable text", "Initial OCR is persisted")
+        try write(Data("new searchable text".utf8), to: source)
+        await store!.refreshFileReferences()
+        await store!.waitForImageOCR()
+        let updated = store!.item(id: item.id)!
+        try TestSupport.expect(updated.imageOCR?.text == "new searchable text", "Replacing a reference refreshes OCR without copying again")
+        try TestSupport.expect(updated.copyCount == item.copyCount && updated.fileURLs == item.fileURLs,
+                               "Reference refresh preserves history identity and copy count")
+        let oldSearch = await store!.searchAsync("old searchable", after: nil, limit: 10)
+        let newSearch = await store!.searchAsync("new searchable", after: nil, limit: 10)
+        try TestSupport.expect(oldSearch.items.isEmpty && newSearch.items.map(\.id) == [item.id],
+                               "FTS drops old text and indexes replacement content")
+        try FileManager.default.removeItem(at: source)
+        await store!.refreshFileReferences()
+        await store!.waitForImageOCR()
+        try TestSupport.expect(store!.item(id: item.id)?.imageOCR?.text == nil,
+                               "Deleted sources cannot retain searchable OCR text")
+        try write(Data("restored searchable text".utf8), to: source)
+        await store!.refreshFileReferences()
+        await store!.waitForImageOCR()
+        try TestSupport.expect(store!.item(id: item.id)?.imageOCR?.text == "restored searchable text",
+                               "Restored sources recover even after failed OCR attempts were exhausted")
+        store = nil
+        try write(Data("changed while closed".utf8), to: source)
+        let reopened = ClipboardStore(directory: directory, recognizeImage: { url in
+            .recognized((try? String(contentsOf: url, encoding: .utf8)) ?? "")
+        })
+        reopened.load()
+        await reopened.refreshFileReferences()
+        await reopened.waitForImageOCR()
+        try TestSupport.expect(reopened.item(id: item.id)?.imageOCR?.text == "changed while closed",
+                               "Persisted source versions detect changes across a restart")
+    }
+
+    private actor OCRGate {
+        var calls = 0
+        var continuation: CheckedContinuation<Void, Never>?
+
+        func recognize(_ url: URL) async -> ClipboardImageOCRResult {
+            calls += 1
+            let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+            if calls == 1 { await withCheckedContinuation { continuation = $0 } }
+            return .recognized(text)
+        }
+
+        func release() { continuation?.resume(); continuation = nil }
+    }
+
+    @MainActor
+    private static func externalOCRRace(in root: URL) async throws {
+        let source = root.appendingPathComponent("racing.png")
+        try write(Data("stale result".utf8), to: source)
+        let gate = OCRGate()
+        let store = ClipboardStore(directory: root.appendingPathComponent("store"), recognizeImage: {
+            await gate.recognize($0)
+        })
+        let item = store.addFiles([source], sourceBundleID: nil)!
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while await gate.calls == 0, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let started = await gate.calls
+        try TestSupport.expect(started == 1, "The original recognition is suspended")
+        try write(Data("current result".utf8), to: source)
+        await gate.release()
+        await store.waitForImageOCR()
+        try TestSupport.expect(store.item(id: item.id)?.imageOCR?.text == "current result",
+                               "A result from replaced bytes is discarded and the current source is recognized")
+    }
+
+    @MainActor
+    private static func availableFile(in root: URL) async throws {
         let path = root.appendingPathComponent("available.txt")
         let store = makeStore(in: root.appendingPathComponent("store"))
         try write(Data("available fixture".utf8), to: path)
@@ -51,7 +192,7 @@ enum FileLifecycleTests {
             throw FixtureFailure.invalidFixture("available file was not stored")
         }
         guard let historical = store.item(id: item.id),
-              let lease = ClipboardFileAccess.acquire(historical, store: store, interactive: false)
+              let lease = await ClipboardFileAccess.acquire(historical, store: store, interactive: false)
         else {
             throw FixtureFailure.invalidFixture("available file did not create a lease")
         }
@@ -73,7 +214,7 @@ enum FileLifecycleTests {
     }
 
     @MainActor
-    private static func movedFileIsNotFollowed(in root: URL, storeDirectory: URL) throws {
+    private static func movedFileIsNotFollowed(in root: URL, storeDirectory: URL) async throws {
         let original = root.appendingPathComponent("moved.txt")
         let destination = root.appendingPathComponent("elsewhere.txt")
         let store = makeStore(in: storeDirectory)
@@ -87,8 +228,9 @@ enum FileLifecycleTests {
         guard let historical = store.item(id: item.id) else {
             throw FixtureFailure.invalidFixture("moved file history disappeared")
         }
+        let unavailable = await ClipboardFileAccess.acquire(historical, store: store, interactive: false)
         try TestSupport.expect(
-            ClipboardFileAccess.acquire(historical, store: store, interactive: false) == nil,
+            unavailable == nil,
             "A bookmark cannot substitute a file moved away from the recorded path")
         try TestSupport.expect(
             FileManager.default.fileExists(atPath: destination.path),
@@ -101,20 +243,21 @@ enum FileLifecycleTests {
     @MainActor
     private static func permanentlyDeletedFileIsUnavailable(
         in root: URL, storeDirectory: URL
-    ) throws {
+    ) async throws {
         let path = root.appendingPathComponent("deleted.txt")
         let store = makeStore(in: storeDirectory)
         try write(Data("deleted fixture".utf8), to: path)
         guard let item = store.addFiles([path], sourceBundleID: nil) else {
             throw FixtureFailure.invalidFixture("deleted file was not stored")
         }
-        guard ClipboardFileAccess.acquire(item, store: store, interactive: false) != nil else {
+        guard await ClipboardFileAccess.acquire(item, store: store, interactive: false) != nil else {
             throw FixtureFailure.invalidFixture("deleted file was unavailable before deletion")
         }
         try FileManager.default.removeItem(at: path)
 
+        let unavailable = await ClipboardFileAccess.acquire(item, store: store, interactive: false)
         try TestSupport.expect(
-            ClipboardFileAccess.acquire(item, store: store, interactive: false) == nil,
+            unavailable == nil,
             "A permanently deleted file does not acquire a lease")
         try TestSupport.expect(
             store.item(id: item.id)?.fileURLs == [path.standardizedFileURL],
@@ -124,7 +267,7 @@ enum FileLifecycleTests {
     @MainActor
     private static func permissionDeniedFileStaysSilent(
         in root: URL, storeDirectory: URL
-    ) throws {
+    ) async throws {
         guard geteuid() != 0 else { return }
         let path = root.appendingPathComponent("permission-denied.txt")
         let store = makeStore(in: storeDirectory)
@@ -146,15 +289,16 @@ enum FileLifecycleTests {
         guard case .needsPermission = ClipboardFileAccess.availability(of: path) else {
             throw FixtureFailure.invalidFixture("chmod fixture did not produce a permission denial")
         }
+        let unavailable = await ClipboardFileAccess.acquire(item, store: store, interactive: false)
         try TestSupport.expect(
-            ClipboardFileAccess.acquire(item, store: store, interactive: false) == nil,
+            unavailable == nil,
             "A permission-denied file stays unavailable without starting an interactive grant")
     }
 
     @MainActor
     private static func partiallyAvailableGroupPreservesHistory(
         in root: URL, storeDirectory: URL
-    ) throws {
+    ) async throws {
         let first = root.appendingPathComponent("first.txt")
         let second = root.appendingPathComponent("second.txt")
         let store = makeStore(in: storeDirectory)
@@ -166,7 +310,7 @@ enum FileLifecycleTests {
         let recordedURLs = item.fileURLs
         try FileManager.default.removeItem(at: second)
 
-        guard let lease = ClipboardFileAccess.acquire(item, store: store, interactive: false) else {
+        guard let lease = await ClipboardFileAccess.acquire(item, store: store, interactive: false) else {
             throw FixtureFailure.invalidFixture("partially available file group did not create a lease")
         }
         try TestSupport.expect(lease.urls.count == 1, "Only the surviving member of a file group is leased")
@@ -188,7 +332,7 @@ enum FileLifecycleTests {
     @MainActor
     private static func replacementWinsOverMovedBookmark(
         in root: URL, storeDirectory: URL
-    ) throws {
+    ) async throws {
         let original = root.appendingPathComponent("replace.txt")
         let moved = root.appendingPathComponent("old.txt")
         let store = makeStore(in: storeDirectory)
@@ -202,7 +346,7 @@ enum FileLifecycleTests {
         try FileManager.default.moveItem(at: original, to: moved)
         try write(newData, to: original)
 
-        guard let lease = ClipboardFileAccess.acquire(item, store: store, interactive: false) else {
+        guard let lease = await ClipboardFileAccess.acquire(item, store: store, interactive: false) else {
             throw FixtureFailure.invalidFixture("replacement at the original path did not create a lease")
         }
         guard let leaseURL = lease.urls.first else {
@@ -224,7 +368,7 @@ enum FileLifecycleTests {
     @MainActor
     private static func replacementAfterDeletionUsesCurrentPath(
         in root: URL, storeDirectory: URL
-    ) throws {
+    ) async throws {
         let path = root.appendingPathComponent("recreate.txt")
         let store = makeStore(in: storeDirectory)
         let newData = Data("NEW".utf8)
@@ -236,7 +380,7 @@ enum FileLifecycleTests {
         try FileManager.default.removeItem(at: path)
         try write(newData, to: path)
 
-        guard let lease = ClipboardFileAccess.acquire(item, store: store, interactive: false),
+        guard let lease = await ClipboardFileAccess.acquire(item, store: store, interactive: false),
               let leaseURL = lease.urls.first
         else {
             throw FixtureFailure.invalidFixture("recreated file did not create a lease")
@@ -253,7 +397,7 @@ enum FileLifecycleTests {
     @MainActor
     private static func reopenedStorePreservesNormalAndReplacementSemantics(
         in root: URL, storeDirectory: URL
-    ) throws {
+    ) async throws {
         let normal = root.appendingPathComponent("normal.txt")
         let replaced = root.appendingPathComponent("stored-bookmark.txt")
         let normalData = Data("normal fixture".utf8)
@@ -282,7 +426,7 @@ enum FileLifecycleTests {
         try TestSupport.expect(
             reopened.fileBookmarks(for: itemID).count == 2,
             "Both captured bookmarks survive a store reopen")
-        guard let lease = ClipboardFileAccess.acquire(
+        guard let lease = await ClipboardFileAccess.acquire(
             historical, store: reopened, interactive: false)
         else {
             throw FixtureFailure.invalidFixture("reopened store could not lease its files")

@@ -252,7 +252,7 @@ final class PaletteViewModel {
 
     func copyableFileCount(for item: ClipboardItem) -> Int? {
         guard item.isFileBacked, let payload = currentPreview(for: item),
-            !payload.requiresFilePermission
+            !payload.requiresFilePermission, !payload.details.fileAvailability.contains(.unavailable)
         else { return nil }
         return payload.availableFileCount
     }

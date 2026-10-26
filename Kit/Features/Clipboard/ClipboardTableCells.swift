@@ -187,7 +187,8 @@ final class ClipboardItemCellView: NSTableCellView {
     }
 
     func configure(
-        item: ClipboardItem, selected: Bool, query: String, imageURL: URL?, locale: Locale
+        item: ClipboardItem, selected: Bool, query: String, imageURL: URL?, locale: Locale,
+        store: ClipboardStore? = nil
     ) {
         if representedID != item.id {
             // Reused cells must never carry a previous item's highlight or pending fade.
@@ -199,7 +200,7 @@ final class ClipboardItemCellView: NSTableCellView {
         }
         setSelected(selected)
         updateTitle(item: item, query: query, locale: locale)
-        thumbnailView.configure(item: item, imageURL: imageURL)
+        thumbnailView.configure(item: item, imageURL: imageURL, store: store)
     }
 
     func updateTitle(item: ClipboardItem, query: String, locale: Locale) {
@@ -223,9 +224,9 @@ final class ClipboardItemCellView: NSTableCellView {
         renderTitle()
     }
 
-    func refreshThumbnail(item: ClipboardItem, imageURL: URL?) {
+    func refreshThumbnail(item: ClipboardItem, imageURL: URL?, store: ClipboardStore? = nil) {
         guard item.isFileBacked else { return }
-        thumbnailView.configure(item: item, imageURL: imageURL)
+        thumbnailView.configure(item: item, imageURL: imageURL, store: store)
     }
 
     static func rowHeight(for item: ClipboardItem) -> CGFloat {
@@ -499,7 +500,7 @@ private final class ClipboardThumbnailView: NSView {
         NSGraphicsContext.restoreGraphicsState()
     }
 
-    func configure(item: ClipboardItem, imageURL: URL?) {
+    func configure(item: ClipboardItem, imageURL: URL?, store: ClipboardStore? = nil) {
         let sourceURL = imageURL ?? item.fileURLs.first
         let sourceVersion = sourceURL.map { ImageThumbnail.fileVersion(for: $0) }
         let usesFileContents = item.kind == .image || item.kind == .file
@@ -520,54 +521,46 @@ private final class ClipboardThumbnailView: NSView {
         case .text, .markdown, .code, .link, .path:
             showKind(item.kind)
             finishedLoading = true
-        case .image:
-            showKind(.image)
-            guard let imageURL, FileManager.default.fileExists(atPath: imageURL.path) else {
+        case .image, .file:
+            showKind(item.kind)
+            guard let sourceURL else {
                 finishedLoading = true
                 return
             }
-            if let cached = ImageThumbnail.cached(
-                imageURL, maxPixel: Self.imageMaxPixel)
-            {
+            if !item.isFileBacked, let cached = ImageThumbnail.cached(sourceURL, maxPixel: Self.imageMaxPixel) {
                 showImage(cached)
                 finishedLoading = true
                 return
             }
             let id = item.id
             loadTask = Task { @MainActor [weak self] in
-                let image = await ImageThumbnail.loadAsync(
-                    imageURL, maxPixel: Self.imageMaxPixel)
-                guard !Task.isCancelled, let self, representedID == id,
-                    representedVersion == sourceVersion,
-                    sourceVersion == sourceURL.map({ ImageThumbnail.fileVersion(for: $0) })
-                else { return }
+                let access: FileAccessLease?
+                if item.isFileBacked, let store {
+                    access = await ClipboardFileAccess.acquire(item, store: store, interactive: false)
+                } else { access = nil }
+                defer { withExtendedLifetime(access) {} }
+                if item.isFileBacked {
+                    _ = await Task.detached(priority: .utility) { ImageThumbnail.refreshFile(at: sourceURL) }.value
+                }
+                guard !Task.isCancelled, let self, representedID == id else { return }
+                let version = ImageThumbnail.fileVersion(for: sourceURL)
+                representedVersion = version
+                let image: NSImage?
+                if item.kind == .image {
+                    image = await ImageThumbnail.loadAsync(sourceURL, maxPixel: Self.imageMaxPixel)
+                } else {
+                    let available = await Task.detached(priority: .utility) {
+                        ClipboardFileReference.availability(of: sourceURL) == .available
+                    }.value
+                    image = available ? await IconCache.loadAsync(forFile: sourceURL.path, version: version) : nil
+                }
+                guard !Task.isCancelled, representedID == id,
+                    representedVersion == version,
+                    version == ImageThumbnail.fileVersion(for: sourceURL) else { return }
                 loadTask = nil
                 finishedLoading = true
                 guard let image else { return }
-                showImage(image)
-            }
-        case .file:
-            showKind(.file)
-            guard let sourceURL, FileManager.default.fileExists(atPath: sourceURL.path) else {
-                finishedLoading = true
-                return
-            }
-            if let cached = IconCache.cached(forFile: sourceURL.path, version: sourceVersion ?? 0) {
-                showFileIcon(cached)
-                finishedLoading = true
-                return
-            }
-            let id = item.id
-            loadTask = Task { @MainActor [weak self] in
-                let icon = await IconCache.loadAsync(forFile: sourceURL.path, version: sourceVersion ?? 0)
-                guard !Task.isCancelled, let self, representedID == id,
-                    representedVersion == sourceVersion,
-                    sourceVersion == ImageThumbnail.fileVersion(for: sourceURL)
-                else { return }
-                loadTask = nil
-                finishedLoading = true
-                guard let icon else { return }
-                showFileIcon(icon)
+                if item.kind == .image { showImage(image) } else { showFileIcon(image) }
             }
         }
     }

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		CB1300000000000000000001 /* ClipboardFileAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1300000000000000000002 /* ClipboardFileAccess.swift */; };
+		CB1400000000000000000001 /* ClipboardFileReference.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1400000000000000000002 /* ClipboardFileReference.swift */; };
 		CB1200000000000000000001 /* PaletteSnapGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1200000000000000000002 /* PaletteSnapGeometry.swift */; };
 		CB1200000000000000000003 /* PaletteWindowDrag.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1200000000000000000004 /* PaletteWindowDrag.swift */; };
 		CB1100000000000000000001 /* JetBrainsMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = CB1100000000000000000002 /* JetBrainsMono-Regular.ttf */; };
@@ -87,6 +88,7 @@
 
 /* Begin PBXFileReference section */
 		CB1300000000000000000002 /* ClipboardFileAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardFileAccess.swift; sourceTree = "<group>"; };
+		CB1400000000000000000002 /* ClipboardFileReference.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardFileReference.swift; sourceTree = "<group>"; };
 		CB1200000000000000000002 /* PaletteSnapGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteSnapGeometry.swift; sourceTree = "<group>"; };
 		CB1200000000000000000004 /* PaletteWindowDrag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaletteWindowDrag.swift; sourceTree = "<group>"; };
 		CB1100000000000000000002 /* JetBrainsMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "JetBrainsMono-Regular.ttf"; sourceTree = "<group>"; };
@@ -225,6 +227,7 @@
 				8738F70AF4AB873CA45EE200 /* PaletteWindowController.swift */,
 				FC678FC84A80AE731726D744 /* Paster.swift */,
 				CB1300000000000000000002 /* ClipboardFileAccess.swift */,
+				CB1400000000000000000002 /* ClipboardFileReference.swift */,
 				ACA000000000000000000004 /* TextFieldPasteTarget.swift */,
 				B83EBAE1FB329C0318507DFB /* PasteTransaction.swift */,
 				EA577CC2AE8EBDA99C731955 /* Permissions.swift */,
@@ -490,6 +493,7 @@
 				73C5E3F78FDD5E8837E47AC0 /* PasteTransaction.swift in Sources */,
 				1C45571908BB38D3FAD1095B /* Paster.swift in Sources */,
 				CB1300000000000000000001 /* ClipboardFileAccess.swift in Sources */,
+				CB1400000000000000000001 /* ClipboardFileReference.swift in Sources */,
 				4727BAB0DFB738C67703BC3B /* Permissions.swift in Sources */,
 				068B6C43C18DB6110AED985B /* PopoverMenu.swift in Sources */,
 				62F5E9E05B1CB111BC22F982 /* RootPaletteView.swift in Sources */,

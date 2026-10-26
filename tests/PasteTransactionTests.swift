@@ -44,6 +44,21 @@ enum PasteTransactionTests {
     }
 
     @MainActor
+    private static func sourceInvalidatedDuringActivation() async throws {
+        var events: [String] = []
+        let result = await PasteTransaction.run(
+            permission: { true }, prepare: { "file lease" },
+            willDeliver: { events.append("hide") },
+            targetReady: { events.append("activate"); return true },
+            validate: { _ in events.append("revalidate"); return false },
+            write: { _ in events.append("write"); return true },
+            deliver: { events.append("paste"); return true },
+            didDeliver: { events.append("history") })
+        try TestSupport.expect(!result && events == ["hide", "activate", "revalidate"],
+                               "Changed sources abort after activation without clipboard writes or history updates")
+    }
+
+    @MainActor
     private static func permissionDenial() async throws {
         var events: [String] = []
         let result = await PasteTransaction.run(
@@ -413,6 +428,7 @@ enum PasteTransactionTests {
 
     @MainActor
     static func run() async throws {
+        try await sourceInvalidatedDuringActivation()
         try await permissionDenial()
         try await preparationFailure()
         try await targetNotReady()

@@ -665,7 +665,7 @@ enum ImageInfrastructureTests {
         )
 
         guard let historical = store.item(id: item.id),
-              let lease = ClipboardFileAccess.acquire(
+              let lease = await ClipboardFileAccess.acquire(
                 historical, store: store, interactive: false)
         else {
             throw TestSupport.Failure(

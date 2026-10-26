@@ -18,7 +18,8 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         itemID: ClipboardItem.ID,
         url: URL,
         title: String,
-        preferredLongEdge: CGFloat
+        preferredLongEdge: CGFloat,
+        image: NSImage
     ) {
         observeExclusiveFullScreenIfNeeded()
         observeTitlesIfNeeded()
@@ -29,7 +30,7 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
 
         let visibleFrame = targetVisibleFrame()
         let geometry = PinnedImageGeometry(
-            imageSize: ImageThumbnail.pixelSize(of: url) ?? CGSize(width: 1_200, height: 900),
+            imageSize: image.size,
             visibleFrame: visibleFrame,
             preferredLongEdge: preferredLongEdge
         )
@@ -40,8 +41,7 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
 
         install(
             PinnedImageContent(
-                url: url,
-                decodeMaxPixel: imageDecodeMaxPixel,
+                image: image,
                 onClose: { [weak self] in self?.close(itemID) }
             ),
             in: panel
@@ -49,7 +49,7 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         present(panel, itemID: itemID)
     }
 
-    private var imageDecodeMaxPixel: CGFloat {
+    var imageDecodeMaxPixel: CGFloat {
         NSScreen.screens.reduce(CGFloat(1_600)) { result, candidate in
             max(
                 result,

@@ -15,6 +15,8 @@ enum ImageQuickLook {
 struct ImageQuickLookAnchor: NSViewRepresentable {
     var url: URL?
     var highlights: [CGRect] = []
+    var sourceVersion: UInt64 = 0
+    var pixelSize: CGSize?
     @Binding var isPresented: Bool
     var onActions: () -> Void
 
@@ -31,7 +33,7 @@ struct ImageQuickLookAnchor: NSViewRepresentable {
         context.coordinator.anchorView = nsView
         let presented = _isPresented
         ImageQuickLookSession.shared.sync(
-            presented: isPresented, url: url, highlights: highlights, anchor: nsView
+            presented: isPresented, url: url, highlights: highlights, sourceVersion: sourceVersion, pixelSize: pixelSize, anchor: nsView
         ) {
             if presented.wrappedValue {
                 presented.wrappedValue = false
@@ -141,6 +143,9 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
     private var requestedHighlights: [CGRect] = []
     private var requestedPresented = false
     private var onDismiss: (() -> Void)?
+    private var requestedVersion: UInt64 = 0
+    private var shownVersion: UInt64 = 0
+    private var requestedPixelSize: CGSize?
     private var shownURL: URL?
     private var shownSize: CGSize = .zero
     private var shownHighlights: [CGRect] = []
@@ -153,13 +158,16 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
     private static let minSide: CGFloat = 180
 
     func sync(
-        presented: Bool, url: URL?, highlights: [CGRect], anchor: NSView,
+        presented: Bool, url: URL?, highlights: [CGRect], sourceVersion: UInt64 = 0,
+        pixelSize: CGSize? = nil, anchor: NSView,
         onDismiss: @escaping () -> Void
     ) {
         self.onDismiss = onDismiss
         self.anchorView = anchor
         requestedPresented = presented && url != nil
         requestedURL = url
+        requestedVersion = sourceVersion
+        requestedPixelSize = pixelSize
         requestedHighlights = highlights
         if presented, url != nil {
             // A newly mounted/updated anchor supersedes any deferred failure notification from
@@ -227,7 +235,7 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
         }
         guard let anchorView, anchorView.window?.isVisible == true,
             !anchorView.bounds.isEmpty else { return }
-        guard let placement = Self.placement(url: url, anchorView: anchorView) else {
+        guard let placement = Self.placement(pixelSize: requestedPixelSize, anchorView: anchorView) else {
             requestedPresented = false
             notifyWhenClosed = true
             beginClose()
@@ -236,14 +244,17 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
 
         if let popover, popover.isShown {
             // Selection changes close the session, keep an already showing image stable
-            guard shownURL == url, shownSize == placement.size, shownAnchorView === anchorView
+            guard shownURL == url, shownAnchorView === anchorView
             else { return }
-            if shownHighlights != requestedHighlights,
+            if shownHighlights != requestedHighlights || shownVersion != requestedVersion || shownSize != placement.size,
                 let hosting = popover.contentViewController as? NSHostingController<ImageQuickLookContent>
             {
                 hosting.rootView = ImageQuickLookContent(
-                    url: url, size: shownSize, highlights: requestedHighlights)
+                    url: url, size: placement.size, highlights: requestedHighlights, sourceVersion: requestedVersion)
+                popover.contentSize = placement.size
+                shownSize = placement.size
                 shownHighlights = requestedHighlights
+                shownVersion = requestedVersion
             }
             return
         }
@@ -258,11 +269,12 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
         popover.contentSize = placement.size
         popover.contentViewController = NSHostingController(
             rootView: ImageQuickLookContent(
-                url: url, size: placement.size, highlights: requestedHighlights)
+                url: url, size: placement.size, highlights: requestedHighlights, sourceVersion: requestedVersion)
         )
         self.popover = popover
         shownAnchorView = anchorView
         shownURL = url
+        shownVersion = requestedVersion
         shownSize = placement.size
         shownHighlights = requestedHighlights
         popover.show(
@@ -331,7 +343,7 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
 
     /// Fit the image left of or below the preview, then use whichever placement shows it larger.
     /// Leave room for popover chrome so AppKit does not flip it over the anchor.
-    private static func placement(url: URL, anchorView: NSView) -> Placement? {
+    private static func placement(pixelSize: CGSize?, anchorView: NSView) -> Placement? {
         guard let window = anchorView.window else { return nil }
         let anchorInWindow = anchorView.convert(anchorView.bounds, to: nil)
         let anchor = window.convertToScreen(anchorInWindow)
@@ -339,7 +351,7 @@ private final class ImageQuickLookSession: NSObject, NSPopoverDelegate {
         let visible = screen?.visibleFrame ?? anchor.insetBy(dx: -400, dy: -400)
         let backing = screen?.backingScaleFactor ?? 2
 
-        let pixel = ImageThumbnail.pixelSize(of: url) ?? CGSize(width: 1200, height: 900)
+        let pixel = pixelSize ?? CGSize(width: 1200, height: 900)
         let natural = CGSize(
             width: max(pixel.width / backing, 1), height: max(pixel.height / backing, 1))
 
@@ -381,7 +393,9 @@ struct ImageQuickLookContent: View {
     let size: CGSize
     var highlights: [CGRect] = []
 
+    var sourceVersion: UInt64 = 0
     @State private var image: NSImage?
+    @State private var loadFailed = false
     @Environment(\.displayScale) private var displayScale
 
     var body: some View {
@@ -394,18 +408,23 @@ struct ImageQuickLookContent: View {
                     .overlay {
                         ImageSearchHighlightOverlay(imageSize: image.size, regions: highlights)
                     }
+            } else if loadFailed {
+                Image(systemName: "photo.badge.exclamationmark")
             } else {
                 ProgressView()
                     .controlSize(.small)
             }
         }
         .frame(width: size.width, height: size.height)
-        .task(id: "\(url.absoluteString)#\(Int(size.width))x\(Int(size.height))") {
+        .task(id: "\(url.absoluteString)#\(Int(size.width))x\(Int(size.height))#\(sourceVersion)#\(displayScale)") {
+            image = nil
+            loadFailed = false
             let maxPixel =
                 max(size.width, size.height) * displayScale
             let loaded = await ImageThumbnail.loadAsync(url, maxPixel: maxPixel)
             guard !Task.isCancelled else { return }
             image = loaded
+            loadFailed = loaded == nil
         }
     }
 }

@@ -130,7 +130,7 @@ extension ClipboardSQLite {
         }
 
         private func migrateFileURLs() -> Bool {
-            migrateColumns([("file_urls", "TEXT"), ("file_bookmarks", "BLOB")]) { true }
+            migrateColumns([("file_urls", "TEXT"), ("file_bookmarks", "BLOB"), ("file_signature", "TEXT")]) { true }
         }
 
         private func migrateColumns(

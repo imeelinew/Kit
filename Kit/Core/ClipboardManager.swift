@@ -117,10 +117,14 @@ final class ClipboardManager {
                     png, sourceBundleID: capture.sourceBundleID,
                     expectedGeneration: capture.generation)
             case .files(let urls):
+                let kind = await Task.detached(priority: .utility) {
+                    ClipboardStore.kind(forFileURLs: urls)
+                }.value
+                guard !Task.isCancelled else { return }
                 guard
                     let item = self.store.addFiles(
                         urls, sourceBundleID: capture.sourceBundleID,
-                        expectedGeneration: capture.generation)
+                        expectedGeneration: capture.generation, fileKind: kind)
                 else { return }
                 self.store.rememberFileBookmarks(capture.fileBookmarks, for: item.id)
             }

@@ -32,6 +32,7 @@ enum Paster {
                 if keepingPaletteOpen { return !app.isTerminated }
                 return await activateAndWait(app)
             },
+            validate: validate,
             write: write,
             deliver: { postCommandV(toPid: pid) },
             didDeliver: { store.recordHistoryAction(id: item.id, deferPublication: keepingPaletteOpen) })
@@ -48,6 +49,7 @@ enum Paster {
             prepare: { await prepare(item, store: store, targetBundleID: Bundle.main.bundleIdentifier) },
             willDeliver: willDeliver,
             targetReady: { target.restoreEditing(activateWindow: !keepingPaletteOpen) },
+            validate: validate,
             write: write,
             deliver: { target.paste() },
             didDeliver: { store.recordHistoryAction(id: item.id, deferPublication: keepingPaletteOpen) })
@@ -67,6 +69,7 @@ enum Paster {
             return false
         }
         defer { withExtendedLifetime(payload) {} }
+        guard await validate(payload), !Task.isCancelled else { return false }
         willWrite()
         guard write(payload) else { return false }
         store.recordHistoryAction(id: item.id)
@@ -87,7 +90,7 @@ enum Paster {
     ) async -> Payload? {
         // File-backed images retain their original filename and file identity
         if item.isFileBacked {
-            guard let access = ClipboardFileAccess.acquire(item, store: store) else { return nil }
+            guard let access = await ClipboardFileAccess.acquire(item, store: store) else { return nil }
             return .files(access)
         }
         switch item.kind {
@@ -96,8 +99,11 @@ enum Paster {
         case .image:
             guard let url = store.imageURL(for: item) else { return nil }
             if targetBundleID == finderBundleID {
-                guard FileManager.default.isReadableFile(atPath: url.path) else { return nil }
-                return .files(FileAccessLease(urls: [url as NSURL]))
+                return await Task.detached(priority: .userInitiated) {
+                    guard let access = ClipboardFileReference.prepare(
+                        urls: [url], bookmarks: [:], refreshCredentials: false).lease else { return nil as Payload? }
+                    return Payload.files(access)
+                }.value
             }
             return await imagePayload(at: url)
         case .file:
@@ -132,6 +138,16 @@ enum Paster {
         while !app.isActive {
             guard !app.isTerminated, clock.now < deadline, !Task.isCancelled else { return false }
             try? await Task.sleep(for: .milliseconds(10))
+        }
+        return true
+    }
+
+    @MainActor
+    private static func validate(_ payload: Payload) async -> Bool {
+        guard case .files(let access) = payload else { return !Task.isCancelled }
+        guard await access.isCurrent() else {
+            if !Task.isCancelled { ClipboardFileAccess.showFailure() }
+            return false
         }
         return true
     }
