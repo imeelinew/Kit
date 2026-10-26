@@ -45,6 +45,8 @@
 "Forever" = "永久";
 "File" = "文件";
 "Files" = "多个文件";
+"File Unavailable: %@" = "文件不可用：%@";
+"Files Are Unavailable" = "文件不可用";
 "General" = "通用";
 "History" = "历史记录";
 "Image" = "图像";

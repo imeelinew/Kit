@@ -45,6 +45,8 @@
 "Forever" = "Forever";
 "File" = "File";
 "Files" = "Files";
+"File Unavailable: %@" = "File Unavailable: %@";
+"Files Are Unavailable" = "Files Are Unavailable";
 "General" = "General";
 "History" = "History";
 "Image" = "Image";

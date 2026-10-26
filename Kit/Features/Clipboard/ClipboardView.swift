@@ -131,6 +131,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private var onActions: ((ClipboardItem) -> Void)?
         private var onLoadMore: (() -> Void)?
         private var boundsToken: NotificationToken?
+        private var fileDidChangeToken: NotificationToken?
         private weak var hostedContainerView: ClipboardTableContainerView?
         private var lastScroll: ScrollIntent?
         private var pendingScrollApply: DispatchWorkItem?
@@ -217,6 +218,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 MainActor.assumeIsolated { self?.boundsChanged(scrollView.contentView.bounds.origin) }
             }
             boundsToken = NotificationToken(token, center: .default)
+            installFileChangeObserver()
 
             let containerView = ClipboardTableContainerView(scrollView: scrollView)
             hostedContainerView = containerView
@@ -476,6 +478,29 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                         title: AppLocalization.string("Scroll for more", locale: locale),
                         isFirst: false)
                 }
+            }
+        }
+
+        private func installFileChangeObserver() {
+            guard fileDidChangeToken == nil else { return }
+            let token = NotificationCenter.default.addObserver(
+                forName: ImageThumbnail.fileDidChange, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshVisibleThumbnails() }
+            }
+            fileDidChangeToken = NotificationToken(token, center: .default)
+        }
+
+        private func refreshVisibleThumbnails() {
+            guard let tableView, tableView.window?.isVisible == true else { return }
+            let visibleRows = tableView.rows(in: tableView.visibleRect)
+            guard visibleRows.location != NSNotFound else { return }
+            for row in visibleRows.location..<NSMaxRange(visibleRows) {
+                guard rows.indices.contains(row), case .item(let item) = rows[row],
+                    let view = tableView.view(
+                        atColumn: 0, row: row, makeIfNecessary: false) as? ClipboardItemCellView
+                else { continue }
+                view.refreshThumbnail(item: item, imageURL: store?.imageURL(for: item))
             }
         }
 

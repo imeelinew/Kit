@@ -223,6 +223,11 @@ final class ClipboardItemCellView: NSTableCellView {
         renderTitle()
     }
 
+    func refreshThumbnail(item: ClipboardItem, imageURL: URL?) {
+        guard item.isFileBacked else { return }
+        thumbnailView.configure(item: item, imageURL: imageURL)
+    }
+
     static func rowHeight(for item: ClipboardItem) -> CGFloat {
         guard item.kind == .image else { return 36 }
         let hasCustomTitle = item.customTitle?.trimmingCharacters(in: .whitespacesAndNewlines)

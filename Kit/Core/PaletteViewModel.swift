@@ -347,7 +347,7 @@ final class PaletteViewModel {
                 return
             }
             let payload = await ClipboardPreviewPayload.load(
-                for: item, imageURL: core.clipboardStore.imageURL(for: item))
+                for: item, imageURL: core.clipboardStore.imageURL(for: item), store: core.clipboardStore)
             guard !Task.isCancelled else { return }
             guard searchTask == nil, results.first?.id == item.id else { continue }
             if preparedPreview !== payload { preparedPreview = payload }
@@ -878,8 +878,8 @@ final class PaletteViewModel {
         previewWarmTask = nil
         if isPreviewActive, let first = newResults.first {
             let url = core.clipboardStore.imageURL(for: first)
-            previewWarmTask = Task {
-                _ = await ClipboardPreviewPayload.load(for: first, imageURL: url)
+            previewWarmTask = Task { [store = core.clipboardStore] in
+                _ = await ClipboardPreviewPayload.load(for: first, imageURL: url, store: store)
             }
         }
 

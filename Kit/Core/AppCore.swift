@@ -231,10 +231,10 @@ final class AppCore {
 
     func revealClipboardItem(_ item: ClipboardItem, dismissPalette: Bool = true) {
         if item.isFileBacked {
-            let urls = item.fileURLs.filter { FileManager.default.fileExists(atPath: $0.path) }
-            guard !urls.isEmpty else { NSSound.beep(); return }
+            guard let lease = ClipboardFileAccess.acquire(item, store: clipboardStore) else { return }
+            defer { withExtendedLifetime(lease) {} }
             if dismissPalette { hidePalette(restoreFocus: false) }
-            NSWorkspace.shared.activateFileViewerSelecting(urls)
+            NSWorkspace.shared.activateFileViewerSelecting(lease.urls.map { $0 as URL })
             return
         }
         let url: URL

@@ -18,6 +18,7 @@ struct AppTestSuite {
             ("geometry", WindowGeometryTests.run),
             ("paste", PasteTransactionTests.run),
             ("store", ClipboardStoreIntegrationTests.run),
+            ("files", FileLifecycleTests.run),
             ("settings", AppSettingsTests.run),
             ("search", SearchSemanticsTests.run),
             ("palette", PaletteInteractionTests.run),

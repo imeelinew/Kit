@@ -1,5 +1,6 @@
 import AppKit
 import CryptoKit
+import Darwin
 import ImageIO
 
 /// Stable identity for the normalized PNG payload owned by the clipboard store.
@@ -12,6 +13,7 @@ enum ImageFingerprint {
 /// Downsampled, memory-capped image loading for the clipboard UI: ImageIO decodes each on-disk image to exactly the pixel size needed and caches it in a system-evicted `NSCache`.
 enum ImageThumbnail {
     static let rowMaxPixel: CGFloat = 512
+    static let fileDidChange = Notification.Name("com.eli.Kit.fileAppearanceDidChange")
     private static let rowDiskCache = ClipboardRowThumbnailCache()
 
     private final class ManagedImageDirectories: @unchecked Sendable {
@@ -29,10 +31,39 @@ enum ImageThumbnail {
 
     private static let managedImageDirectories = ManagedImageDirectories()
 
+    private enum FileSignature: Equatable {
+        case metadata(
+            device: dev_t,
+            inode: ino_t,
+            mode: mode_t,
+            size: off_t,
+            modifiedSeconds: time_t,
+            modifiedNanoseconds: Int,
+            changedSeconds: time_t,
+            changedNanoseconds: Int)
+        case failure(Int32)
+
+        static func read(at url: URL) -> FileSignature {
+            var info = stat()
+            let result = url.path.withCString { stat($0, &info) }
+            guard result == 0 else { return .failure(errno) }
+            return .metadata(
+                device: info.st_dev,
+                inode: info.st_ino,
+                mode: info.st_mode,
+                size: info.st_size,
+                modifiedSeconds: info.st_mtimespec.tv_sec,
+                modifiedNanoseconds: info.st_mtimespec.tv_nsec,
+                changedSeconds: info.st_ctimespec.tv_sec,
+                changedNanoseconds: info.st_ctimespec.tv_nsec)
+        }
+    }
+
     private final class FileVersions: @unchecked Sendable {
         private struct Entry {
             let version: UInt64
             var accessed: UInt64
+            let signature: FileSignature?
         }
         private let lock = NSLock()
         private var clock: UInt64 = 0
@@ -52,8 +83,29 @@ enum ImageThumbnail {
                 {
                     entries[oldest] = nil
                 }
-                entries[path] = Entry(version: clock, accessed: clock)
+                entries[path] = Entry(
+                    version: clock, accessed: clock,
+                    signature: invalidating ? entries[path]?.signature : nil)
                 return clock
+            }
+        }
+
+        func refresh(_ signature: FileSignature, for url: URL) -> Bool {
+            lock.withLock {
+                clock &+= 1
+                let path = url.standardizedFileURL.path
+                if var entry = entries[path], entry.signature == signature {
+                    entry.accessed = clock
+                    entries[path] = entry
+                    return false
+                }
+                if entries[path] == nil, entries.count >= 1024,
+                    let oldest = entries.min(by: { $0.value.accessed < $1.value.accessed })?.key
+                {
+                    entries[oldest] = nil
+                }
+                entries[path] = Entry(version: clock, accessed: clock, signature: signature)
+                return true
             }
         }
     }
@@ -63,6 +115,14 @@ enum ImageThumbnail {
     static func fileVersion(for url: URL) -> UInt64 {
         if managedImageDirectories.contains(url.deletingLastPathComponent()) { return 0 }
         return fileVersions.version(for: url)
+    }
+
+    /// Refreshes the cached metadata signature without blocking readers on filesystem access
+    @discardableResult
+    nonisolated static func refreshFile(at url: URL) -> Bool {
+        if managedImageDirectories.contains(url.deletingLastPathComponent()) { return false }
+        let signature = FileSignature.read(at: url)
+        return fileVersions.refresh(signature, for: url)
     }
 
     /// A fresh version prevents pending decodes from repopulating the current file's cache

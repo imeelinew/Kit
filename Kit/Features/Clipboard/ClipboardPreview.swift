@@ -12,6 +12,8 @@ final class ClipboardPreviewPayload {
     private let copiedAt: Date
     private let imageURL: URL?
     private let imageVersion: UInt64
+    private let fileVersions: [UInt64]
+    private let fileAccess: FileAccessLease?
 
     struct Details: Sendable {
         var characters: Int?
@@ -35,7 +37,7 @@ final class ClipboardPreviewPayload {
 
     private init(
         item: ClipboardItem, image: NSImage?, details: Details,
-        imageURL: URL?, imageVersion: UInt64
+        imageURL: URL?, imageVersion: UInt64, fileVersions: [UInt64], fileAccess: FileAccessLease?
     ) {
         self.itemID = item.id
         self.image = image
@@ -43,11 +45,14 @@ final class ClipboardPreviewPayload {
         self.copiedAt = item.lastCopiedAt
         self.imageURL = imageURL
         self.imageVersion = imageVersion
+        self.fileVersions = fileVersions
+        self.fileAccess = fileAccess
     }
 
     func matches(_ item: ClipboardItem) -> Bool {
         itemID == item.id && copiedAt == item.lastCopiedAt
             && imageVersion == (imageURL.map { ImageThumbnail.fileVersion(for: $0) } ?? 0)
+            && fileVersions == item.fileURLs.map { ImageThumbnail.fileVersion(for: $0) }
     }
 
     static func cached(for item: ClipboardItem) -> ClipboardPreviewPayload? {
@@ -56,10 +61,28 @@ final class ClipboardPreviewPayload {
         return payload
     }
 
-    static func load(for item: ClipboardItem, imageURL: URL?) async -> ClipboardPreviewPayload {
+    static func load(
+        for item: ClipboardItem, imageURL: URL?, store: ClipboardStore? = nil
+    ) async -> ClipboardPreviewPayload {
+        let access = item.isFileBacked ? store.flatMap {
+            ClipboardFileAccess.acquire(item, store: $0, interactive: false)
+        } : nil
+        if item.isFileBacked {
+            let changed = await Task.detached(priority: .userInitiated) {
+                var changed = false
+                for url in item.fileURLs {
+                    if ImageThumbnail.refreshFile(at: url) { changed = true }
+                }
+                return changed
+            }.value
+            if changed {
+                NotificationCenter.default.post(name: ImageThumbnail.fileDidChange, object: nil)
+            }
+        }
         if let hit = cached(for: item) { return hit }
         let generation = cacheGeneration
         let imageVersion = imageURL.map { ImageThumbnail.fileVersion(for: $0) } ?? 0
+        let fileVersions = item.fileURLs.map { ImageThumbnail.fileVersion(for: $0) }
         let detailsTask = Task.detached(priority: .userInitiated) {
             var details = Details()
             guard !Task.isCancelled else { return details }
@@ -79,12 +102,14 @@ final class ClipboardPreviewPayload {
                 FileManager.default.fileExists(atPath: imageURL.path)
             {
                 details.pixelSize = ImageThumbnail.pixelSize(of: imageURL)
-                details.fileBytes = try? imageURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+                details.fileBytes = try? URL(fileURLWithPath: imageURL.path)
+                    .resourceValues(forKeys: [.fileSizeKey]).fileSize
             } else if item.isFileBacked {
                 var totalBytes = 0
                 var foundSize = false
                 for url in item.fileURLs {
-                    guard let values = try? url.resourceValues(
+                    let freshURL = URL(fileURLWithPath: url.path)
+                    guard let values = try? freshURL.resourceValues(
                         forKeys: [.fileSizeKey, .isRegularFileKey]),
                         values.isRegularFile == true,
                         let size = values.fileSize
@@ -105,7 +130,8 @@ final class ClipboardPreviewPayload {
             }
             return ClipboardPreviewPayload(
                 item: item, image: image, details: await detailsTask.value,
-                imageURL: imageURL, imageVersion: imageVersion)
+                imageURL: imageURL, imageVersion: imageVersion,
+                fileVersions: fileVersions, fileAccess: access)
         } onCancel: {
             detailsTask.cancel()
         }
@@ -122,11 +148,17 @@ struct ClipboardPreview: View {
         let itemID: ClipboardItem.ID
         let copiedAt: Date
         let imageVersion: UInt64
+        let fileRevision: UInt64
     }
 
     private struct HighlightLoadID: Hashable {
         let url: URL
         let version: UInt64
+    }
+
+    private struct FileRefreshID: Hashable {
+        let itemID: ClipboardItem.ID
+        let copiedAt: Date
     }
 
     let item: ClipboardItem?
@@ -137,13 +169,15 @@ struct ClipboardPreview: View {
 
     @State private var loadedPayload: ClipboardPreviewPayload?
     @State private var imageHighlights: ImageSearchHighlightPayload?
+    @State private var fileRevision: UInt64 = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var loadID: LoadID? {
         item.map {
             LoadID(
                 itemID: $0.id, copiedAt: $0.lastCopiedAt,
-                imageVersion: store.imageURL(for: $0).map { ImageThumbnail.fileVersion(for: $0) } ?? 0)
+                imageVersion: store.imageURL(for: $0).map { ImageThumbnail.fileVersion(for: $0) } ?? 0,
+                fileRevision: fileRevision)
         }
     }
 
@@ -170,9 +204,31 @@ struct ClipboardPreview: View {
                 return
             }
             let payload = await ClipboardPreviewPayload.load(
-                for: item, imageURL: store.imageURL(for: item))
+                for: item, imageURL: store.imageURL(for: item), store: store)
             guard !Task.isCancelled else { return }
             loadedPayload = payload
+        }
+        .task(id: vm.isPreviewActive && item?.isFileBacked == true ? item.map {
+            FileRefreshID(itemID: $0.id, copiedAt: $0.lastCopiedAt)
+        } : nil) {
+            guard vm.isPreviewActive, let item, item.isFileBacked else { return }
+            let access = ClipboardFileAccess.acquire(item, store: store, interactive: false)
+            defer { withExtendedLifetime(access) {} }
+            while !Task.isCancelled {
+                let changed = await Task.detached(priority: .utility) {
+                    var changed = false
+                    for url in item.fileURLs {
+                        if ImageThumbnail.refreshFile(at: url) { changed = true }
+                    }
+                    return changed
+                }.value
+                guard !Task.isCancelled else { return }
+                if changed {
+                    fileRevision &+= 1
+                    NotificationCenter.default.post(name: ImageThumbnail.fileDidChange, object: nil)
+                }
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            }
         }
         .task(id: imageHighlightURL.map {
             HighlightLoadID(url: $0, version: ImageThumbnail.fileVersion(for: $0))

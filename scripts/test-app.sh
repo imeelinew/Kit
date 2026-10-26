@@ -40,6 +40,7 @@ xcrun swiftc -swift-version 6 -parse-as-library \
     "$repo_root/tests/WindowGeometryTests.swift" \
     "$repo_root/tests/PasteTransactionTests.swift" \
     "$repo_root/tests/ClipboardStoreIntegrationTests.swift" \
+    "$repo_root/tests/FileLifecycleTests.swift" \
     "$repo_root/tests/AppSettingsTests.swift" \
     "$repo_root/tests/SearchSemanticsTests.swift" \
     "$repo_root/tests/PaletteInteractionTests.swift" \

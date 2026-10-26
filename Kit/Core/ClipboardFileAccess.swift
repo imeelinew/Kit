@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import OSLog
 
 /// Keeps the original NSURL objects and their access scopes alive through pasteboard delivery
@@ -40,18 +41,53 @@ enum ClipboardFileAccess {
         return bookmarks
     }
 
-    static func acquire(_ item: ClipboardItem, store: ClipboardStore) -> FileAccessLease? {
+    enum Availability: Sendable {
+        case available, missing, needsPermission, unavailable
+    }
+
+    /// Inspect the original address without mistaking a privacy denial for a missing file
+    nonisolated static func availability(of url: URL) -> Availability {
+        var metadata = stat()
+        guard stat(url.path, &metadata) == 0 else {
+            switch errno {
+            case ENOENT, ENOTDIR: return .missing
+            case EACCES, EPERM: return .needsPermission
+            default: return .unavailable
+            }
+        }
+        guard access(url.path, R_OK) == 0 else {
+            switch errno {
+            case ENOENT, ENOTDIR: return .missing
+            case EACCES, EPERM: return .needsPermission
+            default: return .unavailable
+            }
+        }
+        return .available
+    }
+
+    private static func resolve(_ data: Data?) -> NSURL? {
+        guard let data else { return nil }
+        var stale: ObjCBool = false
+        return try? NSURL(
+            resolvingBookmarkData: data, options: [.withSecurityScope, .withoutUI, .withoutMounting],
+            relativeTo: nil, bookmarkDataIsStale: &stale)
+    }
+
+    /// Credentials grant access, while delivery always refers to the original recorded address
+    static func acquire(
+        _ item: ClipboardItem, store: ClipboardStore, interactive: Bool = true
+    ) -> FileAccessLease? {
         var bookmarks = store.fileBookmarks(for: item.id)
-        // An older history entry can still use credentials on the current native pasteboard
-        let pasteboard = NSPasteboard.general
-        if !(pasteboard.types ?? []).contains(ClipboardCapturePolicy.internalType),
-            (pasteboard.types ?? []).contains(.fileURL),
-            let nativeURLs = pasteboard.readObjects(
-                forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [NSURL]
-        {
-            let wanted = Set(item.fileURLs.map { key($0 as NSURL) })
-            let fresh = capture(nativeURLs.filter { wanted.contains(key($0)) })
-            bookmarks.merge(fresh) { _, new in new }
+        if interactive {
+            let pasteboard = NSPasteboard.general
+            if !(pasteboard.types ?? []).contains(ClipboardCapturePolicy.internalType),
+                (pasteboard.types ?? []).contains(.fileURL),
+                let nativeURLs = pasteboard.readObjects(
+                    forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [NSURL]
+            {
+                let wanted = Set(item.fileURLs.map { key($0 as NSURL) })
+                bookmarks.merge(capture(nativeURLs.filter { wanted.contains(key($0)) })) { _, new in new }
+            }
         }
 
         var urls: [NSURL] = []
@@ -62,59 +98,63 @@ enum ClipboardFileAccess {
                 for url in scopedURLs { url.stopAccessingSecurityScopedResource() }
             }
         }
+        func hold(_ url: NSURL) {
+            if url.startAccessingSecurityScopedResource() { scopedURLs.append(url) }
+        }
         for original in item.fileURLs {
             guard !Task.isCancelled else { return nil }
             let originalKey = key(original as NSURL)
-            var restoredURL: NSURL?
-            if let data = bookmarks[originalKey] {
-                var stale: ObjCBool = false
-                restoredURL = try? NSURL(
-                    resolvingBookmarkData: data, options: [.withSecurityScope, .withoutUI],
-                    relativeTo: nil, bookmarkDataIsStale: &stale)
-            }
-            // Upgrade accessible legacy paths before writing, rather than submitting a bare URL
-            if restoredURL == nil, isReadable(original as NSURL),
-                let data = capture([original as NSURL])[originalKey]
-            {
-                var stale: ObjCBool = false
-                restoredURL = try? NSURL(
-                    resolvingBookmarkData: data, options: [.withSecurityScope, .withoutUI],
-                    relativeTo: nil, bookmarkDataIsStale: &stale)
-            }
-            var url = restoredURL ?? (original as NSURL)
-            var started = url.startAccessingSecurityScopedResource()
-            if restoredURL == nil || !isReadable(url) {
-                if started { url.stopAccessingSecurityScopedResource() }
+            let credential = resolve(bookmarks[originalKey])
+            if let credential { hold(credential) }
+            var state = availability(of: original)
+            if case .needsPermission = state {
+                guard interactive else { continue }
                 guard let selected = authorize(original) else { return nil }
-                url = selected
-                started = url.startAccessingSecurityScopedResource()
-                guard isReadable(url) else {
-                    if started { url.stopAccessingSecurityScopedResource() }
+                hold(selected)
+                state = availability(of: original)
+                if case .needsPermission = state {
                     showFailure(filename: original.lastPathComponent)
                     return nil
                 }
             }
-            if started { scopedURLs.append(url) }
-            urls.append(url)
-            // Refresh stale bookmarks while their scope is active, preserving the history key
-            if let data = try? url.bookmarkData(
-                options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
-                includingResourceValuesForKeys: nil, relativeTo: nil)
+            guard case .available = state else { continue }
+
+            // Mint from a fresh path URL, so an old bookmark cannot substitute a moved inode
+            var delivery = original as NSURL
+            if let data = capture([delivery])[originalKey], let current = resolve(data),
+                key(current) == originalKey
             {
+                hold(current)
+                delivery = current
                 bookmarks[originalKey] = data
+            } else if let credential, key(credential) == originalKey {
+                delivery = credential
             }
+            // A file may disappear while its credentials are being refreshed
+            guard case .available = availability(of: original) else { continue }
+            urls.append(delivery)
         }
         guard !Task.isCancelled else { return nil }
-        if !store.rememberFileBookmarks(bookmarks, for: item.id) {
+        guard !urls.isEmpty else {
+            if interactive {
+                showUnavailable(filename: item.fileURLs.count == 1 ? item.fileURLs.first?.lastPathComponent : nil)
+            }
+            return nil
+        }
+        if interactive, !store.rememberFileBookmarks(bookmarks, for: item.id) {
             logger.error("Could not persist file access credentials")
         }
         acquired = true
+        logger.info("File access prepared requested=\(item.fileURLs.count) available=\(urls.count)")
         return FileAccessLease(urls: urls, scopedURLs: scopedURLs)
     }
 
-    private static func isReadable(_ url: NSURL) -> Bool {
-        guard let path = url.path else { return false }
-        return FileManager.default.isReadableFile(atPath: path)
+    static func showUnavailable(filename: String? = nil) {
+        let locale = AppCore.shared.settings.language.locale
+        let message = filename.map {
+            String(format: AppLocalization.string("File Unavailable: %@", locale: locale), $0)
+        } ?? AppLocalization.string("Files Are Unavailable", locale: locale)
+        showMessage(message)
     }
 
     private static func authorize(_ original: URL) -> NSURL? {
@@ -145,15 +185,18 @@ enum ClipboardFileAccess {
     static func showFailure(filename: String? = nil) {
         guard !Task.isCancelled else { return }
         let locale = AppCore.shared.settings.language.locale
+        let message = filename.map {
+            String(format: AppLocalization.string("Unable to Access %@", locale: locale), $0)
+        } ?? AppLocalization.string("Unable to Copy Files", locale: locale)
+        showMessage(message)
+    }
+
+    private static func showMessage(_ message: String) {
+        guard !Task.isCancelled else { return }
         let alert = NSAlert()
         alert.alertStyle = .warning
-        if let filename {
-            alert.messageText = String(
-                format: AppLocalization.string("Unable to Access %@", locale: locale), filename)
-        } else {
-            alert.messageText = AppLocalization.string("Unable to Copy Files", locale: locale)
-        }
-        alert.addButton(withTitle: AppLocalization.string("OK", locale: locale))
+        alert.messageText = message
+        alert.addButton(withTitle: AppLocalization.string("OK", locale: AppCore.shared.settings.language.locale))
         _ = AppCore.shared.runModalAlert(alert)
     }
 }

@@ -93,6 +93,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
             panel.makeKeyAndOrderFront(nil)
             panel.orderFrontRegardless()
             panel.requestSearchFocus()
+            NotificationCenter.default.post(name: ImageThumbnail.fileDidChange, object: nil)
             isPresenting = false
             presentationTask = nil
             DispatchQueue.main.async { [weak self, weak panel] in

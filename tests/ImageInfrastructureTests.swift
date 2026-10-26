@@ -437,6 +437,163 @@ enum ImageInfrastructureTests {
         )
     }
 
+    @MainActor
+    private static func fileBackedPreviewLifecycle(in root: URL) async throws {
+        let storeDirectory = root.appendingPathComponent("preview-store", isDirectory: true)
+        let sourceDirectory = root.appendingPathComponent("preview-external", isDirectory: true)
+        let source = sourceDirectory.appendingPathComponent("changing.png")
+        let store = ClipboardStore(
+            directory: storeDirectory, maintenanceInterval: 86_400,
+            recognizeImage: { _ in .failed })
+
+        ClipboardPreviewPayload.purge()
+        defer {
+            ClipboardPreviewPayload.purge()
+            ImageThumbnail.removeCachedImage(for: source)
+        }
+
+        let first = image(width: 48, height: 32, red: 210, green: 40, blue: 30)
+        try write(first.png, to: source)
+        guard let item = store.addFiles([source], sourceBundleID: nil) else {
+            throw TestSupport.Failure(description: "The external PNG becomes a file-backed history item")
+        }
+        let itemID = item.id
+        await store.waitForImageOCR()
+
+        // OCR persistence reloads the row from SQLite, so lifecycle comparisons start here
+        guard let baselineItem = store.item(id: itemID) else {
+            throw TestSupport.Failure(description: "The inserted history item remains after OCR setup")
+        }
+        let copiedAt = baselineItem.lastCopiedAt
+        let copyCount = baselineItem.copyCount
+        let expectedPath = source.standardizedFileURL
+        try TestSupport.expect(
+            baselineItem.kind == .image,
+            "The external PNG is classified as an image item")
+        try TestSupport.expect(
+            !expectedPath.path.hasPrefix(storeDirectory.standardizedFileURL.path + "/"),
+            "The image fixture lives outside the store-owned images directory"
+        )
+
+        let firstPayload = await ClipboardPreviewPayload.load(
+            for: item, imageURL: source, store: store)
+        guard let firstImage = firstPayload.image else {
+            throw TestSupport.Failure(description: "The initial file-backed preview has an image")
+        }
+        try TestSupport.expect(
+            firstPayload.details.pixelSize == CGSize(width: 48, height: 32),
+            "The initial preview reports the source PNG pixel dimensions"
+        )
+        try TestSupport.expect(
+            imagePixelSize(firstImage).map { close($0, CGSize(width: 48, height: 32)) } == true,
+            "The initial preview image contains the source PNG pixels"
+        )
+        try TestSupport.expect(
+            firstPayload.details.fileBytes == first.png.count,
+            "The initial preview reports the source PNG byte count"
+        )
+        try TestSupport.expect(
+            firstPayload.matches(item) && ClipboardPreviewPayload.cached(for: item) === firstPayload,
+            "The initial complete payload enters the current preview cache"
+        )
+
+        let replacement = image(width: 73, height: 29, red: 30, green: 120, blue: 220)
+        try write(replacement.png, to: source)
+        try TestSupport.expect(
+            ImageThumbnail.refreshFile(at: source),
+            "An atomic replacement at the same path advances the file version"
+        )
+        try TestSupport.expect(
+            !firstPayload.matches(item) && ClipboardPreviewPayload.cached(for: item) == nil,
+            "The pre-replacement payload no longer matches the source path"
+        )
+
+        let replacementPayload = await ClipboardPreviewPayload.load(
+            for: item, imageURL: source, store: store)
+        guard let replacementImage = replacementPayload.image else {
+            throw TestSupport.Failure(description: "The replacement preview has an image")
+        }
+        try TestSupport.expect(
+            replacementPayload !== firstPayload,
+            "The replacement source produces a new preview payload"
+        )
+        try TestSupport.expect(
+            replacementPayload.details.pixelSize == CGSize(width: 73, height: 29),
+            "The replacement preview reports the new source pixel dimensions"
+        )
+        try TestSupport.expect(
+            imagePixelSize(replacementImage).map {
+                close($0, CGSize(width: 73, height: 29))
+            } == true,
+            "The replacement preview image contains the new source pixels"
+        )
+        try TestSupport.expect(
+            replacementPayload.details.fileBytes == replacement.png.count,
+            "The replacement preview reports the replacement PNG byte count"
+        )
+
+        try FileManager.default.removeItem(at: source)
+        try TestSupport.expect(
+            ImageThumbnail.refreshFile(at: source),
+            "Deleting the source advances the file version"
+        )
+        try TestSupport.expect(
+            !replacementPayload.matches(item)
+                && ClipboardPreviewPayload.cached(for: item) == nil,
+            "The replacement payload no longer matches after source deletion"
+        )
+
+        let missingPayload = await ClipboardPreviewPayload.load(
+            for: item, imageURL: source, store: store)
+        try TestSupport.expect(
+            missingPayload.image == nil
+                && missingPayload.details.pixelSize == nil
+                && missingPayload.details.fileBytes == nil,
+            "A deleted source produces no stale preview image or metadata"
+        )
+
+        let restored = image(width: 36, height: 54, red: 180, green: 30, blue: 160)
+        try write(restored.png, to: source)
+        try TestSupport.expect(
+            ImageThumbnail.refreshFile(at: source),
+            "Recreating the source at the same path advances the file version"
+        )
+        try TestSupport.expect(
+            !missingPayload.matches(item) && ClipboardPreviewPayload.cached(for: item) == nil,
+            "The missing-source payload no longer matches after recreation"
+        )
+
+        let restoredPayload = await ClipboardPreviewPayload.load(
+            for: item, imageURL: source, store: store)
+        guard let restoredImage = restoredPayload.image else {
+            throw TestSupport.Failure(description: "The recreated preview has an image")
+        }
+        try TestSupport.expect(
+            restoredPayload.details.pixelSize == CGSize(width: 36, height: 54)
+                && imagePixelSize(restoredImage).map {
+                    close($0, CGSize(width: 36, height: 54))
+                } == true,
+            "The recreated source restores the current preview pixels"
+        )
+        try TestSupport.expect(
+            restoredPayload.details.fileBytes == restored.png.count,
+            "The recreated source restores the current preview byte count"
+        )
+
+        guard let storedItem = store.item(id: itemID) else {
+            throw TestSupport.Failure(description: "The original history item remains after source changes")
+        }
+        try TestSupport.expect(
+            storedItem.id == itemID && storedItem.lastCopiedAt == copiedAt
+                && storedItem.copyCount == copyCount,
+            "Source replacement and deletion do not recopy or replace the history item"
+        )
+        try TestSupport.expect(
+            storedItem.fileURLs == [expectedPath],
+            "The history keeps the original standardized source path"
+        )
+    }
+
     private static func characterBounds(
         count: Int, values: [Int: CGRect]
     ) -> [CGRect?] {
@@ -641,11 +798,12 @@ enum ImageInfrastructureTests {
             try rowCacheSymlinkDefense(in: root)
             try rowCacheByteBound(in: root)
             try await thumbnailBehavior(in: root)
+            try await fileBackedPreviewLifecycle(in: root)
             try layoutNormalization()
             try layoutMatches()
             try overlayGeometry()
             try await highlightPayloadCache()
         }
-        print("PASS: image fingerprints, disk row cache, thumbnails, OCR layout, highlight geometry")
+        print("PASS: image fingerprints, row cache, thumbnails, file preview lifecycle, OCR layout")
     }
 }
