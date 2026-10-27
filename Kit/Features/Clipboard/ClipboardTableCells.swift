@@ -156,7 +156,7 @@ final class ClipboardItemCellView: NSTableCellView {
             titleTrailingConstraint,
             missingFileIndicator.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             missingFileIndicator.centerYAnchor.constraint(
-                equalTo: titleLabel.centerYAnchor, constant: isFlipped ? 2 : -2),
+                equalTo: titleLabel.centerYAnchor, constant: 1),
             missingFileIndicator.widthAnchor.constraint(equalToConstant: 14),
             missingFileIndicator.heightAnchor.constraint(equalToConstant: 14),
             titleLabel.heightAnchor.constraint(equalToConstant: Theme.Size.rowIcon),
