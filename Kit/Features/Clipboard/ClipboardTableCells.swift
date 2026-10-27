@@ -136,7 +136,7 @@ final class ClipboardItemCellView: NSTableCellView {
         addSubview(thumbnailView)
         addSubview(titleLabel)
 
-        missingFileIndicator.image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: nil)?
+        missingFileIndicator.image = NSImage(systemSymbolName: "exclamationmark.circle.fill", accessibilityDescription: nil)?
             .withSymbolConfiguration(.init(pointSize: 12, weight: .regular))
         missingFileIndicator.contentTintColor = .secondaryLabelColor
         missingFileIndicator.translatesAutoresizingMaskIntoConstraints = false
@@ -155,8 +155,7 @@ final class ClipboardItemCellView: NSTableCellView {
             thumbnailView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             titleTrailingConstraint,
             missingFileIndicator.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            // Keep the glyph on the title baseline as the type size changes
-            missingFileIndicator.centerYAnchor.constraint(equalTo: titleLabel.firstBaselineAnchor),
+            missingFileIndicator.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
             missingFileIndicator.widthAnchor.constraint(equalToConstant: 14),
             missingFileIndicator.heightAnchor.constraint(equalToConstant: 14),
             titleLabel.heightAnchor.constraint(equalToConstant: Theme.Size.rowIcon),
