@@ -508,6 +508,8 @@ private final class ClipboardThumbnailView: NSView {
     private static let imageMaxPixel = ImageThumbnail.rowMaxPixel
 
     private let symbolView = NSImageView()
+    private var symbolWidthConstraint: NSLayoutConstraint!
+    private var symbolHeightConstraint: NSLayoutConstraint!
     private var representedID: ClipboardItem.ID?
     private var representedURL: URL?
     private var representedVersion: UInt64?
@@ -527,12 +529,14 @@ private final class ClipboardThumbnailView: NSView {
         symbolView.imageScaling = .scaleProportionallyDown
         symbolView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(symbolView)
+        symbolWidthConstraint = symbolView.widthAnchor.constraint(equalToConstant: 16)
+        symbolHeightConstraint = symbolView.heightAnchor.constraint(equalToConstant: 16)
 
         NSLayoutConstraint.activate([
             symbolView.centerXAnchor.constraint(equalTo: centerXAnchor),
             symbolView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            symbolView.widthAnchor.constraint(equalToConstant: 16),
-            symbolView.heightAnchor.constraint(equalToConstant: 16),
+            symbolWidthConstraint,
+            symbolHeightConstraint,
         ])
     }
 
@@ -663,6 +667,8 @@ private final class ClipboardThumbnailView: NSView {
     }
 
     private func showKind(_ kind: ClipboardItem.Kind) {
+        symbolWidthConstraint.constant = 16
+        symbolHeightConstraint.constant = 16
         placeholderKind = kind
         displayedImage = nil
         displayedFileIcon = nil
@@ -689,6 +695,8 @@ private final class ClipboardThumbnailView: NSView {
     }
 
     private func showFileIcon(_ image: NSImage) {
+        symbolWidthConstraint.constant = Theme.Size.rowIcon
+        symbolHeightConstraint.constant = Theme.Size.rowIcon
         displayedImage = nil
         displayedFileIcon = image
         layer?.contents = nil

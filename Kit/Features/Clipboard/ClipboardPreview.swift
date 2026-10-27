@@ -487,7 +487,7 @@ private struct ClipboardFileIcon: View {
         .task(id: "\(url.absoluteString)#\(ImageThumbnail.fileVersion(for: url))") {
             let version = ImageThumbnail.fileVersion(for: url)
             image = nil
-            let loaded = await IconCache.loadAsync(forFile: url.path, version: version)
+            let loaded = await IconCache.loadAsync(forFile: url.path, version: version, size: max(size, 48))
             guard !Task.isCancelled, version == ImageThumbnail.fileVersion(for: url) else { return }
             image = loaded
         }
