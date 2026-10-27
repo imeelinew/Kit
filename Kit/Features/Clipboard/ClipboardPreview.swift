@@ -454,6 +454,7 @@ private struct ClipboardFileCollectionPreview: View {
                         .accessibilityElement(children: .combine)
                     }
                 }
+                .background(DisableScrollBounce().allowsHitTesting(false))
             }
             .frame(minHeight: 0, idealHeight: height, maxHeight: height)
             .background(Color.primary.opacity(0.025))

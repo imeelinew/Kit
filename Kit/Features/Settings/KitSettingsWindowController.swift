@@ -209,6 +209,7 @@ private final class SourceListSelectionView: NSView {
         DispatchQueue.main.async { [weak self] in
             guard let table = self?.enclosingTable else { return }
             table.style = .sourceList
+            table.enclosingScrollView?.verticalScrollElasticity = .none
         }
     }
 

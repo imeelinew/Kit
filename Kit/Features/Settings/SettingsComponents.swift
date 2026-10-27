@@ -8,6 +8,7 @@ struct PreferencesForm<Content: View>: View {
             content
         }
         .formStyle(.grouped)
+        .background(DisableScrollBounce().allowsHitTesting(false))
         .contentMargins(.horizontal, 18, for: .scrollContent)
         .contentMargins(.top, 0, for: .scrollContent)
     }

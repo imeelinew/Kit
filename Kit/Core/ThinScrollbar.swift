@@ -1,5 +1,6 @@
 import AppKit
 import QuartzCore
+import SwiftUI
 
 /// The scroll destination, indicator and edge mask share one AppKit lifecycle
 class KitScrollView: NSScrollView {
@@ -32,6 +33,7 @@ class KitScrollView: NSScrollView {
         borderType = .noBorder
         hasVerticalScroller = false
         hasHorizontalScroller = false
+        verticalScrollElasticity = .none
         scrollerStyle = .overlay
         autohidesScrollers = true
         automaticallyAdjustsContentInsets = false
@@ -111,6 +113,46 @@ class KitScrollView: NSScrollView {
         origin.y = minimum + min(1, max(0, fraction)) * (maximum - minimum)
         clip.scroll(to: origin)
         reflectScrolledClipView(clip)
+    }
+}
+
+/// Applies the same edge behavior to SwiftUI scroll views through their AppKit host
+struct DisableScrollBounce: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { ScrollBounceMarker() }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        (view as? ScrollBounceMarker)?.apply()
+    }
+}
+
+private final class ScrollBounceMarker: NSView {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        apply()
+    }
+
+    func apply() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if let scrollView = enclosingScrollView {
+                scrollView.verticalScrollElasticity = .none
+                return
+            }
+            var ancestor = superview
+            while let view = ancestor {
+                let scrollViews = Self.scrollViews(in: view)
+                if !scrollViews.isEmpty {
+                    scrollViews.forEach { $0.verticalScrollElasticity = .none }
+                    return
+                }
+                ancestor = view.superview
+            }
+        }
+    }
+
+    private static func scrollViews(in view: NSView) -> [NSScrollView] {
+        if let scrollView = view as? NSScrollView { return [scrollView] }
+        return view.subviews.flatMap { scrollViews(in: $0) }
     }
 }
 

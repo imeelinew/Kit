@@ -154,6 +154,11 @@ enum ClipboardPreviewLifecycleTests {
             let content = pane.subviews.first!
             let title = pane.subviews.compactMap { $0 as? NSTextField }.first!
             let scroll = descendants(content).compactMap { $0 as? NSScrollView }.first!
+            let information = pane.subviews.compactMap { $0 as? KitScrollView }.first!
+            precondition(scroll.verticalScrollElasticity == .none,
+                         "The file preview stops at its scroll edges without rubber banding")
+            precondition(information.verticalScrollElasticity == .none,
+                         "The information pane stops at its scroll edges without rubber banding")
             let viewport = pane.convert(scroll.bounds, from: scroll)
             precondition(viewport.minY >= -1 && viewport.maxY <= title.frame.minY + 1,
                          "The file scroll viewport stays above the information region at every pane height")
@@ -165,8 +170,30 @@ enum ClipboardPreviewLifecycleTests {
         print("PASS: multi-file preview viewport, internal scrolling and clipping across pane sizes")
     }
 
+    private static func settingsScrollEdges() async {
+        let hosting = NSHostingView(rootView: PreferencesForm {
+            Section("Settings") {
+                ForEach(0..<20) { index in Text("Setting \(index)") }
+            }
+        })
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 200),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = hosting
+        defer { window.close() }
+        hosting.layoutSubtreeIfNeeded()
+        await settle()
+        func scrollViews(in view: NSView) -> [NSScrollView] {
+            (view as? NSScrollView).map { [$0] } ?? view.subviews.flatMap { scrollViews(in: $0) }
+        }
+        let views = scrollViews(in: hosting)
+        precondition(!views.isEmpty && views.allSatisfy { $0.verticalScrollElasticity == .none },
+                     "Settings forms stop at their scroll edges without rubber banding")
+    }
+
     static func run() async throws {
         try await multiFilePreviewLayout()
+        await settingsScrollEdges()
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("kit-preview-lifecycle-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }
