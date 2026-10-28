@@ -849,7 +849,7 @@ final class ClipboardStore: ObservableObject {
             searchTask.cancel()
         }
         guard !Task.isCancelled, imageGeneration == imageTextSearchGeneration, let page else {
-            return ClipboardSearchPage(items: [], nextCursor: nil)
+            return ClipboardSearchPage(items: [], nextCursor: nil, failed: true)
         }
         return page
     }
@@ -1478,8 +1478,12 @@ final class ClipboardStore: ObservableObject {
         guard
             sqlite3_open_v2(dbURL.path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, nil)
                 == SQLITE_OK,
-            let db, ClipboardSQLite.prepareSchema(in: db)
-        else { return }
+            let db
+        else {
+            ClipboardSQLite.logFailure(db, operation: "open clipboard database")
+            return
+        }
+        guard ClipboardSQLite.prepareSchema(in: db) else { return }
         insertStmt = prepare(
             """
             INSERT INTO items(
@@ -1541,7 +1545,10 @@ final class ClipboardStore: ObservableObject {
 
     private func prepare(_ sql: String) -> OpaquePointer? {
         var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            ClipboardSQLite.logFailure(db, operation: "prepare statement")
+            return nil
+        }
         return stmt
     }
 

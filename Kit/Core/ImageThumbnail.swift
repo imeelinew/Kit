@@ -185,21 +185,46 @@ enum ImageThumbnail {
         let values = NSCache<NSString, NSImage>()
         private let mutationLock = NSLock()
         private var generation: UInt64 = 0
+        private var epochs: [String: UInt64] = [:]
+        private var keysByPath: [String: Set<NSString>] = [:]
 
         func currentGeneration() -> UInt64 {
             mutationLock.withLock { generation }
         }
 
-        func insert(_ image: NSImage, forKey key: NSString, cost: Int, generation: UInt64) {
+        func epoch(for path: String) -> UInt64 {
+            mutationLock.withLock { epochs[path] ?? 0 }
+        }
+
+        func insert(
+            _ image: NSImage, forKey key: NSString, path: String, epoch: UInt64,
+            cost: Int, generation: UInt64
+        ) {
             mutationLock.withLock {
-                guard generation == self.generation else { return }
+                guard generation == self.generation, epoch == (epochs[path] ?? 0) else { return }
                 values.setObject(image, forKey: key, cost: cost)
+                keysByPath[path, default: []].insert(key)
+            }
+        }
+
+        /// Drops one source. In-flight decodes of that path cannot repopulate the cache.
+        func invalidate(path: String) {
+            mutationLock.withLock {
+                epochs[path] = (epochs[path] ?? 0) &+ 1
+                let keys = keysByPath.removeValue(forKey: path) ?? []
+                for key in keys { values.removeObject(forKey: key) }
             }
         }
 
         func purge() {
             mutationLock.withLock {
                 generation &+= 1
+                var paths = Set(keysByPath.keys)
+                paths.formUnion(epochs.keys)
+                for path in paths {
+                    epochs[path] = (epochs[path] ?? 0) &+ 1
+                }
+                keysByPath.removeAll()
                 values.removeAllObjects()
             }
         }
@@ -235,12 +260,17 @@ enum ImageThumbnail {
         let maxPixel: Int
         let generation: UInt64
         let sourceVersion: UInt64
+        let cacheEpoch: UInt64
 
-        init(url: URL, maxPixel: Int, generation: UInt64, sourceVersion: UInt64 = 0) {
+        init(
+            url: URL, maxPixel: Int, generation: UInt64, sourceVersion: UInt64 = 0,
+            cacheEpoch: UInt64 = 0
+        ) {
             self.url = url
             self.maxPixel = maxPixel
             self.generation = generation
             self.sourceVersion = sourceVersion
+            self.cacheEpoch = cacheEpoch
         }
     }
 
@@ -419,6 +449,7 @@ enum ImageThumbnail {
             pick(CGFloat(request.maxPixel)).insert(
                 image, forKey: cacheKey(
                     request.url, CGFloat(request.maxPixel), version: request.sourceVersion),
+                path: request.url.standardizedFileURL.path, epoch: request.cacheEpoch,
                 cost: result.cost, generation: request.generation)
         })
 
@@ -427,10 +458,12 @@ enum ImageThumbnail {
         previewCache.purge()
     }
 
-    /// Called after original deletion, invalidating pending writes before an undo can restore it.
+    /// Drops one source from memory and disk thumbnails. Other images stay cached.
+    /// A bumped epoch rejects an in-flight decode that would otherwise restore the deleted image.
     static func removeCachedImage(for url: URL) {
-        rowCache.purge()
-        previewCache.purge()
+        let path = url.standardizedFileURL.path
+        rowCache.invalidate(path: path)
+        previewCache.invalidate(path: path)
         rowDiskCache.remove(for: url)
     }
 
@@ -484,13 +517,17 @@ enum ImageThumbnail {
         guard !Task.isCancelled else { return nil }
         let maxPixel = CGFloat(Int(maxPixel))
         let version = fileVersion(for: url)
+        let path = url.standardizedFileURL.path
+        let epoch = pick(maxPixel).epoch(for: path)
         if let cached = pick(maxPixel).values.object(
             forKey: cacheKey(url, maxPixel, version: version)) { return cached }
         let generation = pick(maxPixel).currentGeneration()
         let decoded = await decodeCoordinator.decode(DecodeRequest(
-            url: url, maxPixel: Int(maxPixel), generation: generation, sourceVersion: version),
+            url: url, maxPixel: Int(maxPixel), generation: generation, sourceVersion: version,
+            cacheEpoch: epoch),
             priority: priority)
-        guard !Task.isCancelled, version == fileVersion(for: url) else { return nil }
+        guard !Task.isCancelled, version == fileVersion(for: url),
+            epoch == pick(maxPixel).epoch(for: path) else { return nil }
         return decoded.image
     }
 

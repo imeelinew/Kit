@@ -382,9 +382,11 @@ enum ImageInfrastructureTests {
         let directory = root.appendingPathComponent("thumbnails", isDirectory: true)
         let source = directory.appendingPathComponent("large.png")
         let malformed = directory.appendingPathComponent("malformed.png")
+        let other = directory.appendingPathComponent("other.png")
         defer {
             ImageThumbnail.removeCachedImage(for: source)
             ImageThumbnail.removeCachedImage(for: malformed)
+            ImageThumbnail.removeCachedImage(for: other)
         }
 
         let large = image(width: 1_200, height: 600, red: 210, green: 60, blue: 40)
@@ -405,6 +407,11 @@ enum ImageInfrastructureTests {
             ImageThumbnail.cached(source, maxPixel: 300) === first,
             "A decoded thumbnail enters the bounded memory cache"
         )
+        let otherImage = image(width: 80, height: 40, red: 10, green: 20, blue: 30)
+        try write(otherImage.png, to: other)
+        guard let kept = await ImageThumbnail.loadAsync(other, maxPixel: 40) else {
+            throw TestSupport.Failure(description: "A second image loads asynchronously")
+        }
 
         let replacement = image(width: 900, height: 900, red: 20, green: 200, blue: 80)
         try write(replacement.png, to: source)
@@ -412,6 +419,10 @@ enum ImageInfrastructureTests {
         try TestSupport.expect(
             ImageThumbnail.cached(source, maxPixel: 300) == nil,
             "removeCachedImage invalidates the memory cache entry"
+        )
+        try TestSupport.expect(
+            ImageThumbnail.cached(other, maxPixel: 40) === kept,
+            "Removing one image leaves other memory thumbnails in place"
         )
         guard let reloaded = await ImageThumbnail.loadAsync(source, maxPixel: 150) else {
             throw TestSupport.Failure(description: "The replacement image loads after invalidation")
