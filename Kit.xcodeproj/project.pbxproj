@@ -66,6 +66,7 @@
 		CA5000000000000000000001 /* ClipboardPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5000000000000000000002 /* ClipboardPreview.swift */; };
 		CC1000000000000000000001 /* CopySoundPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1000000000000000000002 /* CopySoundPlayer.swift */; };
 		CC2000000000000000000001 /* ClipboardPreviewPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2000000000000000000002 /* ClipboardPreviewPayload.swift */; };
+		CC3000000000000000000001 /* MarkdownDetection.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC3000000000000000000002 /* MarkdownDetection.swift */; };
 		CA7000000000000000000001 /* PinnedImageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7000000000000000000002 /* PinnedImageViews.swift */; };
 		CA7100000000000000000001 /* PinnedImageGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7100000000000000000002 /* PinnedImageGeometry.swift */; };
 		CA7200000000000000000001 /* PinnedImagePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7200000000000000000002 /* PinnedImagePanel.swift */; };
@@ -145,6 +146,7 @@
 		CA5000000000000000000002 /* ClipboardPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPreview.swift; sourceTree = "<group>"; };
 		CC1000000000000000000002 /* CopySoundPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopySoundPlayer.swift; sourceTree = "<group>"; };
 		CC2000000000000000000002 /* ClipboardPreviewPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPreviewPayload.swift; sourceTree = "<group>"; };
+		CC3000000000000000000002 /* MarkdownDetection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownDetection.swift; sourceTree = "<group>"; };
 		CA7000000000000000000002 /* PinnedImageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImageViews.swift; sourceTree = "<group>"; };
 		CA7100000000000000000002 /* PinnedImageGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImageGeometry.swift; sourceTree = "<group>"; };
 		CA7200000000000000000002 /* PinnedImagePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImagePanel.swift; sourceTree = "<group>"; };
@@ -261,6 +263,7 @@
 				66BA1300B2872471FA6010D4 /* AttributedTextPreview.swift */,
 				2AAAC613C9193B707F079A76 /* IconCache.swift */,
 				81D51FA4C7914F68805A9D72 /* MarkdownAttributedRenderer.swift */,
+				CC3000000000000000000002 /* MarkdownDetection.swift */,
 				F94E5C69B11642BE89C7B40A /* MarkdownPreview.swift */,
 				908045C0E8EF72DB68603149 /* NerdSymbolsFont.swift */,
 				9E2953B3533B91377E5CD791 /* SearchHighlight.swift */,
@@ -471,6 +474,7 @@
 				69136128B6F06843A9962FAF /* AttributedTextPreview.swift in Sources */,
 				A63F872BC0264BB99231BC52 /* MarkdownPreview.swift in Sources */,
 				F3C7ADFBEBBA4EF387C9A15F /* MarkdownAttributedRenderer.swift in Sources */,
+				CC3000000000000000000001 /* MarkdownDetection.swift in Sources */,
 				02CB1E90666F628DBF9C7C78 /* EdgeDissolve.swift in Sources */,
 				B9424F6046260D72728A48DD /* GeneralSettingsView.swift in Sources */,
 				683657868E94884E86EAD188 /* IconCache.swift in Sources */,
