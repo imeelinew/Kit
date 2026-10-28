@@ -64,6 +64,8 @@
 		CA3000000000000000000001 /* ClipboardTextClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3000000000000000000002 /* ClipboardTextClassifier.swift */; };
 		CA4000000000000000000001 /* ClipboardTableCells.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA4000000000000000000002 /* ClipboardTableCells.swift */; };
 		CA5000000000000000000001 /* ClipboardPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA5000000000000000000002 /* ClipboardPreview.swift */; };
+		CC1000000000000000000001 /* CopySoundPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1000000000000000000002 /* CopySoundPlayer.swift */; };
+		CC2000000000000000000001 /* ClipboardPreviewPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2000000000000000000002 /* ClipboardPreviewPayload.swift */; };
 		CA7000000000000000000001 /* PinnedImageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7000000000000000000002 /* PinnedImageViews.swift */; };
 		CA7100000000000000000001 /* PinnedImageGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7100000000000000000002 /* PinnedImageGeometry.swift */; };
 		CA7200000000000000000001 /* PinnedImagePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA7200000000000000000002 /* PinnedImagePanel.swift */; };
@@ -141,6 +143,8 @@
 		CA3000000000000000000002 /* ClipboardTextClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTextClassifier.swift; sourceTree = "<group>"; };
 		CA4000000000000000000002 /* ClipboardTableCells.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardTableCells.swift; sourceTree = "<group>"; };
 		CA5000000000000000000002 /* ClipboardPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPreview.swift; sourceTree = "<group>"; };
+		CC1000000000000000000002 /* CopySoundPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CopySoundPlayer.swift; sourceTree = "<group>"; };
+		CC2000000000000000000002 /* ClipboardPreviewPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPreviewPayload.swift; sourceTree = "<group>"; };
 		CA7000000000000000000002 /* PinnedImageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImageViews.swift; sourceTree = "<group>"; };
 		CA7100000000000000000002 /* PinnedImageGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImageGeometry.swift; sourceTree = "<group>"; };
 		CA7200000000000000000002 /* PinnedImagePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedImagePanel.swift; sourceTree = "<group>"; };
@@ -187,6 +191,7 @@
 				CAE000000000000000000002 /* ClipboardDateSection.swift */,
 				CA4000000000000000000002 /* ClipboardTableCells.swift */,
 				CA5000000000000000000002 /* ClipboardPreview.swift */,
+				CC2000000000000000000002 /* ClipboardPreviewPayload.swift */,
 				19FB08D4568B366C9339712C /* ImageQuickLook.swift */,
 				CAD000000000000000000002 /* ImageSearchHighlight.swift */,
 				A1B2C3D4E5F60718293A4B5C /* PinnedImageWindow.swift */,
@@ -217,6 +222,7 @@
 				D22A18A2E99B807E7716432E /* InputSourceSwitcher.swift */,
 				A490C2CECA4C191B712DB9F2 /* LaunchAtLogin.swift */,
 				BB41A0000000000000000001 /* MenuBarController.swift */,
+				CC1000000000000000000002 /* CopySoundPlayer.swift */,
 				F56E6A15E84064E62E40BD93 /* NotificationToken.swift */,
 				123A20E6FCB60D259A0CC145 /* PalettePanel.swift */,
 				CB1200000000000000000002 /* PaletteSnapGeometry.swift */,
@@ -459,6 +465,8 @@
 				1D9AA5ECC0F41C5EE2E43336 /* ClipboardView.swift in Sources */,
 				CA4000000000000000000001 /* ClipboardTableCells.swift in Sources */,
 				CA5000000000000000000001 /* ClipboardPreview.swift in Sources */,
+				CC2000000000000000000001 /* ClipboardPreviewPayload.swift in Sources */,
+				CC1000000000000000000001 /* CopySoundPlayer.swift in Sources */,
 				32D1DA38415AA18444CAE1CC /* CodeSyntaxHighlighter.swift in Sources */,
 				69136128B6F06843A9962FAF /* AttributedTextPreview.swift in Sources */,
 				A63F872BC0264BB99231BC52 /* MarkdownPreview.swift in Sources */,
