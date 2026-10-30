@@ -821,45 +821,45 @@ final class PaletteViewModel {
         let filter = kindFilter
         let pageLimit = Self.pageSize * loadedPageCount
         let startingPageCount = loadedPageCount
-            let restoredID = pendingRestoredItemID
-            searchTask = Task { [weak self] in
-                guard let self else { return }
-                if restoredID != nil { await core.clipboardStore.waitForSearchMetadata() }
-                guard !Task.isCancelled else { return }
-                var page = await core.clipboardStore.searchAsync(
-                    query, kind: filter.kind, stackID: stackID,
-                    after: nil, limit: pageLimit)
-                if page.failed {
-                    self.keepCurrentResultsAfterFailedSearch(
-                        query: query, filter: filter, stackID: stackID)
-                    return
-                }
-                var pageCount = startingPageCount
-                // An undo may reveal an older search result after the user changed filters.
-                // Load through that entry so selection and subsequent pagination stay coherent.
-                if let restoredID {
-                    var restoredResults = page.items
-                    while !restoredResults.contains(where: { $0.id == restoredID }),
-                        let cursor = page.nextCursor, !Task.isCancelled
-                    {
-                        page = await core.clipboardStore.searchAsync(
-                            query, kind: filter.kind, stackID: stackID,
-                            after: cursor, limit: Self.pageSize)
-                        if page.failed {
-                            self.keepCurrentResultsAfterFailedSearch(
-                                query: query, filter: filter, stackID: stackID)
-                            return
-                        }
-                        restoredResults.append(contentsOf: page.items)
-                        pageCount += 1
+        let restoredID = pendingRestoredItemID
+        searchTask = Task { [weak self] in
+            guard let self else { return }
+            if restoredID != nil { await core.clipboardStore.waitForSearchMetadata() }
+            guard !Task.isCancelled else { return }
+            var page = await core.clipboardStore.searchAsync(
+                query, kind: filter.kind, stackID: stackID,
+                after: nil, limit: pageLimit)
+            if page.failed {
+                self.keepCurrentResultsAfterFailedSearch(
+                    query: query, filter: filter, stackID: stackID)
+                return
+            }
+            var pageCount = startingPageCount
+            // An undo may reveal an older search result after the user changed filters.
+            // Load through that entry so selection and subsequent pagination stay coherent.
+            if let restoredID {
+                var restoredResults = page.items
+                while !restoredResults.contains(where: { $0.id == restoredID }),
+                    let cursor = page.nextCursor, !Task.isCancelled
+                {
+                    page = await core.clipboardStore.searchAsync(
+                        query, kind: filter.kind, stackID: stackID,
+                        after: cursor, limit: Self.pageSize)
+                    if page.failed {
+                        self.keepCurrentResultsAfterFailedSearch(
+                            query: query, filter: filter, stackID: stackID)
+                        return
                     }
-                    page = ClipboardSearchPage(items: restoredResults, nextCursor: page.nextCursor)
+                    restoredResults.append(contentsOf: page.items)
+                    pageCount += 1
                 }
-                guard !Task.isCancelled,
-                    self.query.trimmingCharacters(in: .whitespacesAndNewlines) == query,
-                    self.kindFilter == filter,
-                    self.stackFilter == stackID
-                else { return }
+                page = ClipboardSearchPage(items: restoredResults, nextCursor: page.nextCursor)
+            }
+            guard !Task.isCancelled,
+                self.query.trimmingCharacters(in: .whitespacesAndNewlines) == query,
+                self.kindFilter == filter,
+                self.stackFilter == stackID
+            else { return }
             nextCursor = page.nextCursor
             loadedPageCount = pageCount
             applyResults(page.items, resetSelection: resetSelection)

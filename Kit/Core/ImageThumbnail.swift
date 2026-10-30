@@ -181,12 +181,19 @@ enum ImageThumbnail {
     }
 
     /// `NSCache` is thread-safe but not annotated `Sendable`, so cross-thread use (a detached decode populating what the main actor reads) needs the guarantee asserted once here.
-    private final class ImageCache: @unchecked Sendable {
+    final class ImageCache: @unchecked Sendable {
         let values = NSCache<NSString, NSImage>()
         private let mutationLock = NSLock()
         private var generation: UInt64 = 0
         private var epochs: [String: UInt64] = [:]
         private var keysByPath: [String: Set<NSString>] = [:]
+        private var trackedKeyCount = 0
+        private let metadataLimit: Int
+
+        init(metadataLimit: Int = 2_048) {
+            precondition(metadataLimit > 0)
+            self.metadataLimit = metadataLimit
+        }
 
         func currentGeneration() -> UInt64 {
             mutationLock.withLock { generation }
@@ -202,31 +209,40 @@ enum ImageThumbnail {
         ) {
             mutationLock.withLock {
                 guard generation == self.generation, epoch == (epochs[path] ?? 0) else { return }
+                if trackedKeyCount + epochs.count >= metadataLimit {
+                    purgeLocked()
+                    return
+                }
                 values.setObject(image, forKey: key, cost: cost)
-                keysByPath[path, default: []].insert(key)
+                if keysByPath[path, default: []].insert(key).inserted { trackedKeyCount += 1 }
             }
         }
 
         /// Drops one source. In-flight decodes of that path cannot repopulate the cache.
         func invalidate(path: String) {
             mutationLock.withLock {
+                if trackedKeyCount + epochs.count >= metadataLimit {
+                    purgeLocked()
+                    return
+                }
                 epochs[path] = (epochs[path] ?? 0) &+ 1
                 let keys = keysByPath.removeValue(forKey: path) ?? []
+                trackedKeyCount -= keys.count
                 for key in keys { values.removeObject(forKey: key) }
             }
         }
 
         func purge() {
-            mutationLock.withLock {
-                generation &+= 1
-                var paths = Set(keysByPath.keys)
-                paths.formUnion(epochs.keys)
-                for path in paths {
-                    epochs[path] = (epochs[path] ?? 0) &+ 1
-                }
-                keysByPath.removeAll()
-                values.removeAllObjects()
-            }
+            mutationLock.withLock { purgeLocked() }
+        }
+
+        // NSCache eviction does not remove our metadata, so bound it independently
+        private func purgeLocked() {
+            generation &+= 1
+            epochs.removeAll()
+            keysByPath.removeAll()
+            trackedKeyCount = 0
+            values.removeAllObjects()
         }
     }
 
@@ -512,7 +528,7 @@ enum ImageThumbnail {
             forKey: cacheKey(url, maxPixel, version: fileVersion(for: url)))
     }
 
-    /// Decodes off the main thread and returns the decode directly, not a cache re-read — a purge or eviction mid-decode must not strand a thumbnail on its placeholder.
+    /// Decodes off the main thread and returns the result directly unless its source or cache was invalidated
     static func loadAsync(_ url: URL, maxPixel: CGFloat, priority: Priority? = nil) async -> NSImage? {
         guard !Task.isCancelled else { return nil }
         let maxPixel = CGFloat(Int(maxPixel))
@@ -527,6 +543,7 @@ enum ImageThumbnail {
             cacheEpoch: epoch),
             priority: priority)
         guard !Task.isCancelled, version == fileVersion(for: url),
+            generation == pick(maxPixel).currentGeneration(),
             epoch == pick(maxPixel).epoch(for: path) else { return nil }
         return decoded.image
     }

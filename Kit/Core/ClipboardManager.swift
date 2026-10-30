@@ -15,7 +15,7 @@ final class ClipboardManager {
     private var lastObservedChangeCount = 0
     private var captureTail: Task<Void, Never>?
     /// Pasteboard reads run one at a time. Processing stays ordered behind `captureTail`.
-    private var readTail: Task<PasteboardSnapshot?, Never>?
+    private var readTail: Task<Void, Never>?
     private(set) var isPaused = false
 
     init(store: ClipboardStore, settings: AppSettings) {
@@ -44,8 +44,7 @@ final class ClipboardManager {
         if paused {
             captureTail?.cancel()
             captureTail = nil
-            readTail?.cancel()
-            readTail = nil
+            // Keep the read barrier until synchronous pasteboard access has returned
         }
         // Ignore changes made during the pause instead of importing them when monitoring resumes.
         lastObservedChangeCount = NSPasteboard.general.changeCount
@@ -89,7 +88,8 @@ final class ClipboardManager {
                 changeCount: changeCount, imageTypes: imageTypes,
                 sourceBundleID: sourceBundleID, generation: generation)
         }
-        readTail = readTask
+        // Retain only completion, not the last snapshot and its potentially large image data
+        readTail = Task { _ = await readTask.value }
 
         captureTail = Task { [weak self] in
             let snapshot = await withTaskCancellationHandler {

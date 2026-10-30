@@ -884,7 +884,40 @@ enum ImageInfrastructureTests {
     }
 
     @MainActor
+    private static func boundedCacheMetadata() throws {
+        let cache = ImageThumbnail.ImageCache(metadataLimit: 4)
+        let image = NSImage(size: NSSize(width: 1, height: 1))
+        let generation = cache.currentGeneration()
+        for index in 0..<5 {
+            cache.insert(image, forKey: "key-\(index)" as NSString,
+                         path: "path-\(index)", epoch: 0, cost: 4, generation: generation)
+        }
+        try TestSupport.expect(cache.currentGeneration() != generation,
+                               "Cache bookkeeping stays bounded even without NSCache eviction callbacks")
+        cache.insert(image, forKey: "stale", path: "path-0", epoch: 0,
+                     cost: 4, generation: generation)
+        try TestSupport.expect(cache.values.object(forKey: "stale") == nil,
+                               "Metadata cleanup rejects decodes from the previous generation")
+        let invalidationGeneration = cache.currentGeneration()
+        for index in 0..<5 { cache.invalidate(path: "deleted-\(index)") }
+        try TestSupport.expect(cache.currentGeneration() != invalidationGeneration,
+                               "Deleted paths do not accumulate unbounded invalidation records")
+        let current = cache.currentGeneration()
+        let epoch = cache.epoch(for: "restored")
+        cache.invalidate(path: "restored")
+        cache.insert(image, forKey: "deleted", path: "restored", epoch: epoch,
+                     cost: 4, generation: current)
+        try TestSupport.expect(cache.values.object(forKey: "deleted") == nil,
+                               "Deleting one path rejects its pending decode")
+        cache.insert(image, forKey: "restored", path: "restored", epoch: cache.epoch(for: "restored"),
+                     cost: 4, generation: current)
+        try TestSupport.expect(cache.values.object(forKey: "restored") === image,
+                               "A new decode can populate a restored path")
+    }
+
+    @MainActor
     static func run() async throws {
+        try boundedCacheMetadata()
         try fingerprintFixtures()
         try previewDetailsDefaults()
         try await TestSupport.withTemporaryDirectory { root in
