@@ -84,12 +84,84 @@ struct ClipboardSearchTests {
                "Query, kind, and stack filters compose")
     }
 
+    private final class ComputationGate: @unchecked Sendable {
+        private let lock = NSLock()
+        private var entered = false
+        private let releaseSignal = DispatchSemaphore(value: 0)
+
+        var hasEntered: Bool { lock.withLock { entered } }
+
+        func pause() {
+            lock.withLock { entered = true }
+            precondition(releaseSignal.wait(timeout: .now() + 10) == .success,
+                         "Metadata computation gate times out instead of hanging")
+        }
+
+        func release() { releaseSignal.signal() }
+    }
+
+    @MainActor
+    private static func waitForGate(_ gate: ComputationGate) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while !gate.hasEntered, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        expect(gate.hasEntered, "The metadata worker reaches the controlled computation")
+    }
+
+    @MainActor
+    static func metadataWriteContention(in directory: URL) async throws {
+        let store = ClipboardStore(directory: directory)
+        let first = store.addText("first seed", kind: .text, sourceBundleID: nil)!
+        let second = store.addText("second seed", kind: .text, sourceBundleID: nil)!
+        let database = directory.appendingPathComponent("clipboard.sqlite3").path
+        let batch = [SearchMetadataUpdate(id: first.id.uuidString, text: "你好"),
+                     SearchMetadataUpdate(id: second.id.uuidString, text: "中国")]
+        let firstGate = ComputationGate()
+        let secondGate = ComputationGate()
+        defer { firstGate.release(); secondGate.release() }
+        let worker = Task.detached {
+            ClipboardSearch.updateMetadata(path: database, batch: batch) { text in
+                (text == "你好" ? firstGate : secondGate).pause()
+                return Pinyin.searchForms(for: text)
+            }
+        }
+        defer { worker.cancel() }
+
+        try await waitForGate(firstGate)
+        expect(store.addText("copy during first computation", kind: .text, sourceBundleID: nil) != nil,
+               "A fresh capture is saved while the first pinyin computation is paused")
+        firstGate.release()
+        try await waitForGate(secondGate)
+        expect(collectDB(database, query: "nihao", limit: 10) == ["first seed"],
+               "The first index update commits before the next computation starts")
+        expect(store.addText("copy during second computation", kind: .text, sourceBundleID: nil) != nil,
+               "Later entries do not keep a batch-wide lock that drops fresh captures")
+
+        worker.cancel()
+        secondGate.release()
+        let cancelled = await worker.value
+        expect(!cancelled, "Cancellation stops the remaining metadata write")
+        expect(collectDB(database, query: "zhongguo", limit: 10).isEmpty,
+               "Cancelled computation never publishes its index update")
+        let replay = await Task.detached {
+            ClipboardSearch.updateMetadata(path: database, batch: batch)
+        }.value
+        expect(replay, "A partially committed batch can be retried")
+        expect(collectDB(database, query: "nihao", limit: 10) == ["first seed"],
+               "Replaying a committed row preserves its FTS index without duplicates")
+        expect(collectDB(database, query: "zhongguo", limit: 10) == ["second seed"],
+               "Retry completes the remaining row's pinyin index")
+        print("PASS: captures during pinyin computation, per-row commits, cancellation and replay")
+    }
+
     static func main() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("kit-search-tests-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         await paginationTests(in: root.appendingPathComponent("pagination"))
         await filterTests(in: root.appendingPathComponent("filters"))
+        try await metadataWriteContention(in: root.appendingPathComponent("metadata-contention"))
         print("PASS: FTS/LIKE routing, query escaping, cursor pagination, kind and stack filters")
     }
 }

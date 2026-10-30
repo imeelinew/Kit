@@ -217,7 +217,8 @@ enum ClipboardSearch {
     }
 
     static func updateMetadata(
-        path: String, batch: [SearchMetadataUpdate]
+        path: String, batch: [SearchMetadataUpdate],
+        makeSearchForms: @Sendable (String) -> Pinyin.SearchForms = { Pinyin.searchForms(for: $0) }
     ) -> Bool {
         var connection: OpaquePointer?
         guard
@@ -241,16 +242,11 @@ enum ClipboardSearch {
             return false
         }
         defer { sqlite3_finalize(update) }
-        guard sqlite3_exec(connection, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else {
-            return false
-        }
-        var committed = false
-        defer {
-            if !committed { sqlite3_exec(connection, "ROLLBACK", nil, nil, nil) }
-        }
+        // Compute without a write transaction, then autocommit each row independently
+        // A failed or cancelled batch can be replayed because these updates are idempotent
         for entry in batch {
             guard !Task.isCancelled else { return false }
-            let forms = Pinyin.searchForms(for: entry.text)
+            let forms = makeSearchForms(entry.text)
             guard !Task.isCancelled else { return false }
             sqlite3_bind_text(update, 1, forms.full, -1, SQLITE_TRANSIENT)
             sqlite3_bind_text(update, 2, forms.initials, -1, SQLITE_TRANSIENT)
@@ -260,8 +256,6 @@ enum ClipboardSearch {
             sqlite3_clear_bindings(update)
             guard status == SQLITE_DONE else { return false }
         }
-        guard !Task.isCancelled else { return false }
-        committed = sqlite3_exec(connection, "COMMIT", nil, nil, nil) == SQLITE_OK
-        return committed
+        return !Task.isCancelled
     }
 }

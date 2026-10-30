@@ -1143,9 +1143,14 @@ final class ClipboardStore: ObservableObject {
             let batch = pendingSearchMetadata
             pendingSearchMetadata.removeAll(keepingCapacity: true)
             let path = dbURL.path
-            let updated = await Task.detached(priority: .utility) {
+            let worker = Task.detached(priority: .utility) {
                 ClipboardSearch.updateMetadata(path: path, batch: batch)
-            }.value
+            }
+            let updated = await withTaskCancellationHandler {
+                await worker.value
+            } onCancel: {
+                worker.cancel()
+            }
             guard !Task.isCancelled else { return }
             if updated {
                 revision &+= 1
