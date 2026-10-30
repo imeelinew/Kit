@@ -884,27 +884,52 @@ enum ImageInfrastructureTests {
     }
 
     @MainActor
+    private static func thumbnailCapacityRollover(in root: URL) async throws {
+        let source = root.appendingPathComponent("capacity.png")
+        try write(image(width: 2, height: 2, red: 10, green: 20, blue: 30).png, to: source)
+        ImageThumbnail.purgePreviews()
+        defer { ImageThumbnail.purgePreviews() }
+        // Distinct preview sizes fill metadata without allocating large bitmaps or many files
+        for size in 513...2562 {
+            let decoded = await ImageThumbnail.loadAsync(source, maxPixel: CGFloat(size))
+            try TestSupport.expect(decoded != nil,
+                                   "Capacity cleanup preserves a valid decode at size \(size)")
+        }
+    }
+
+    @MainActor
     private static func boundedCacheMetadata() throws {
         let cache = ImageThumbnail.ImageCache(metadataLimit: 4)
         let image = NSImage(size: NSSize(width: 1, height: 1))
         let generation = cache.currentGeneration()
+        let pending = cache.snapshot(for: "path-0")
         for index in 0..<5 {
             cache.insert(image, forKey: "key-\(index)" as NSString,
                          path: "path-\(index)", epoch: 0, cost: 4, generation: generation)
         }
         try TestSupport.expect(cache.currentGeneration() != generation,
                                "Cache bookkeeping stays bounded even without NSCache eviction callbacks")
+        try TestSupport.expect(cache.isCurrent(pending, for: "path-0"),
+                               "Capacity eviction still allows delivery of valid decoded content")
         cache.insert(image, forKey: "stale", path: "path-0", epoch: 0,
                      cost: 4, generation: generation)
         try TestSupport.expect(cache.values.object(forKey: "stale") == nil,
                                "Metadata cleanup rejects decodes from the previous generation")
         let invalidationGeneration = cache.currentGeneration()
+        let deletedPending = cache.snapshot(for: "deleted-0")
         for index in 0..<5 { cache.invalidate(path: "deleted-\(index)") }
         try TestSupport.expect(cache.currentGeneration() != invalidationGeneration,
                                "Deleted paths do not accumulate unbounded invalidation records")
+        try TestSupport.expect(!cache.isCurrent(deletedPending, for: "deleted-0"),
+                               "Capacity eviction cannot forget a deletion and resurrect stale content")
         let current = cache.currentGeneration()
         let epoch = cache.epoch(for: "restored")
+        let restoredPending = cache.snapshot(for: "restored")
+        let unaffected = cache.snapshot(for: "unaffected")
         cache.invalidate(path: "restored")
+        try TestSupport.expect(!cache.isCurrent(restoredPending, for: "restored")
+                               && cache.isCurrent(unaffected, for: "unaffected"),
+                               "A single deletion rejects its pending decode without rejecting other paths")
         cache.insert(image, forKey: "deleted", path: "restored", epoch: epoch,
                      cost: 4, generation: current)
         try TestSupport.expect(cache.values.object(forKey: "deleted") == nil,
@@ -913,6 +938,10 @@ enum ImageInfrastructureTests {
                      cost: 4, generation: current)
         try TestSupport.expect(cache.values.object(forKey: "restored") === image,
                                "A new decode can populate a restored path")
+        let beforePurge = cache.snapshot(for: "restored")
+        cache.purge()
+        try TestSupport.expect(!cache.isCurrent(beforePurge, for: "restored"),
+                               "An explicit purge still rejects pending content from the previous session")
     }
 
     @MainActor
@@ -926,6 +955,7 @@ enum ImageInfrastructureTests {
             try rowCacheSymlinkDefense(in: root)
             try rowCacheByteBound(in: root)
             try await thumbnailBehavior(in: root)
+            try await thumbnailCapacityRollover(in: root)
             try await fileBackedPreviewLifecycle(in: root)
             try await unavailableImagePreviewStillCopies(in: root)
             try layoutNormalization()

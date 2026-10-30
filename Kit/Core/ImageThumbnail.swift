@@ -185,6 +185,7 @@ enum ImageThumbnail {
         let values = NSCache<NSString, NSImage>()
         private let mutationLock = NSLock()
         private var generation: UInt64 = 0
+        private var invalidationGeneration: UInt64 = 0
         private var epochs: [String: UInt64] = [:]
         private var keysByPath: [String: Set<NSString>] = [:]
         private var trackedKeyCount = 0
@@ -193,6 +194,30 @@ enum ImageThumbnail {
         init(metadataLimit: Int = 2_048) {
             precondition(metadataLimit > 0)
             self.metadataLimit = metadataLimit
+        }
+
+        struct Snapshot {
+            let generation: UInt64
+            let epoch: UInt64
+            let invalidationGeneration: UInt64
+        }
+
+        func snapshot(for path: String) -> Snapshot {
+            mutationLock.withLock {
+                Snapshot(generation: generation, epoch: epochs[path] ?? 0,
+                         invalidationGeneration: invalidationGeneration)
+            }
+        }
+
+        func isCurrent(_ snapshot: Snapshot, for path: String) -> Bool {
+            mutationLock.withLock {
+                if snapshot.generation == generation {
+                    return snapshot.epoch == (epochs[path] ?? 0)
+                }
+                // Capacity eviction forgets epochs, but does not invalidate decoded content
+                // If a real invalidation also occurred, conservatively reject the old result
+                return snapshot.invalidationGeneration == invalidationGeneration
+            }
         }
 
         func currentGeneration() -> UInt64 {
@@ -210,7 +235,7 @@ enum ImageThumbnail {
             mutationLock.withLock {
                 guard generation == self.generation, epoch == (epochs[path] ?? 0) else { return }
                 if trackedKeyCount + epochs.count >= metadataLimit {
-                    purgeLocked()
+                    evictLocked()
                     return
                 }
                 values.setObject(image, forKey: key, cost: cost)
@@ -221,8 +246,9 @@ enum ImageThumbnail {
         /// Drops one source. In-flight decodes of that path cannot repopulate the cache.
         func invalidate(path: String) {
             mutationLock.withLock {
+                invalidationGeneration &+= 1
                 if trackedKeyCount + epochs.count >= metadataLimit {
-                    purgeLocked()
+                    evictLocked()
                     return
                 }
                 epochs[path] = (epochs[path] ?? 0) &+ 1
@@ -233,11 +259,14 @@ enum ImageThumbnail {
         }
 
         func purge() {
-            mutationLock.withLock { purgeLocked() }
+            mutationLock.withLock {
+                invalidationGeneration &+= 1
+                evictLocked()
+            }
         }
 
         // NSCache eviction does not remove our metadata, so bound it independently
-        private func purgeLocked() {
+        private func evictLocked() {
             generation &+= 1
             epochs.removeAll()
             keysByPath.removeAll()
@@ -528,23 +557,22 @@ enum ImageThumbnail {
             forKey: cacheKey(url, maxPixel, version: fileVersion(for: url)))
     }
 
-    /// Decodes off the main thread and returns the result directly unless its source or cache was invalidated
+    /// Capacity eviction never discards a valid decode, source invalidation still rejects stale results
     static func loadAsync(_ url: URL, maxPixel: CGFloat, priority: Priority? = nil) async -> NSImage? {
         guard !Task.isCancelled else { return nil }
         let maxPixel = CGFloat(Int(maxPixel))
         let version = fileVersion(for: url)
         let path = url.standardizedFileURL.path
-        let epoch = pick(maxPixel).epoch(for: path)
-        if let cached = pick(maxPixel).values.object(
+        let cache = pick(maxPixel)
+        let snapshot = cache.snapshot(for: path)
+        if let cached = cache.values.object(
             forKey: cacheKey(url, maxPixel, version: version)) { return cached }
-        let generation = pick(maxPixel).currentGeneration()
         let decoded = await decodeCoordinator.decode(DecodeRequest(
-            url: url, maxPixel: Int(maxPixel), generation: generation, sourceVersion: version,
-            cacheEpoch: epoch),
+            url: url, maxPixel: Int(maxPixel), generation: snapshot.generation, sourceVersion: version,
+            cacheEpoch: snapshot.epoch),
             priority: priority)
         guard !Task.isCancelled, version == fileVersion(for: url),
-            generation == pick(maxPixel).currentGeneration(),
-            epoch == pick(maxPixel).epoch(for: path) else { return nil }
+            cache.isCurrent(snapshot, for: path) else { return nil }
         return decoded.image
     }
 
