@@ -829,6 +829,11 @@ final class PaletteViewModel {
             var page = await core.clipboardStore.searchAsync(
                 query, kind: filter.kind, stackID: stackID,
                 after: nil, limit: pageLimit)
+            if page.failed {
+                self.keepCurrentResultsAfterFailedSearch(
+                    query: query, filter: filter, stackID: stackID)
+                return
+            }
             var pageCount = startingPageCount
             // An undo may reveal an older search result after the user changed filters.
             // Load through that entry so selection and subsequent pagination stay coherent.
@@ -840,6 +845,11 @@ final class PaletteViewModel {
                     page = await core.clipboardStore.searchAsync(
                         query, kind: filter.kind, stackID: stackID,
                         after: cursor, limit: Self.pageSize)
+                    if page.failed {
+                        self.keepCurrentResultsAfterFailedSearch(
+                            query: query, filter: filter, stackID: stackID)
+                        return
+                    }
                     restoredResults.append(contentsOf: page.items)
                     pageCount += 1
                 }
@@ -880,6 +890,10 @@ final class PaletteViewModel {
                 self.stackFilter == stackID,
                 self.nextCursor == cursor
             else { return }
+            if page.failed {
+                loadMoreTask = nil
+                return
+            }
             nextCursor = page.nextCursor
             loadedPageCount += 1
             let seen = Set(results.map(\.id))
@@ -891,6 +905,19 @@ final class PaletteViewModel {
             loadMoreTask = nil
             if additions.isEmpty && hasMoreResults { loadMoreResults() }
         }
+    }
+
+    /// A database error is not an empty history. Leave the visible page in place when this search is still current.
+    private func keepCurrentResultsAfterFailedSearch(
+        query: String, filter: ClipboardKindFilter, stackID: ClipboardStack.ID?
+    ) {
+        guard !Task.isCancelled,
+            self.query.trimmingCharacters(in: .whitespacesAndNewlines) == query,
+            kindFilter == filter,
+            stackFilter == stackID
+        else { return }
+        searchReady = true
+        searchTask = nil
     }
 
     private func applyResults(

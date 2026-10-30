@@ -9,6 +9,8 @@ struct ClipboardSearchCursor: Sendable, Equatable {
 struct ClipboardSearchPage: Sendable {
     let items: [ClipboardItem]
     let nextCursor: ClipboardSearchCursor?
+    /// A query that did not finish. Empty `items` with `failed == false` is a real zero-hit page.
+    var failed = false
 }
 
 struct SearchMetadataUpdate: Sendable {
@@ -69,6 +71,7 @@ enum ClipboardSearch {
         guard sqlite3_open_v2(path, &connection, SQLITE_OPEN_READONLY, nil) == SQLITE_OK,
             let connection
         else {
+            ClipboardSQLite.logFailure(connection, operation: "open search database")
             sqlite3_close_v2(connection)
             return nil
         }
@@ -100,6 +103,7 @@ enum ClipboardSearch {
         guard sqlite3_prepare_v2(connection, sql, -1, &statement, nil) == SQLITE_OK,
             let statement
         else {
+            ClipboardSQLite.logFailure(connection, operation: "prepare search")
             sqlite3_finalize(statement)
             return nil
         }
@@ -146,7 +150,12 @@ enum ClipboardSearch {
             }
             status = sqlite3_step(statement)
         }
-        guard status == SQLITE_DONE || (status == SQLITE_ROW && results.count > limit) else { return nil }
+        guard status == SQLITE_DONE || (status == SQLITE_ROW && results.count > limit) else {
+            if status != SQLITE_INTERRUPT {
+                ClipboardSQLite.logFailure(connection, operation: "search step")
+            }
+            return nil
+        }
         let hasMore = results.count > limit
         if hasMore { results.removeLast() }
         return ClipboardSearchPage(

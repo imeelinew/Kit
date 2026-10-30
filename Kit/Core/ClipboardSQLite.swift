@@ -1,9 +1,17 @@
 import Foundation
+import OSLog
 import SQLite3
+
+private let clipboardDatabaseLogger = Logger(subsystem: "com.eli.Kit", category: "ClipboardDatabase")
 
 let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 enum ClipboardSQLite {
+    static func logFailure(_ db: OpaquePointer?, operation: String) {
+        let detail = db.map { String(cString: sqlite3_errmsg($0)) } ?? "no database connection"
+        clipboardDatabaseLogger.error("\(operation, privacy: .public) failed: \(detail, privacy: .public)")
+    }
+
     static let imageBackedPredicate =
         "((kind = 'image' AND image_path IS NOT NULL) OR (kind = 'file' AND file_is_image = 1 AND file_urls IS NOT NULL))"
 
@@ -167,7 +175,9 @@ extension ClipboardSQLite {
         }
 
         private func execute(_ sql: String) -> Bool {
-            sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK
+            let ok = sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK
+            if !ok { ClipboardSQLite.logFailure(database, operation: "schema") }
+            return ok
         }
 
         private static let coreSchema = """

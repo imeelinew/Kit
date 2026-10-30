@@ -382,9 +382,11 @@ enum ImageInfrastructureTests {
         let directory = root.appendingPathComponent("thumbnails", isDirectory: true)
         let source = directory.appendingPathComponent("large.png")
         let malformed = directory.appendingPathComponent("malformed.png")
+        let other = directory.appendingPathComponent("other.png")
         defer {
             ImageThumbnail.removeCachedImage(for: source)
             ImageThumbnail.removeCachedImage(for: malformed)
+            ImageThumbnail.removeCachedImage(for: other)
         }
 
         let large = image(width: 1_200, height: 600, red: 210, green: 60, blue: 40)
@@ -405,6 +407,11 @@ enum ImageInfrastructureTests {
             ImageThumbnail.cached(source, maxPixel: 300) === first,
             "A decoded thumbnail enters the bounded memory cache"
         )
+        let otherImage = image(width: 80, height: 40, red: 10, green: 20, blue: 30)
+        try write(otherImage.png, to: other)
+        guard let kept = await ImageThumbnail.loadAsync(other, maxPixel: 40) else {
+            throw TestSupport.Failure(description: "A second image loads asynchronously")
+        }
 
         let replacement = image(width: 900, height: 900, red: 20, green: 200, blue: 80)
         try write(replacement.png, to: source)
@@ -412,6 +419,10 @@ enum ImageInfrastructureTests {
         try TestSupport.expect(
             ImageThumbnail.cached(source, maxPixel: 300) == nil,
             "removeCachedImage invalidates the memory cache entry"
+        )
+        try TestSupport.expect(
+            ImageThumbnail.cached(other, maxPixel: 40) === kept,
+            "Removing one image leaves other memory thumbnails in place"
         )
         guard let reloaded = await ImageThumbnail.loadAsync(source, maxPixel: 150) else {
             throw TestSupport.Failure(description: "The replacement image loads after invalidation")
@@ -873,7 +884,40 @@ enum ImageInfrastructureTests {
     }
 
     @MainActor
+    private static func boundedCacheMetadata() throws {
+        let cache = ImageThumbnail.ImageCache(metadataLimit: 4)
+        let image = NSImage(size: NSSize(width: 1, height: 1))
+        let generation = cache.currentGeneration()
+        for index in 0..<5 {
+            cache.insert(image, forKey: "key-\(index)" as NSString,
+                         path: "path-\(index)", epoch: 0, cost: 4, generation: generation)
+        }
+        try TestSupport.expect(cache.currentGeneration() != generation,
+                               "Cache bookkeeping stays bounded even without NSCache eviction callbacks")
+        cache.insert(image, forKey: "stale", path: "path-0", epoch: 0,
+                     cost: 4, generation: generation)
+        try TestSupport.expect(cache.values.object(forKey: "stale") == nil,
+                               "Metadata cleanup rejects decodes from the previous generation")
+        let invalidationGeneration = cache.currentGeneration()
+        for index in 0..<5 { cache.invalidate(path: "deleted-\(index)") }
+        try TestSupport.expect(cache.currentGeneration() != invalidationGeneration,
+                               "Deleted paths do not accumulate unbounded invalidation records")
+        let current = cache.currentGeneration()
+        let epoch = cache.epoch(for: "restored")
+        cache.invalidate(path: "restored")
+        cache.insert(image, forKey: "deleted", path: "restored", epoch: epoch,
+                     cost: 4, generation: current)
+        try TestSupport.expect(cache.values.object(forKey: "deleted") == nil,
+                               "Deleting one path rejects its pending decode")
+        cache.insert(image, forKey: "restored", path: "restored", epoch: cache.epoch(for: "restored"),
+                     cost: 4, generation: current)
+        try TestSupport.expect(cache.values.object(forKey: "restored") === image,
+                               "A new decode can populate a restored path")
+    }
+
+    @MainActor
     static func run() async throws {
+        try boundedCacheMetadata()
         try fingerprintFixtures()
         try previewDetailsDefaults()
         try await TestSupport.withTemporaryDirectory { root in

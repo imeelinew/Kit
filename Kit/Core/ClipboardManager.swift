@@ -14,6 +14,8 @@ final class ClipboardManager {
     private var timer: Timer?
     private var lastObservedChangeCount = 0
     private var captureTail: Task<Void, Never>?
+    /// Pasteboard reads run one at a time. Processing stays ordered behind `captureTail`.
+    private var readTail: Task<Void, Never>?
     private(set) var isPaused = false
 
     init(store: ClipboardStore, settings: AppSettings) {
@@ -24,6 +26,7 @@ final class ClipboardManager {
     isolated deinit {
         timer?.invalidate()
         captureTail?.cancel()
+        readTail?.cancel()
     }
 
     func start() {
@@ -31,6 +34,7 @@ final class ClipboardManager {
         let timer = Timer(timeInterval: Self.pollInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.poll() }
         }
+        timer.tolerance = Self.pollInterval * 0.5
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
     }
@@ -40,6 +44,7 @@ final class ClipboardManager {
         if paused {
             captureTail?.cancel()
             captureTail = nil
+            // Keep the read barrier until synchronous pasteboard access has returned
         }
         // Ignore changes made during the pause instead of importing them when monitoring resumes.
         lastObservedChangeCount = NSPasteboard.general.changeCount
@@ -75,11 +80,16 @@ final class ClipboardManager {
         }
         let generation = store.captureGeneration
         let previous = captureTail
-        let readTask = Task.detached(priority: .utility) {
-            Self.readSnapshot(
+        let previousRead = readTail
+        let readTask = Task.detached(priority: .utility) { () -> PasteboardSnapshot? in
+            _ = await previousRead?.value
+            guard !Task.isCancelled else { return nil }
+            return Self.readSnapshot(
                 changeCount: changeCount, imageTypes: imageTypes,
                 sourceBundleID: sourceBundleID, generation: generation)
         }
+        // Retain only completion, not the last snapshot and its potentially large image data
+        readTail = Task { _ = await readTask.value }
 
         captureTail = Task { [weak self] in
             let snapshot = await withTaskCancellationHandler {

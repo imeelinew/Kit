@@ -19,7 +19,7 @@ enum ClipboardTextClassifier {
         if isLink(text) { return .link }
         if fileURL(for: text) != nil { return .path }
         if isCode(text) { return .code }
-        if MarkdownAttributedRenderer.isMarkdown(text) { return .markdown }
+        if MarkdownDetection.isMarkdown(text) { return .markdown }
         return .text
     }
 

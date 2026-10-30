@@ -400,6 +400,29 @@ enum PaletteInteractionTests {
         try data.write(to: url, options: .atomic)
     }
 
+    private static func failedSearchKeepsResults(in directory: URL) async throws {
+        let store = ClipboardStore(directory: directory, maintenanceInterval: 86_400)
+        store.setImageTextSearchEnabled(false)
+        guard let item = store.addText("stable row", kind: .text, sourceBundleID: nil) else {
+            throw TestSupport.Failure(description: "The failed-search fixture inserts")
+        }
+        let core = AppCore(clipboardStore: store)
+        let vm = PaletteViewModel(core: core)
+        try await ready(vm)
+        try TestSupport.expect(
+            vm.results.map(\.id) == [item.id],
+            "The row is visible before the database disappears")
+        let database = directory.appendingPathComponent("clipboard.sqlite3")
+        try FileManager.default.removeItem(at: database)
+        try? FileManager.default.removeItem(at: directory.appendingPathComponent("clipboard.sqlite3-wal"))
+        try? FileManager.default.removeItem(at: directory.appendingPathComponent("clipboard.sqlite3-shm"))
+        vm.query = "stable"
+        try await ready(vm)
+        try TestSupport.expect(
+            vm.results.map(\.id) == [item.id] && vm.searchReady,
+            "A failed search keeps the previous page")
+    }
+
     static func run() async throws {
         try await TestSupport.withTemporaryDirectory { root in
             try await navigation(in: root.appendingPathComponent("navigation"))
@@ -407,6 +430,7 @@ enum PaletteInteractionTests {
             try await previewCopyAvailability(in: root.appendingPathComponent("preview-copy"))
             try await permissionSensitiveCopy(in: root.appendingPathComponent("permission-copy"))
             try await paginationAndRaces(in: root.appendingPathComponent("pagination"))
+            try await failedSearchKeepsResults(in: root.appendingPathComponent("failed-search"))
         }
     }
 }

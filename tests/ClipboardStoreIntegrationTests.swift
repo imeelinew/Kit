@@ -103,8 +103,11 @@ enum ClipboardStoreIntegrationTests {
             vm.searchReady && vm.selectedItem?.id == recopied.id
         }
         vm.openActions(for: recopied.id)
-        try TestSupport.expect(vm.menuActions.contains(.pinToScreen(vm.selectedItem!)),
-                               "Image files retain the pin action after category migration")
+        // Menu actions resolve the live store while selection may still hold older search metadata
+        try TestSupport.expect(vm.menuActions.contains { action in
+            guard case .pinToScreen(let item) = action else { return false }
+            return item.id == recopied.id && item.hasImagePreview
+        }, "Image files retain the pin action after category migration")
         vm.closeMenu()
         vm.toggleImageQuickLook(for: recopied.id)
         try TestSupport.expect(vm.imageQuickLookOpen, "Image files retain Quick Look after category migration")
