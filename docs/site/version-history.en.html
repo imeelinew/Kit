@@ -95,6 +95,30 @@
 <main>
 
 <section>
+  <span class="tag">v0.5.1</span>
+  <p class="date">October 30, 2026</p>
+  <div class="group">
+    <h3>Improvements</h3>
+    <ul>
+      <li>Optimized pasteboard reads so rapid copies are read and processed in the order they arrive, without concurrent reads interfering with each other</li>
+      <li>Improved thumbnail and file icon caching to reduce repeated decoding and placeholder flicker when cache capacity changes or a single image is invalidated</li>
+      <li>Improved OCR language detection and pinyin indexing so new copies can still be saved promptly while background indexing is in progress</li>
+      <li>Moved Markdown classification outside the AppKit renderer to reduce background processing overhead</li>
+      <li>Disabled vertical scroll elasticity in previews, file lists, settings forms, and the settings sidebar for consistent scrolling</li>
+    </ul>
+  </div>
+  <div class="group">
+    <h3>Fixes</h3>
+    <ul>
+      <li>Fixed failed searches clearing the current result page</li>
+      <li>Fixed missing file indicators not being vertically centered with clipboard row titles</li>
+      <li>Fixed invalidating one image clearing thumbnail cache entries for other images</li>
+      <li>Fixed completed thumbnail decodes being discarded when cache capacity was reached</li>
+    </ul>
+  </div>
+</section>
+
+<section>
   <span class="tag">v0.5.0</span>
   <p class="date">October 26, 2026</p>
   <div class="group">
