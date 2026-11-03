@@ -492,14 +492,8 @@ final class PalettePanel: NSPanel {
             material.layer?.cornerRadius = Theme.Radius.panel
             material.layer?.masksToBounds = true
             // A neutral veil limits wallpaper color bleed without losing the backdrop blur
-            let veil = NSBox(frame: frame)
+            let veil = PaletteFrostedTintView(frame: frame)
             veil.autoresizingMask = [.width, .height]
-            veil.boxType = .custom
-            veil.titlePosition = .noTitle
-            veil.borderWidth = 0
-            veil.fillColor = NSColor.windowBackgroundColor.withAlphaComponent(0.78)
-            material.addSubview(veil)
-            material.addSubview(hosting)
 
             // The material's rounded layer does not clip the window's rectangular shadow.
             // Match the shell that keeps Liquid Glass's corners transparent.
@@ -510,6 +504,9 @@ final class PalettePanel: NSPanel {
             shell.layer?.cornerRadius = Theme.Radius.panel
             shell.layer?.masksToBounds = true
             shell.addSubview(material)
+            // Keep the tint and content outside the material's vibrancy hierarchy
+            shell.addSubview(veil)
+            shell.addSubview(hosting)
             contentView = shell
         }
     }
@@ -520,4 +517,26 @@ final class PalettePanel: NSPanel {
 
 private final class TransparentPaletteHostingView<Content: View>: NSHostingView<Content> {
     override var isOpaque: Bool { false }
+}
+
+/// Resolve the neutral tint on every draw so appearance changes cannot retain a light fill
+final class PaletteFrostedTintView: NSView {
+    override var allowsVibrancy: Bool { false }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        NSColor(white: dark ? 0.28 : 0.96, alpha: 0.92).setFill()
+        dirtyRect.fill()
+        let edge = NSBezierPath(
+            roundedRect: bounds.insetBy(dx: 0.25, dy: 0.25),
+            xRadius: Theme.Radius.panel, yRadius: Theme.Radius.panel)
+        edge.lineWidth = 0.5
+        (dark ? NSColor.white : NSColor.black).withAlphaComponent(0.18).setStroke()
+        edge.stroke()
+    }
 }

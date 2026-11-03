@@ -115,7 +115,7 @@ extension View {
     func frosted(in shape: some Shape, visualStyle: PaletteVisualStyle = .liquid, interactive: Bool = true) -> some View {
         if visualStyle == .frosted {
             background {
-                shape.fill(Color(nsColor: .windowBackgroundColor).opacity(0.65))
+                shape.fill(Color.white.opacity(0.08))
                     .overlay {
                         shape.stroke(Theme.Colors.border.opacity(0.6), lineWidth: 0.5)
                     }
