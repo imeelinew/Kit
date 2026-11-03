@@ -160,7 +160,7 @@ struct RootPaletteView: View {
                     .foregroundStyle(Color(nsColor: .secondaryLabelColor))
             }
         }
-        .buttonStyle(FilterButtonStyle(isPresented: showTypeFilter, visualStyle: settings.paletteVisualStyle))
+        .buttonStyle(FilterButtonStyle(isPresented: showTypeFilter))
         .fixedSize()
         .accessibilityElement(children: .combine)
         .accessibilityLabel(vm.kindFilter.title)
@@ -183,7 +183,7 @@ struct RootPaletteView: View {
                     .foregroundStyle(Color(nsColor: .secondaryLabelColor))
             }
         }
-        .buttonStyle(FilterButtonStyle(isPresented: showStackFilter, visualStyle: settings.paletteVisualStyle))
+        .buttonStyle(FilterButtonStyle(isPresented: showStackFilter))
         .fixedSize()
         .background {
             GeometryReader { proxy in
@@ -197,7 +197,7 @@ struct RootPaletteView: View {
 
     private func bottomBar(showActionGroup: Bool) -> some View {
         HStack(spacing: 0) {
-            MenuCircleButton(pressed: showAppMenu, visualStyle: settings.paletteVisualStyle) { vm.toggleAppMenu() }
+            MenuCircleButton(pressed: showAppMenu) { vm.toggleAppMenu() }
             Spacer()
             if showActionGroup {
                 actionGroup
@@ -241,7 +241,7 @@ struct RootPaletteView: View {
             }
         }
         .padding(Theme.Spacing.xs)
-        .frosted(in: Capsule(), visualStyle: settings.paletteVisualStyle)
+        .frosted(in: Capsule())
     }
 
     @MainActor
@@ -373,7 +373,6 @@ private final class PaletteSearchTextField: NSTextField {
 
 private struct MenuCircleButton: View {
     var pressed: Bool = false
-    let visualStyle: PaletteVisualStyle
     let action: () -> Void
     @State private var hovered = false
 
@@ -394,13 +393,12 @@ private struct MenuCircleButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
-        .frosted(in: Circle(), visualStyle: visualStyle)
+        .frosted(in: Circle())
     }
 }
 
 private struct FilterButtonStyle: ButtonStyle {
     let isPresented: Bool
-    let visualStyle: PaletteVisualStyle
     @State private var hovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -420,7 +418,7 @@ private struct FilterButtonStyle: ButtonStyle {
             .background {
                 // Keep glass vibrancy and pointer feedback out of the readable label layer
                 Capsule().fill(.clear)
-                    .frosted(in: Capsule(), visualStyle: visualStyle, interactive: false)
+                    .frosted(in: Capsule(), interactive: false)
                     .allowsHitTesting(false)
             }
             .contentShape(Capsule())

@@ -110,21 +110,11 @@ struct KeyCapChip: View {
 }
 
 extension View {
-    /// Match floating control surfaces to the selected palette material
-    @ViewBuilder
-    func frosted(in shape: some Shape, visualStyle: PaletteVisualStyle = .liquid, interactive: Bool = true) -> some View {
-        if visualStyle == .frosted {
-            background {
-                shape.fill(Color.white.opacity(0.08))
-                    .overlay {
-                        shape.stroke(Theme.Colors.border.opacity(0.6), lineWidth: 0.5)
-                    }
-            }
-        } else {
-            glassEffect(
-                .regular.interactive(interactive).tint(Theme.Colors.glassFrost), in: shape
-            )
-            .tint(.clear)
-        }
+    /// Floating Liquid Glass controls shared by both palette backgrounds
+    func frosted(in shape: some Shape, interactive: Bool = true) -> some View {
+        glassEffect(
+            .regular.interactive(interactive).tint(Theme.Colors.glassFrost), in: shape
+        )
+        .tint(.clear)
     }
 }
