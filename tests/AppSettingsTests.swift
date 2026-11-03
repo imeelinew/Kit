@@ -37,44 +37,7 @@ enum AppSettingsTests {
         try await localization()
         try await clipboardPause()
         try await appearance()
-        try await visualStyle()
-        try frostedAppearance()
         try await retentionCommit()
-    }
-
-    @MainActor
-    private static func frostedAppearance() throws {
-        let tint = PaletteFrostedTintView(frame: NSRect(x: 0, y: 0, width: 20, height: 20))
-        try TestSupport.expect(!tint.allowsVibrancy, "Frosted tint does not inherit vibrant blending")
-        for name in [NSAppearance.Name.aqua, .darkAqua, .aqua, .darkAqua] {
-            tint.appearance = NSAppearance(named: name)
-            tint.needsDisplay = true
-            let bitmap = tint.bitmapImageRepForCachingDisplay(in: tint.bounds)!
-            tint.cacheDisplay(in: tint.bounds, to: bitmap)
-            let color = bitmap.colorAt(x: 10, y: 10)!.usingColorSpace(.deviceRGB)!
-            let expected: CGFloat = name == .darkAqua ? 0.28 : 0.96
-            try TestSupport.expect(abs(color.redComponent - expected) < 0.03,
-                                   "Frosted background redraws with the current appearance")
-            try TestSupport.expect(abs(color.alphaComponent - 0.92) < 0.03,
-                                   "Frosted background keeps a consistent neutral veil")
-        }
-    }
-
-    @MainActor
-    private static func visualStyle() async throws {
-        try withDefaults { defaults in
-            try TestSupport.expect(AppSettings(defaults: defaults).paletteVisualStyle == .liquid,
-                                   "Missing visual style preserves Liquid Glass")
-            defaults.set("invalid", forKey: "paletteVisualStyle")
-            try TestSupport.expect(AppSettings(defaults: defaults).paletteVisualStyle == .liquid,
-                                   "Invalid visual style falls back to Liquid Glass")
-            let settings = AppSettings(defaults: defaults)
-            for style in PaletteVisualStyle.allCases {
-                settings.paletteVisualStyle = style
-                try TestSupport.expect(AppSettings(defaults: defaults).paletteVisualStyle == style,
-                                       "Visual style persists across settings instances")
-            }
-        }
     }
 
     @MainActor

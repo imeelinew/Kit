@@ -418,7 +418,7 @@ private struct FilterButtonStyle: ButtonStyle {
             .background {
                 // Keep glass vibrancy and pointer feedback out of the readable label layer
                 Capsule().fill(.clear)
-                    .frosted(in: Capsule(), interactive: false)
+                    .glassEffect(.regular.tint(Theme.Colors.glassFrost), in: Capsule())
                     .allowsHitTesting(false)
             }
             .contentShape(Capsule())

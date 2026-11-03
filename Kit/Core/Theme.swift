@@ -110,11 +110,9 @@ struct KeyCapChip: View {
 }
 
 extension View {
-    /// Floating Liquid Glass controls shared by both palette backgrounds
-    func frosted(in shape: some Shape, interactive: Bool = true) -> some View {
-        glassEffect(
-            .regular.interactive(interactive).tint(Theme.Colors.glassFrost), in: shape
-        )
-        .tint(.clear)
+    /// A floating Liquid Glass control surface (action group + menu button), interactive for native lensing with a subtle frost tint.
+    func frosted(in shape: some Shape) -> some View {
+        glassEffect(.regular.interactive().tint(Theme.Colors.glassFrost), in: shape)
+            .tint(.clear)
     }
 }
