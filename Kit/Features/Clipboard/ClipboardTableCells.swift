@@ -136,8 +136,8 @@ final class ClipboardItemCellView: NSTableCellView {
         addSubview(thumbnailView)
         addSubview(titleLabel)
 
-        missingFileIndicator.image = NSImage(systemSymbolName: "exclamationmark.circle.fill", accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: 12, weight: .regular))
+        missingFileIndicator.image = NSImage(systemSymbolName: "exclamationmark.octagon", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 15, weight: .regular))
         missingFileIndicator.contentTintColor = .secondaryLabelColor
         missingFileIndicator.translatesAutoresizingMaskIntoConstraints = false
         missingFileIndicator.isHidden = true
@@ -154,11 +154,11 @@ final class ClipboardItemCellView: NSTableCellView {
 
             thumbnailView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             titleTrailingConstraint,
-            missingFileIndicator.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            missingFileIndicator.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
             missingFileIndicator.centerYAnchor.constraint(
-                equalTo: titleLabel.centerYAnchor, constant: 1),
-            missingFileIndicator.widthAnchor.constraint(equalToConstant: 14),
-            missingFileIndicator.heightAnchor.constraint(equalToConstant: 14),
+                equalTo: titleLabel.centerYAnchor),
+            missingFileIndicator.widthAnchor.constraint(equalToConstant: 18),
+            missingFileIndicator.heightAnchor.constraint(equalToConstant: 18),
             titleLabel.heightAnchor.constraint(equalToConstant: Theme.Size.rowIcon),
         ])
         standardConstraints = [
@@ -268,7 +268,7 @@ final class ClipboardItemCellView: NSTableCellView {
     private func setFileMissing(_ missing: Bool) {
         guard missingFileIndicator.isHidden == missing else { return }
         missingFileIndicator.isHidden = !missing
-        titleTrailingConstraint.constant = missing ? -38 : -16
+        titleTrailingConstraint.constant = missing ? -46 : -16
         updateRowLayout()
         renderedTitleWidth = -1
         needsLayout = true
