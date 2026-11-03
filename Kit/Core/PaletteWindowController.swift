@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
@@ -6,6 +7,8 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     private unowned let core: AppCore
     private var panel: PalettePanel?
     private var detachedContentView: NSView?
+    private var panelStyle: PaletteVisualStyle?
+    private var styleObserver: AnyCancellable?
     private var presentationTask: Task<Void, Never>?
     private var presentationID = UUID()
     private(set) var isPresenting = false
@@ -17,6 +20,12 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     init(core: AppCore) {
         self.core = core
         super.init()
+        styleObserver = core.settings.$paletteVisualStyle
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.rebuildPanelForStyleChange()
+            }
     }
 
     var isVisible: Bool { panel?.isVisible ?? false }
@@ -189,13 +198,35 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     }
 
     private func ensurePanel() -> PalettePanel {
-        if let panel { return panel }
+        let style = core.settings.paletteVisualStyle
+        if let panel, panelStyle == style { return panel }
+        panel?.orderOut(nil)
+        detachedContentView = nil
         let root = RootPaletteView(vm: core.palette, store: core.clipboardStore, settings: core.settings)
-        let panel = PalettePanel(rootView: root)
+        let panel = PalettePanel(rootView: root, visualStyle: style)
         panel.delegate = self
         panel.paletteViewModel = core.palette
         self.panel = panel
+        panelStyle = style
         return panel
+    }
+
+    private func rebuildPanelForStyleChange() {
+        guard panel != nil else { return }
+        let visible = isVisible || isPresenting
+        presentationID = UUID()
+        presentationTask?.cancel()
+        presentationTask = nil
+        isPresenting = false
+        panel?.orderOut(nil)
+        panel = nil
+        detachedContentView = nil
+        panelStyle = nil
+        if visible {
+            show()
+        } else {
+            prewarm()
+        }
     }
 
     private func positionedFrame() -> NSRect? {

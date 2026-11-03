@@ -37,7 +37,25 @@ enum AppSettingsTests {
         try await localization()
         try await clipboardPause()
         try await appearance()
+        try await visualStyle()
         try await retentionCommit()
+    }
+
+    @MainActor
+    private static func visualStyle() async throws {
+        try withDefaults { defaults in
+            try TestSupport.expect(AppSettings(defaults: defaults).paletteVisualStyle == .liquid,
+                                   "Missing visual style preserves Liquid Glass")
+            defaults.set("invalid", forKey: "paletteVisualStyle")
+            try TestSupport.expect(AppSettings(defaults: defaults).paletteVisualStyle == .liquid,
+                                   "Invalid visual style falls back to Liquid Glass")
+            let settings = AppSettings(defaults: defaults)
+            for style in PaletteVisualStyle.allCases {
+                settings.paletteVisualStyle = style
+                try TestSupport.expect(AppSettings(defaults: defaults).paletteVisualStyle == style,
+                                       "Visual style persists across settings instances")
+            }
+        }
     }
 
     @MainActor

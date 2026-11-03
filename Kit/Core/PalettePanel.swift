@@ -428,7 +428,7 @@ final class PalettePanel: NSPanel {
     }
 
     init<Content: View>(
-        rootView: Content,
+        rootView: Content, visualStyle: PaletteVisualStyle = .liquid,
         mouseLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation }
     ) {
         self.mouseLocation = mouseLocation
@@ -464,21 +464,54 @@ final class PalettePanel: NSPanel {
         hosting.sizingOptions = []
         hosting.autoresizingMask = [.width, .height]
 
-        let glass = NSGlassEffectView(frame: frame)
-        glass.autoresizingMask = [.width, .height]
-        glass.style = .regular
-        glass.cornerRadius = Theme.Radius.panel
-        glass.contentView = hosting
+        switch visualStyle {
+        case .liquid:
+            let glass = NSGlassEffectView(frame: frame)
+            glass.autoresizingMask = [.width, .height]
+            glass.style = .regular
+            glass.cornerRadius = Theme.Radius.panel
+            glass.contentView = hosting
 
-        // Clip the window corners so its shadow follows the glass surface
-        let shell = NSView(frame: frame)
-        shell.autoresizingMask = [.width, .height]
-        shell.wantsLayer = true
-        shell.layer?.backgroundColor = NSColor.clear.cgColor
-        shell.layer?.cornerRadius = Theme.Radius.panel
-        shell.layer?.masksToBounds = true
-        shell.addSubview(glass)
-        contentView = shell
+            // The glass shadow is still a rectangle. Masking the window to the same
+            // corner makes those square corners transparent so the shadow follows the curve.
+            let shell = NSView(frame: frame)
+            shell.autoresizingMask = [.width, .height]
+            shell.wantsLayer = true
+            shell.layer?.backgroundColor = NSColor.clear.cgColor
+            shell.layer?.cornerRadius = Theme.Radius.panel
+            shell.layer?.masksToBounds = true
+            shell.addSubview(glass)
+            contentView = shell
+        case .frosted:
+            let material = NSVisualEffectView(frame: frame)
+            material.autoresizingMask = [.width, .height]
+            material.material = .popover
+            material.blendingMode = .behindWindow
+            material.state = .active
+            material.wantsLayer = true
+            material.layer?.cornerRadius = Theme.Radius.panel
+            material.layer?.masksToBounds = true
+            // A neutral veil limits wallpaper color bleed without losing the backdrop blur
+            let veil = NSBox(frame: frame)
+            veil.autoresizingMask = [.width, .height]
+            veil.boxType = .custom
+            veil.titlePosition = .noTitle
+            veil.borderWidth = 0
+            veil.fillColor = NSColor.windowBackgroundColor.withAlphaComponent(0.78)
+            material.addSubview(veil)
+            material.addSubview(hosting)
+
+            // The material's rounded layer does not clip the window's rectangular shadow.
+            // Match the shell that keeps Liquid Glass's corners transparent.
+            let shell = NSView(frame: frame)
+            shell.autoresizingMask = [.width, .height]
+            shell.wantsLayer = true
+            shell.layer?.backgroundColor = NSColor.clear.cgColor
+            shell.layer?.cornerRadius = Theme.Radius.panel
+            shell.layer?.masksToBounds = true
+            shell.addSubview(material)
+            contentView = shell
+        }
     }
 
     override var canBecomeKey: Bool { true }
