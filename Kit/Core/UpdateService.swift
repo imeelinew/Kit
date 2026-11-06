@@ -1,5 +1,5 @@
 import AppKit
-import Combine
+import Observation
 import Sparkle
 
 private let versionHistoryURL = URL(string: "https://imeelinew.github.io/Kit/site/version-history.html")!
@@ -8,13 +8,20 @@ private let versionHistoryEnglishURL = URL(string: "https://imeelinew.github.io/
 /// Gives the no-update alert its "Version History" button and opens the published change log.
 /// Sparkle calls these on the main thread; hopping keeps the nonisolated protocol requirement honest.
 private final class VersionHistoryDriver: NSObject, SPUStandardUserDriverDelegate {
+    private let settings: AppSettings
+
+    init(settings: AppSettings) {
+        self.settings = settings
+    }
+
     func standardUserDriverShouldShowVersionHistory(for item: SUAppcastItem) -> Bool {
         true
     }
 
     func standardUserDriverShowVersionHistory(for item: SUAppcastItem) {
+        let settings = self.settings
         Task { @MainActor in
-            NSWorkspace.shared.open(Self.pageURL(for: AppCore.shared.settings.language))
+            NSWorkspace.shared.open(Self.pageURL(for: settings.language))
         }
     }
 
@@ -33,16 +40,19 @@ private final class VersionHistoryDriver: NSObject, SPUStandardUserDriverDelegat
 /// Owns Sparkle for the lifetime of the app and exposes only the controls used by Kit's UI.
 /// Sparkle persists its own preferences; Kit deliberately does not duplicate them in AppSettings.
 @MainActor
-final class UpdateService: ObservableObject {
-    @Published private(set) var canCheckForUpdates = false
-    @Published private(set) var automaticallyChecksForUpdates = false
+@Observable
+final class UpdateService {
+    private(set) var canCheckForUpdates = false
+    private(set) var automaticallyChecksForUpdates = false
 
     /// Sparkle references its user driver delegate weakly, so Kit has to keep it alive here.
-    private let versionHistoryDriver: VersionHistoryDriver
-    private let updaterController: SPUStandardUpdaterController
+    @ObservationIgnored private let versionHistoryDriver: VersionHistoryDriver
+    @ObservationIgnored private let updaterController: SPUStandardUpdaterController
+    @ObservationIgnored private var canCheckObserver: NSKeyValueObservation?
+    @ObservationIgnored private var autoCheckObserver: NSKeyValueObservation?
 
-    init() {
-        let versionHistoryDriver = VersionHistoryDriver()
+    init(settings: AppSettings) {
+        let versionHistoryDriver = VersionHistoryDriver(settings: settings)
         self.versionHistoryDriver = versionHistoryDriver
         updaterController = SPUStandardUpdaterController(
             startingUpdater: false,
@@ -51,12 +61,20 @@ final class UpdateService: ObservableObject {
         )
 
         let updater = updaterController.updater
-        updater.publisher(for: \.canCheckForUpdates)
-            .receive(on: RunLoop.main)
-            .assign(to: &$canCheckForUpdates)
-        updater.publisher(for: \.automaticallyChecksForUpdates)
-            .receive(on: RunLoop.main)
-            .assign(to: &$automaticallyChecksForUpdates)
+        canCheckForUpdates = updater.canCheckForUpdates
+        automaticallyChecksForUpdates = updater.automaticallyChecksForUpdates
+        canCheckObserver = updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] _, _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.canCheckForUpdates = self.updaterController.updater.canCheckForUpdates
+            }
+        }
+        autoCheckObserver = updater.observe(\.automaticallyChecksForUpdates, options: [.initial, .new]) { [weak self] _, _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.automaticallyChecksForUpdates = self.updaterController.updater.automaticallyChecksForUpdates
+            }
+        }
     }
 
     func start() {

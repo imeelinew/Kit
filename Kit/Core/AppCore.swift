@@ -1,5 +1,4 @@
 import AppKit
-import Combine
 import KeyboardShortcuts
 
 @MainActor
@@ -7,7 +6,7 @@ final class AppCore {
     static let shared = AppCore()
 
     let settings = AppSettings()
-    let updateService = UpdateService()
+    lazy var updateService = UpdateService(settings: settings)
     let clipboardStore: ClipboardStore
     let clipboardManager: ClipboardManager
     lazy var palette = PaletteViewModel(core: self)
@@ -16,18 +15,19 @@ final class AppCore {
 
     private lazy var windowController = PaletteWindowController(core: self)
     private let activationPolicy = ActivationPolicyCoordinator()
-    private lazy var pinnedImageWindows = PinnedImageWindowController()
+    private lazy var pinnedImageWindows = PinnedImageWindowController(core: self)
     private lazy var settingsWindowController = KitSettingsWindowController(
+        core: self,
         activationPolicy: activationPolicy
     )
-    private lazy var menuBarController = MenuBarController(settings: settings)
+    private lazy var menuBarController = MenuBarController(core: self)
     private let copySoundPlayer = CopySoundPlayer()
     private var transferTask: Task<Void, Never>?
     private var transferGeneration = UUID()
     private var clipboardResumeTask: Task<Void, Never>?
     private var clipboardShortcutIsDown = false
-    private var imageTextSearchObserver: AnyCancellable?
-    private var historyAfterActionObserver: AnyCancellable?
+    private var imageTextSearchObserver: ObservationToken?
+    private var historyAfterActionObserver: ObservationToken?
 
     private convenience init() {
         self.init(clipboardStore: ClipboardStore())
@@ -36,14 +36,12 @@ final class AppCore {
     init(clipboardStore: ClipboardStore) {
         self.clipboardStore = clipboardStore
         clipboardManager = ClipboardManager(store: clipboardStore, settings: settings)
-        imageTextSearchObserver = settings.$imageTextSearchEnabled
-            .sink { [weak clipboardStore] enabled in
-                clipboardStore?.setImageTextSearchEnabled(enabled)
-            }
-        historyAfterActionObserver = settings.$updateHistoryAfterAction
-            .sink { [weak clipboardStore] enabled in
-                clipboardStore?.updateHistoryAfterAction = enabled
-            }
+        imageTextSearchObserver = settings.observeImageTextSearchEnabled { [weak clipboardStore] enabled in
+            clipboardStore?.setImageTextSearchEnabled(enabled)
+        }
+        historyAfterActionObserver = settings.observeUpdateHistoryAfterAction { [weak clipboardStore] enabled in
+            clipboardStore?.updateHistoryAfterAction = enabled
+        }
     }
 
     func start() {

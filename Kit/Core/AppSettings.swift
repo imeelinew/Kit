@@ -1,4 +1,5 @@
 import AppKit
+import Observation
 import SwiftUI
 
 enum AppLanguage: String, CaseIterable, Identifiable {
@@ -122,9 +123,14 @@ enum CopySoundEffect: Int, CaseIterable, Identifiable {
 }
 
 @MainActor
-final class AppSettings: ObservableObject {
-    private let defaults: UserDefaults
-    private var reconcilingLaunchAtLogin = false
+@Observable
+final class AppSettings {
+    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private var reconcilingLaunchAtLogin = false
+    @ObservationIgnored private var imageTextSearchObservers: [UUID: (Bool) -> Void] = [:]
+    @ObservationIgnored private var updateHistoryAfterActionObservers: [UUID: (Bool) -> Void] = [:]
+    @ObservationIgnored private var languageObservers: [UUID: (AppLanguage) -> Void] = [:]
+    @ObservationIgnored private var showMenuBarIconObservers: [UUID: (Bool) -> Void] = [:]
 
     private enum Key {
         static let clipboardRetention = "clipboardRetentionDays"
@@ -146,12 +152,17 @@ final class AppSettings: ObservableObject {
         static let hapticFeedbackEnabled = "hapticFeedbackEnabled"
     }
 
-    @Published private(set) var clipboardRetention: ClipboardRetention {
+    private(set) var clipboardRetention: ClipboardRetention {
         didSet { defaults.set(clipboardRetention.rawValue, forKey: Key.clipboardRetention) }
     }
 
-    @Published var updateHistoryAfterAction: Bool {
-        didSet { defaults.set(updateHistoryAfterAction, forKey: Key.updateHistoryAfterAction) }
+    var updateHistoryAfterAction: Bool {
+        didSet {
+            defaults.set(updateHistoryAfterAction, forKey: Key.updateHistoryAfterAction)
+            for observer in updateHistoryAfterActionObservers.values {
+                observer(updateHistoryAfterAction)
+            }
+        }
     }
 
     /// Persist only a committed policy; requests and cancelled confirmations never reach defaults.
@@ -164,11 +175,11 @@ final class AppSettings: ObservableObject {
         return result
     }
 
-    @Published var clipboardDisabledApps: [String] {
+    var clipboardDisabledApps: [String] {
         didSet { defaults.set(clipboardDisabledApps, forKey: Key.clipboardDisabledApps) }
     }
 
-    @Published var launchAtLogin: Bool {
+    var launchAtLogin: Bool {
         didSet {
             guard !reconcilingLaunchAtLogin else { return }
             let actual = LaunchAtLogin.set(launchAtLogin)
@@ -181,52 +192,111 @@ final class AppSettings: ObservableObject {
     }
 
     /// When enabled, opening the palette selects the English keyboard so pinyin search can be typed directly.
-    @Published var switchToEnglishInputOnOpen: Bool {
+    var switchToEnglishInputOnOpen: Bool {
         didSet { defaults.set(switchToEnglishInputOnOpen, forKey: Key.switchToEnglishInputOnOpen) }
     }
 
-    @Published var renderMarkdown: Bool {
+    var renderMarkdown: Bool {
         didSet { defaults.set(renderMarkdown, forKey: Key.renderMarkdown) }
     }
 
-    @Published var imageTextSearchEnabled: Bool {
-        didSet { defaults.set(imageTextSearchEnabled, forKey: Key.imageTextSearchEnabled) }
+    var imageTextSearchEnabled: Bool {
+        didSet {
+            defaults.set(imageTextSearchEnabled, forKey: Key.imageTextSearchEnabled)
+            for observer in imageTextSearchObservers.values {
+                observer(imageTextSearchEnabled)
+            }
+        }
     }
 
-    @Published var language: AppLanguage {
-        didSet { defaults.set(language.rawValue, forKey: Key.language) }
+    var language: AppLanguage {
+        didSet {
+            defaults.set(language.rawValue, forKey: Key.language)
+            for observer in languageObservers.values {
+                observer(language)
+            }
+        }
     }
 
-    @Published var appearance: AppAppearance {
+    var appearance: AppAppearance {
         didSet {
             defaults.set(appearance.rawValue, forKey: Key.appearance)
             appearance.apply()
         }
     }
 
-    @Published var pinnedImageSize: PinnedImageSize {
+    var pinnedImageSize: PinnedImageSize {
         didSet { defaults.set(pinnedImageSize.rawValue, forKey: Key.pinnedImageSize) }
     }
 
-    @Published var showMenuBarIcon: Bool {
-        didSet { defaults.set(showMenuBarIcon, forKey: Key.showMenuBarIcon) }
+    var showMenuBarIcon: Bool {
+        didSet {
+            defaults.set(showMenuBarIcon, forKey: Key.showMenuBarIcon)
+            for observer in showMenuBarIconObservers.values {
+                observer(showMenuBarIcon)
+            }
+        }
     }
 
-    @Published var animateMenuBarIconOnCopy: Bool {
+    var animateMenuBarIconOnCopy: Bool {
         didSet { defaults.set(animateMenuBarIconOnCopy, forKey: Key.animateMenuBarIconOnCopy) }
     }
 
-    @Published var soundEffectsEnabled: Bool {
+    var soundEffectsEnabled: Bool {
         didSet { defaults.set(soundEffectsEnabled, forKey: Key.soundEffectsEnabled) }
     }
 
-    @Published var copySoundEffect: CopySoundEffect {
+    var copySoundEffect: CopySoundEffect {
         didSet { defaults.set(copySoundEffect.rawValue, forKey: Key.copySoundEffect) }
     }
 
     /// Trackpad ticks when the pointer crosses a list row or a row crosses the viewport edge.
-    @Published var hapticFeedbackEnabled: Bool {
+    var hapticFeedbackEnabled: Bool {
         didSet { defaults.set(hapticFeedbackEnabled, forKey: Key.hapticFeedbackEnabled) }
+    }
+
+    func observeImageTextSearchEnabled(
+        initial: Bool = true, _ handler: @escaping (Bool) -> Void
+    ) -> ObservationToken {
+        let id = UUID()
+        imageTextSearchObservers[id] = handler
+        if initial { handler(imageTextSearchEnabled) }
+        return ObservationToken { [weak self] in
+            self?.imageTextSearchObservers.removeValue(forKey: id)
+        }
+    }
+
+    func observeUpdateHistoryAfterAction(
+        initial: Bool = true, _ handler: @escaping (Bool) -> Void
+    ) -> ObservationToken {
+        let id = UUID()
+        updateHistoryAfterActionObservers[id] = handler
+        if initial { handler(updateHistoryAfterAction) }
+        return ObservationToken { [weak self] in
+            self?.updateHistoryAfterActionObservers.removeValue(forKey: id)
+        }
+    }
+
+    func observeLanguage(
+        initial: Bool = true, _ handler: @escaping (AppLanguage) -> Void
+    ) -> ObservationToken {
+        let id = UUID()
+        languageObservers[id] = handler
+        if initial { handler(language) }
+        return ObservationToken { [weak self] in
+            self?.languageObservers.removeValue(forKey: id)
+        }
+    }
+
+    func observeShowMenuBarIcon(
+        initial: Bool = true, _ handler: @escaping (Bool) -> Void
+    ) -> ObservationToken {
+        let id = UUID()
+        showMenuBarIconObservers[id] = handler
+        if initial { handler(showMenuBarIcon) }
+        return ObservationToken { [weak self] in
+            self?.showMenuBarIconObservers.removeValue(forKey: id)
+        }
     }
 
     var savedClipboardPause: (isPaused: Bool, until: Date?) {

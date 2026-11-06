@@ -99,38 +99,33 @@ enum ClipboardSearch {
             ORDER BY i.created_at DESC, i.rowid DESC
             LIMIT ?
             """
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(connection, sql, -1, &statement, nil) == SQLITE_OK,
-            let statement
-        else {
-            ClipboardSQLite.logFailure(connection, operation: "prepare search")
-            sqlite3_finalize(statement)
+        guard let statement = ClipboardSQLite.prepare(sql, in: connection, operation: "prepare search") else {
             return nil
         }
         defer { sqlite3_finalize(statement) }
 
         var parameter: Int32 = 1
         for value in predicate.bindings {
-            sqlite3_bind_text(statement, parameter, value, -1, SQLITE_TRANSIENT)
+            ClipboardSQLite.bindText(value, to: statement, at: parameter)
             parameter += 1
         }
         if let kind {
-            sqlite3_bind_text(statement, parameter, kind.rawValue, -1, SQLITE_TRANSIENT)
+            ClipboardSQLite.bindText(kind.rawValue, to: statement, at: parameter)
             parameter += 1
         }
         if let stackID {
-            sqlite3_bind_text(statement, parameter, stackID.uuidString, -1, SQLITE_TRANSIENT)
+            ClipboardSQLite.bindText(stackID.uuidString, to: statement, at: parameter)
             parameter += 1
         }
         if let cursor {
-            sqlite3_bind_double(statement, parameter, cursor.lastCopiedAt.timeIntervalSince1970)
-            sqlite3_bind_double(statement, parameter + 1, cursor.lastCopiedAt.timeIntervalSince1970)
-            sqlite3_bind_int64(statement, parameter + 2, cursor.rowID)
+            ClipboardSQLite.bindDouble(cursor.lastCopiedAt.timeIntervalSince1970, to: statement, at: parameter)
+            ClipboardSQLite.bindDouble(cursor.lastCopiedAt.timeIntervalSince1970, to: statement, at: parameter + 1)
+            ClipboardSQLite.bindInt64(cursor.rowID, to: statement, at: parameter + 2)
             parameter += 3
         }
         // OCR pinyin shares this index with paths, so disabled OCR needs candidate validation
         // Apply the page limit after validation to avoid truncating later genuine matches
-        sqlite3_bind_int64(statement, parameter, validatesFileImageText ? -1 : sqlite3_int64(limit + 1))
+        ClipboardSQLite.bindInt64(validatesFileImageText ? -1 : Int64(limit + 1), to: statement, at: parameter)
 
         var results: [(item: ClipboardItem, cursor: ClipboardSearchCursor)] = []
         var status = sqlite3_step(statement)
@@ -230,15 +225,10 @@ enum ClipboardSearch {
         }
         defer { sqlite3_close_v2(connection) }
         sqlite3_busy_timeout(connection, 1000)
-        var update: OpaquePointer?
-        guard
-            sqlite3_prepare_v2(
-                connection,
-                "UPDATE items SET pinyin = ?, pinyin_initials = ? WHERE id = ?", -1, &update,
-                nil) == SQLITE_OK,
-            let update
-        else {
-            sqlite3_finalize(update)
+        guard let update = ClipboardSQLite.prepare(
+            "UPDATE items SET pinyin = ?, pinyin_initials = ? WHERE id = ?",
+            in: connection, operation: "prepare metadata update"
+        ) else {
             return false
         }
         defer { sqlite3_finalize(update) }
@@ -248,13 +238,10 @@ enum ClipboardSearch {
             guard !Task.isCancelled else { return false }
             let forms = makeSearchForms(entry.text)
             guard !Task.isCancelled else { return false }
-            sqlite3_bind_text(update, 1, forms.full, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(update, 2, forms.initials, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(update, 3, entry.id, -1, SQLITE_TRANSIENT)
-            let status = sqlite3_step(update)
-            sqlite3_reset(update)
-            sqlite3_clear_bindings(update)
-            guard status == SQLITE_DONE else { return false }
+            ClipboardSQLite.bindText(forms.full, to: update, at: 1)
+            ClipboardSQLite.bindText(forms.initials, to: update, at: 2)
+            ClipboardSQLite.bindText(entry.id, to: update, at: 3)
+            guard ClipboardSQLite.stepAndReset(update) else { return false }
         }
         return !Task.isCancelled
     }

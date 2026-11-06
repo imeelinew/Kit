@@ -1,5 +1,4 @@
 import AppKit
-import Combine
 import QuartzCore
 
 /// Menu bar status item: `arrow.trianglehead.clockwise` template icon, left-click toggles the palette,
@@ -7,27 +6,24 @@ import QuartzCore
 /// Spins clockwise on successful copies.
 @MainActor
 final class MenuBarController: NSObject {
-    private let settings: AppSettings
+    private unowned let core: AppCore
+    private var settings: AppSettings { core.settings }
     private var statusItem: NSStatusItem?
     private var spinTimer: Timer?
     private var spinningImage: NSImage?
     private var spinStartedAt: CFTimeInterval = 0
-    private var cancellables = Set<AnyCancellable>()
+    private var visibilityObserver: ObservationToken?
+    private var languageObserver: ObservationToken?
 
-    init(settings: AppSettings) {
-        self.settings = settings
+    init(core: AppCore) {
+        self.core = core
         super.init()
-        settings.$showMenuBarIcon
-            .removeDuplicates()
-            .sink { [weak self] show in
-                self?.setVisible(show)
-            }
-            .store(in: &cancellables)
-        settings.$language
-            .sink { [weak self] _ in
-                self?.applyLocalizedChrome()
-            }
-            .store(in: &cancellables)
+        visibilityObserver = core.settings.observeShowMenuBarIcon { [weak self] show in
+            self?.setVisible(show)
+        }
+        languageObserver = core.settings.observeLanguage { [weak self] _ in
+            self?.applyLocalizedChrome()
+        }
     }
 
     func start() {
@@ -108,14 +104,14 @@ final class MenuBarController: NSObject {
 
     @objc private func handleClick(_ sender: Any?) {
         guard let event = NSApp.currentEvent else {
-            AppCore.shared.togglePalette()
+            core.togglePalette()
             return
         }
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if event.type == .rightMouseUp || modifiers.contains(.control) {
             popMenu()
         } else {
-            AppCore.shared.togglePalette()
+            core.togglePalette()
         }
     }
 
@@ -157,7 +153,7 @@ final class MenuBarController: NSObject {
 
         menu.addItem(.separator())
 
-        if AppCore.shared.isClipboardPaused {
+        if core.isClipboardPaused {
             let resumeItem = NSMenuItem(
                 title: AppLocalization.string("Resume Kit", locale: locale),
                 action: #selector(resumeClipboard),
@@ -221,27 +217,27 @@ final class MenuBarController: NSObject {
 
     @objc private func pauseClipboard(_ sender: NSMenuItem) {
         let duration = (sender.representedObject as? NSNumber)?.doubleValue
-        AppCore.shared.pauseClipboard(until: duration.map { Date().addingTimeInterval($0) })
+        core.pauseClipboard(until: duration.map { Date().addingTimeInterval($0) })
     }
 
     @objc private func resumeClipboard() {
-        AppCore.shared.resumeClipboard()
+        core.resumeClipboard()
     }
 
     @objc private func showAbout() {
-        AppCore.shared.showAbout()
+        core.showAbout()
     }
 
     @objc private func openSettings() {
-        AppCore.shared.showSettings()
+        core.showSettings()
     }
 
     @objc private func checkForUpdates() {
-        AppCore.shared.checkForUpdates()
+        core.checkForUpdates()
     }
 
     @objc private func quit() {
-        AppCore.shared.requestQuit()
+        core.requestQuit()
     }
 }
 

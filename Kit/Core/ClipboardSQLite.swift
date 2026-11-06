@@ -15,6 +15,13 @@ enum ClipboardSQLite {
     static let imageBackedPredicate =
         "((kind = 'image' AND image_path IS NOT NULL) OR (kind = 'file' AND file_is_image = 1 AND file_urls IS NOT NULL))"
 
+    static let itemSelection = """
+        SELECT id, kind, text, image_path, created_at, source_app,
+               image_fingerprint, custom_title, first_copied_at,
+               ocr_text, ocr_status, ocr_version, ocr_attempts, copy_count, file_urls, file_is_image
+        FROM items
+        """
+
     static func transaction(in db: OpaquePointer?, _ body: () -> Bool) -> Bool {
         guard sqlite3_exec(db, "BEGIN IMMEDIATE", nil, nil, nil) == SQLITE_OK else { return false }
         if body(), sqlite3_exec(db, "COMMIT", nil, nil, nil) == SQLITE_OK { return true }
@@ -22,12 +29,62 @@ enum ClipboardSQLite {
         return false
     }
 
+    static func prepare(_ sql: String, in db: OpaquePointer?, operation: String = "prepare statement") -> OpaquePointer? {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            logFailure(db, operation: operation)
+            sqlite3_finalize(stmt)
+            return nil
+        }
+        return stmt
+    }
+
+    @discardableResult
+    static func execute(_ sql: String, in db: OpaquePointer?) -> Bool {
+        sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK
+    }
+
+    @discardableResult
+    static func stepAndReset(_ stmt: OpaquePointer) -> Bool {
+        let status = sqlite3_step(stmt)
+        reset(stmt)
+        return status == SQLITE_DONE
+    }
+
+    static func reset(_ stmt: OpaquePointer) {
+        sqlite3_reset(stmt)
+        sqlite3_clear_bindings(stmt)
+    }
+
     static func prepareSchema(in db: OpaquePointer) -> Bool {
         Schema(database: db).prepare()
     }
 
-    static func bindText(_ text: String?, to stmt: OpaquePointer, at index: Int32) {
-        sqlite3_bind_text(stmt, index, text, text.map { Int32($0.utf8.count) } ?? 0, SQLITE_TRANSIENT)
+    @discardableResult
+    static func bindText(_ text: String?, to stmt: OpaquePointer, at index: Int32) -> Bool {
+        sqlite3_bind_text(stmt, index, text, text.map { Int32($0.utf8.count) } ?? 0, SQLITE_TRANSIENT) == SQLITE_OK
+    }
+
+    static func bindInt(_ value: Int, to stmt: OpaquePointer, at index: Int32) {
+        sqlite3_bind_int(stmt, index, Int32(value))
+    }
+
+    static func bindInt64(_ value: Int64, to stmt: OpaquePointer, at index: Int32) {
+        sqlite3_bind_int64(stmt, index, value)
+    }
+
+    static func bindDouble(_ value: Double, to stmt: OpaquePointer, at index: Int32) {
+        sqlite3_bind_double(stmt, index, value)
+    }
+
+    static func bindBlob(_ data: Data, to stmt: OpaquePointer, at index: Int32) {
+        _ = data.withUnsafeBytes {
+            sqlite3_bind_blob(stmt, index, $0.baseAddress, Int32($0.count), SQLITE_TRANSIENT)
+        }
+    }
+
+    static func bindNull(to stmt: OpaquePointer, at index: Int32) {
+        sqlite3_bind_null(stmt, index)
     }
 
     static func row(_ stmt: OpaquePointer?) -> ClipboardItem? {

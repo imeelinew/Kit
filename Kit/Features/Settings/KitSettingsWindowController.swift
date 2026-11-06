@@ -1,29 +1,28 @@
 import AppKit
 import Carbon.HIToolbox
-import Combine
 import KeyboardShortcuts
+import Observation
 import SwiftUI
 
 /// Owns the native window and the selection shared with the SwiftUI sidebar.
 @MainActor
 final class KitSettingsWindowController {
+    private unowned let core: AppCore
     private let activationPolicy: ActivationPolicyCoordinator
     private let selection = SettingsSelection()
     private let windowDelegate = SettingsWindowDelegate()
     private var window: NSWindow?
     private var closeObserver: NSObjectProtocol?
     private var commandWCloseView: CommandWCloseView?
-    private var languageObserver: AnyCancellable?
+    private var languageObserver: ObservationToken?
 
-    init(activationPolicy: ActivationPolicyCoordinator) {
+    init(core: AppCore, activationPolicy: ActivationPolicyCoordinator) {
+        self.core = core
         self.activationPolicy = activationPolicy
-        languageObserver = AppCore.shared.settings.$language
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] language in
-                self?.window?.title = AppLocalization.string(
-                    "Kit Settings", locale: language.locale)
-            }
+        languageObserver = core.settings.observeLanguage(initial: false) { [weak self] language in
+            self?.window?.title = AppLocalization.string(
+                "Kit Settings", locale: language.locale)
+        }
     }
 
     var isVisible: Bool { window?.isVisible == true }
@@ -45,10 +44,11 @@ final class KitSettingsWindowController {
     }
 
     private func makeWindow() {
-        let hosting = NSHostingController(rootView: SettingsWindowRoot(selection: selection))
+        let hosting = NSHostingController(
+            rootView: SettingsWindowRoot(core: core, selection: selection))
         let window = SettingsWindow(contentViewController: hosting)
         window.title = AppLocalization.string(
-            "Kit Settings", locale: AppCore.shared.settings.language.locale)
+            "Kit Settings", locale: core.settings.language.locale)
         window.styleMask = [.titled, .closable, .fullSizeContentView]
         window.collectionBehavior = [.fullScreenNone, .fullScreenDisallowsTiling]
         window.delegate = windowDelegate
@@ -85,13 +85,15 @@ final class KitSettingsWindowController {
 }
 
 @MainActor
-private final class SettingsSelection: ObservableObject {
-    @Published var tab: SettingsTab = .general
+@Observable
+private final class SettingsSelection {
+    var tab: SettingsTab = .general
 }
 
 private struct SettingsWindowRoot: View {
-    @ObservedObject var selection: SettingsSelection
-    @ObservedObject private var settings = AppCore.shared.settings
+    let core: AppCore
+    @Bindable var selection: SettingsSelection
+    private var settings: AppSettings { core.settings }
     @State private var backStack: [SettingsTab] = []
     @State private var forwardStack: [SettingsTab] = []
     @State private var applyingHistory = false
@@ -179,11 +181,16 @@ private struct SettingsWindowRoot: View {
     @ViewBuilder
     private var settingsPage: some View {
         switch selection.tab {
-        case .general: GeneralSettingsView()
+        case .general: GeneralSettingsView(settings: core.settings, updateService: core.updateService)
         case .shortcuts: ShortcutsSettingsView()
-        case .appearance: AppearanceSettingsView()
-        case .sound: SoundSettingsView()
-        case .clipboard: ClipboardSettingsView()
+        case .appearance: AppearanceSettingsView(settings: core.settings)
+        case .sound: SoundSettingsView(settings: core.settings, onPreviewSound: { core.previewCopySound() })
+        case .clipboard:
+            ClipboardSettingsView(
+                settings: core.settings,
+                store: core.clipboardStore,
+                systemClipboardHistory: core.systemClipboardHistory
+            )
         case .about: AboutSettingsView()
         }
     }

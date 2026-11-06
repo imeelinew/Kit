@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// Mandarin romanization helpers shared by indexed search, resident entries, and highlights.
 enum Pinyin {
@@ -62,7 +63,7 @@ enum Pinyin {
         }
         private let sources = NSCache<NSData, IndexBox>()
         private let characters = NSCache<NSData, TokenBox>()
-        private let conversionLock = NSLock()
+        private let conversionLock = Mutex<Void>(())
         private let convert: @Sendable (String) -> String
 
         init(convert: @escaping @Sendable (String) -> String = Pinyin.romanize) {
@@ -117,14 +118,14 @@ enum Pinyin {
         private func token(for character: String) -> String? {
             let key = Data(character.utf8) as NSData
             if let hit = characters.object(forKey: key) { return hit.value }
-            conversionLock.lock()
-            defer { conversionLock.unlock() }
-            guard !Task.isCancelled else { return nil }
-            if let hit = characters.object(forKey: key) { return hit.value }
-            let token = compact(convert(character))
-            guard !Task.isCancelled else { return nil }
-            characters.setObject(TokenBox(token), forKey: key)
-            return token
+            return conversionLock.withLock { _ in
+                guard !Task.isCancelled else { return nil }
+                if let hit = characters.object(forKey: key) { return hit.value }
+                let token = compact(convert(character))
+                guard !Task.isCancelled else { return nil }
+                characters.setObject(TokenBox(token), forKey: key)
+                return token
+            }
         }
     }
 

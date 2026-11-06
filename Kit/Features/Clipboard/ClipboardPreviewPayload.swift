@@ -40,6 +40,12 @@ final class ClipboardPreviewPayload {
         cache.removeAllObjects()
     }
 
+    static func purgeSessionCaches() {
+        purge()
+        ImageSearchHighlightPayload.purge()
+        ImageThumbnail.purgePreviews()
+    }
+
     private init(
         item: ClipboardItem, image: NSImage?, details: Details,
         imageURL: URL?, imageVersion: UInt64, fileVersions: [UInt64], fileAccess: FileAccessLease?,

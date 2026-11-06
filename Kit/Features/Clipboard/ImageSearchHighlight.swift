@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Synchronization
 import Vision
 
 /// Value-only OCR geometry. Normalized text offsets stay attached to their original image regions,
@@ -167,38 +168,40 @@ final class ImageSearchHighlightPayload {
 
     /// Vision's supported cross-thread cancel is the only concurrent access to the request.
     /// Recognition itself is serial, and cancelled queued jobs never start a Vision request.
-    private final class RecognitionJob: @unchecked Sendable {
-        private let lock = NSLock()
-        private var cancelled = false
-        private var request: VNRecognizeTextRequest?
+    private final class RecognitionJob: Sendable {
+        private struct State: @unchecked Sendable {
+            var cancelled = false
+            var request: VNRecognizeTextRequest?
+        }
+        private let state = Mutex(State())
 
         func cancel() {
-            lock.withLock {
-                cancelled = true
-                request?.cancel()
+            state.withLock { state in
+                state.cancelled = true
+                state.request?.cancel()
             }
         }
 
         func run(_ url: URL) -> ImageTextLayout? {
             let request = ClipboardImageTextRecognition.makeRequest()
-            guard lock.withLock({
-                guard !cancelled else { return false }
-                self.request = request
+            guard state.withLock({ state in
+                guard !state.cancelled else { return false }
+                state.request = request
                 return true
             }) else { return nil }
-            defer { lock.withLock { self.request = nil } }
+            defer { state.withLock { $0.request = nil } }
             do {
                 let supported = try request.supportedRecognitionLanguages()
                 guard request.recognitionLanguages.allSatisfy(supported.contains) else { return nil }
                 try VNImageRequestHandler(url: url).perform([request])
                 var lines: [ImageTextLayout.Line] = []
                 for observation in request.results ?? [] {
-                    guard !lock.withLock({ cancelled }) else { return nil }
+                    guard !state.withLock({ $0.cancelled }) else { return nil }
                     guard let candidate = observation.topCandidates(1).first else { continue }
                     let text = candidate.string
                     var bounds: [CGRect?] = []
                     for index in text.indices {
-                        guard !lock.withLock({ cancelled }) else { return nil }
+                        guard !state.withLock({ $0.cancelled }) else { return nil }
                         let range = index..<text.index(after: index)
                         bounds.append((try? candidate.boundingBox(for: range))?.boundingBox)
                     }

@@ -1,13 +1,14 @@
 import AppKit
-import Combine
 
 /// Install the standard editing commands required by AppKit field editors in our manual app lifecycle.
 @MainActor
 final class ApplicationMenu: NSObject, NSMenuItemValidation {
-    private var languageObserver: AnyCancellable?
+    private weak var core: AppCore?
+    private var languageObserver: ObservationToken?
 
-    func install() {
-        languageObserver = AppCore.shared.settings.$language.sink { [weak self] language in
+    func install(core: AppCore = .shared) {
+        self.core = core
+        languageObserver = core.settings.observeLanguage { [weak self] language in
             self?.build(locale: language.locale)
         }
     }
@@ -70,9 +71,9 @@ final class ApplicationMenu: NSObject, NSMenuItemValidation {
         editor.deleteBackward(sender)
     }
 
-    @objc private func about(_ sender: Any?) { AppCore.shared.showSettings(tab: .about) }
+    @objc private func about(_ sender: Any?) { core?.showSettings(tab: .about) }
 
-    @objc private func quit(_ sender: Any?) { AppCore.shared.requestQuit() }
+    @objc private func quit(_ sender: Any?) { core?.requestQuit() }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {

@@ -1,5 +1,4 @@
 import AppKit
-import Combine
 import Observation
 import SwiftUI
 
@@ -208,16 +207,14 @@ final class PaletteViewModel {
     @ObservationIgnored private var loadedPageCount = 1
     @ObservationIgnored private var pendingRestoredItemID: ClipboardItem.ID?
     private var deletionWasLastEdit = false
-    @ObservationIgnored private var revisionObserver: AnyCancellable?
+    @ObservationIgnored private var revisionObserver: ObservationToken?
 
     init(core: AppCore) {
         self.core = core
-        revisionObserver = core.clipboardStore.$revision
-            .dropFirst()
-            .sink { [weak self] _ in
-                guard let self, !self.core.clipboardStore.hasDeferredHistoryUpdates else { return }
-                refreshResults(resetSelection: !searchReady, blockCommands: false)
-            }
+        revisionObserver = core.clipboardStore.observeRevision { [weak self] in
+            guard let self, !self.core.clipboardStore.hasDeferredHistoryUpdates else { return }
+            refreshResults(resetSelection: !searchReady, blockCommands: false)
+        }
         refreshResults(resetSelection: true, blockCommands: true)
     }
 

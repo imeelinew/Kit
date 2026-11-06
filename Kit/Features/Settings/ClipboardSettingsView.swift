@@ -3,8 +3,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ClipboardSettingsView: View {
-    @ObservedObject private var settings = AppCore.shared.settings
-    @ObservedObject private var store = AppCore.shared.clipboardStore
+    @Bindable var settings: AppSettings
+    let store: ClipboardStore
+    let systemClipboardHistory: SystemClipboardHistory
     private struct RetentionConfirmation: Identifiable {
         let id = UUID()
         let retention: ClipboardRetention
@@ -15,8 +16,6 @@ struct ClipboardSettingsView: View {
     @State private var retentionChangeFailed = false
     @State private var confirmingRebuildImageIndex = false
     @State private var imageCountForRebuild = 0
-
-    @ObservedObject private var systemClipboardHistory = AppCore.shared.systemClipboardHistory
 
     var body: some View {
         PreferencesForm {
@@ -110,10 +109,12 @@ struct ClipboardSettingsView: View {
         .onAppear {
             systemClipboardHistory.refresh()
         }
-        .onReceive(
-            NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
-        ) { _ in
-            systemClipboardHistory.refresh()
+        .task {
+            for await _ in NotificationCenter.default.notifications(
+                named: NSApplication.didBecomeActiveNotification
+            ) {
+                systemClipboardHistory.refresh()
+            }
         }
         .alert("Couldn't change history retention", isPresented: $retentionChangeFailed) {
             Button("OK", role: .cancel) {}

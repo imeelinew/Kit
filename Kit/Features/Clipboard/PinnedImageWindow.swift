@@ -1,5 +1,4 @@
 import AppKit
-import Combine
 import SwiftUI
 
 /// Owns pinned-content panels independently from the clipboard palette. Each clipboard item gets
@@ -7,12 +6,17 @@ import SwiftUI
 /// Spaces and hide on exclusive fullscreen Spaces.
 @MainActor
 final class PinnedImageWindowController: NSObject, NSWindowDelegate {
+    private unowned let core: AppCore
     private var panels: [ClipboardItem.ID: PinnedImagePanel] = [:]
     private var hiddenForFullscreen: Set<ClipboardItem.ID> = []
     private var spaceObservers: [NotificationToken] = []
     private var fullscreenSyncTask: Task<Void, Never>?
     private var observesExclusiveFullScreen = false
-    private var titleObserver: AnyCancellable?
+    private var titleObserver: ObservationToken?
+
+    init(core: AppCore) {
+        self.core = core
+    }
 
     func show(
         itemID: ClipboardItem.ID,
@@ -118,16 +122,14 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
 
     private func observeTitlesIfNeeded() {
         guard titleObserver == nil else { return }
-        titleObserver = AppCore.shared.clipboardStore.$revision
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                self?.syncPanelTitles()
-            }
+        titleObserver = core.clipboardStore.observeRevision { [weak self] in
+            self?.syncPanelTitles()
+        }
     }
 
     private func syncPanelTitles() {
-        let locale = AppCore.shared.settings.language.locale
-        let store = AppCore.shared.clipboardStore
+        let locale = core.settings.language.locale
+        let store = core.clipboardStore
         for (id, panel) in panels {
             let title = store.item(id: id)?.displayTitle(locale: locale) ?? ""
             if !title.isEmpty, panel.title != title {

@@ -7,6 +7,10 @@ trap 'rm -rf "$test_dir"' EXIT
 
 xcrun swiftc -swift-version 6 -parse-as-library \
     "$repo_root/Kit/Core/ClipboardStore.swift" \
+    "$repo_root/Kit/Core/ClipboardStackStore.swift" \
+    "$repo_root/Kit/Core/ClipboardRetentionEngine.swift" \
+    "$repo_root/Kit/Core/ClipboardOCRIndexer.swift" \
+    "$repo_root/Kit/Core/ClipboardFileMonitor.swift" \
     "$repo_root/Kit/Core/ClipboardFileReference.swift" \
     "$repo_root/Kit/Core/ClipboardItem.swift" \
     "$repo_root/Kit/Core/ClipboardImageOCR.swift" \

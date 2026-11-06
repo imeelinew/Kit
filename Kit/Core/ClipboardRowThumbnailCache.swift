@@ -1,9 +1,10 @@
 import Foundation
 import ImageIO
+import Synchronization
 
 /// Disposable, lossless row images beside the store's immutable originals. All I/O runs
-/// on decode workers; the lock also makes deletion invalidate an in-progress write.
-final class ClipboardRowThumbnailCache: @unchecked Sendable {
+/// on decode workers; the mutex also makes deletion invalidate an in-progress write.
+final class ClipboardRowThumbnailCache: Sendable {
     struct Ticket: Sendable {
         let source: URL
         let destination: URL
@@ -11,15 +12,18 @@ final class ClipboardRowThumbnailCache: @unchecked Sendable {
         let generation: UInt64
     }
 
-    private struct Entry {
+    private struct Entry: Sendable {
         let bytes: Int
         var accessed: Date
     }
 
-    private let lock = NSLock()
+    private struct State: Sendable {
+        var generation: UInt64 = 0
+        var directories: [URL: [URL: Entry]] = [:]
+    }
+
+    private let state = Mutex(State())
     private let byteLimit: Int
-    private var generation: UInt64 = 0
-    private var directories: [URL: [URL: Entry]] = [:]
 
     init(byteLimit: Int = 64 * 1024 * 1024) {
         precondition(byteLimit > 0)
@@ -50,15 +54,15 @@ final class ClipboardRowThumbnailCache: @unchecked Sendable {
         let suffix = ImageFingerprint.digest(data: Data(signature.utf8))
         let destination = Self.directory(for: source)
             .appendingPathComponent(Self.prefix(for: source) + suffix + ".png")
-        return lock.withLock {
-            Ticket(source: source, destination: destination, signature: signature, generation: generation)
+        return state.withLock { state in
+            Ticket(source: source, destination: destination, signature: signature, generation: state.generation)
         }
     }
 
     func cachedURL(for ticket: Ticket) -> URL? {
-        lock.withLock {
+        state.withLock { state in
             let freshURL = URL(fileURLWithPath: ticket.destination.path)
-            guard ticket.generation == generation,
+            guard ticket.generation == state.generation,
                 Self.isCacheDirectory(ticket.destination.deletingLastPathComponent()),
                 let values = try? freshURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
                 values.isRegularFile == true, values.isSymbolicLink != true
@@ -66,7 +70,7 @@ final class ClipboardRowThumbnailCache: @unchecked Sendable {
             // Persist recency so eviction remains useful after restarting the app.
             let now = Date()
             try? FileManager.default.setAttributes([.modificationDate: now], ofItemAtPath: ticket.destination.path)
-            directories[Self.directory(for: ticket.source)]?[ticket.destination]?.accessed = now
+            state.directories[Self.directory(for: ticket.source)]?[ticket.destination]?.accessed = now
             return ticket.destination
         }
     }
@@ -77,16 +81,16 @@ final class ClipboardRowThumbnailCache: @unchecked Sendable {
         else { return }
         CGImageDestinationAddImage(destination, image, nil)
         guard CGImageDestinationFinalize(destination), data.length <= byteLimit else { return }
-        lock.withLock {
-            guard ticket.generation == generation, Self.signature(for: ticket.source) == ticket.signature
+        state.withLock { state in
+            guard ticket.generation == state.generation, Self.signature(for: ticket.source) == ticket.signature
             else { return }
             let directory = Self.directory(for: ticket.source)
-            if !FileManager.default.fileExists(atPath: directory.path) { directories[directory] = nil }
+            if !FileManager.default.fileExists(atPath: directory.path) { state.directories[directory] = nil }
             guard (try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)) != nil
                 && Self.isCacheDirectory(directory)
             else { return }
-            var entries = directories[directory] ?? inventory(in: directory)
-            defer { directories[directory] = entries }
+            var entries = state.directories[directory] ?? inventory(in: directory)
+            defer { state.directories[directory] = entries }
             // A replaced source must not leave multiple versions of its thumbnail behind.
             let prefix = Self.prefix(for: ticket.source)
             for url in entries.keys.filter({ $0.lastPathComponent.hasPrefix(prefix) }) {
@@ -105,26 +109,26 @@ final class ClipboardRowThumbnailCache: @unchecked Sendable {
     }
 
     func remove(for source: URL) {
-        lock.withLock {
-            generation &+= 1
+        state.withLock { state in
+            state.generation &+= 1
             let prefix = Self.prefix(for: source)
             let directory = Self.directory(for: source)
-            guard Self.isCacheDirectory(directory) else { directories[directory] = nil; return }
-            var entries = directories[directory] ?? inventory(in: directory)
+            guard Self.isCacheDirectory(directory) else { state.directories[directory] = nil; return }
+            var entries = state.directories[directory] ?? inventory(in: directory)
             for url in entries.keys.filter({ $0.lastPathComponent.hasPrefix(prefix) }) {
                 if removeFile(url) { entries[url] = nil }
             }
             // Do not retain empty directories belonging to discarded temporary stores.
-            directories[directory] = entries.isEmpty ? nil : entries
+            state.directories[directory] = entries.isEmpty ? nil : entries
         }
     }
 
     func removeAll(in imagesDirectory: URL) {
-        lock.withLock {
-            generation &+= 1
+        state.withLock { state in
+            state.generation &+= 1
             let directory = Self.directory(for: imagesDirectory.appendingPathComponent("unused.png"))
             try? FileManager.default.removeItem(at: directory)
-            directories[directory] = nil
+            state.directories[directory] = nil
         }
     }
 

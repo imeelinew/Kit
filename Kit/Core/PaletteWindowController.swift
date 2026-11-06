@@ -134,9 +134,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         core.palette.prepareForNextPresentation()
         // Release preview view state and text storage in a tree with no window to redraw.
         detachedContentView?.layoutSubtreeIfNeeded()
-        ClipboardPreviewPayload.purge()
-        ImageSearchHighlightPayload.purge()
-        ImageThumbnail.purgePreviews()
+        ClipboardPreviewPayload.purgeSessionCaches()
         // Let orderOut and popover teardown finish before reattaching the empty hidden tree
         let request = presentationID
         DispatchQueue.main.async { [weak self, weak panel] in

@@ -2,6 +2,7 @@ import AppKit
 import CryptoKit
 import Darwin
 import ImageIO
+import Synchronization
 
 /// Stable identity for the normalized PNG payload owned by the clipboard store.
 enum ImageFingerprint {
@@ -16,22 +17,21 @@ enum ImageThumbnail {
     static let fileDidChange = Notification.Name("com.eli.Kit.fileAppearanceDidChange")
     private static let rowDiskCache = ClipboardRowThumbnailCache()
 
-    private final class ManagedImageDirectories: @unchecked Sendable {
-        private let lock = NSLock()
-        private var paths: Set<String> = []
+    private final class ManagedImageDirectories: Sendable {
+        private let paths = Mutex<Set<String>>([])
 
         func register(_ url: URL) {
-            _ = lock.withLock { paths.insert(url.standardizedFileURL.path) }
+            _ = paths.withLock { $0.insert(url.standardizedFileURL.path) }
         }
 
         func contains(_ url: URL) -> Bool {
-            lock.withLock { paths.contains(url.standardizedFileURL.path) }
+            paths.withLock { $0.contains(url.standardizedFileURL.path) }
         }
     }
 
     private static let managedImageDirectories = ManagedImageDirectories()
 
-    private enum FileSignature: Equatable {
+    private enum FileSignature: Equatable, Sendable {
         case metadata(
             device: dev_t,
             inode: ino_t,
@@ -59,71 +59,75 @@ enum ImageThumbnail {
         }
     }
 
-    private final class FileVersions: @unchecked Sendable {
-        private struct Entry {
+    private final class FileVersions: Sendable {
+        private struct Entry: Sendable {
             let version: UInt64
             var accessed: UInt64
             let signature: FileSignature?
         }
-        private let lock = NSLock()
-        private var clock: UInt64 = 0
-        private var entries: [String: Entry] = [:]
-        private var retainedPaths: [String: Int] = [:]
+        private struct State: Sendable {
+            var clock: UInt64 = 0
+            var entries: [String: Entry] = [:]
+            var retainedPaths: [String: Int] = [:]
+        }
+        private let state = Mutex(State())
 
         func retain(_ paths: [String]) {
-            lock.withLock { for path in paths { retainedPaths[path, default: 0] += 1 } }
+            state.withLock { state in
+                for path in paths { state.retainedPaths[path, default: 0] += 1 }
+            }
         }
 
         func release(_ paths: [String]) {
-            lock.withLock {
+            state.withLock { state in
                 for path in paths {
-                    if let count = retainedPaths[path], count > 1 { retainedPaths[path] = count - 1 }
-                    else { retainedPaths[path] = nil }
+                    if let count = state.retainedPaths[path], count > 1 { state.retainedPaths[path] = count - 1 }
+                    else { state.retainedPaths[path] = nil }
                 }
-                if entries.count > 1024 {
-                    let removable = entries.filter { retainedPaths[$0.key] == nil }
+                if state.entries.count > 1024 {
+                    let removable = state.entries.filter { state.retainedPaths[$0.key] == nil }
                         .sorted { $0.value.accessed < $1.value.accessed }
-                    for entry in removable.prefix(entries.count - 1024) { entries[entry.key] = nil }
+                    for entry in removable.prefix(state.entries.count - 1024) { state.entries[entry.key] = nil }
                 }
             }
         }
 
         func version(for url: URL, invalidating: Bool = false) -> UInt64 {
-            lock.withLock {
-                clock &+= 1
+            state.withLock { state in
+                state.clock &+= 1
                 let path = url.standardizedFileURL.path
-                if var entry = entries[path], !invalidating {
-                    entry.accessed = clock
-                    entries[path] = entry
+                if var entry = state.entries[path], !invalidating {
+                    entry.accessed = state.clock
+                    state.entries[path] = entry
                     return entry.version
                 }
-                if entries[path] == nil, entries.count >= 1024,
-                    let oldest = entries.filter({ retainedPaths[$0.key] == nil }).min(by: { $0.value.accessed < $1.value.accessed })?.key
+                if state.entries[path] == nil, state.entries.count >= 1024,
+                    let oldest = state.entries.filter({ state.retainedPaths[$0.key] == nil }).min(by: { $0.value.accessed < $1.value.accessed })?.key
                 {
-                    entries[oldest] = nil
+                    state.entries[oldest] = nil
                 }
-                entries[path] = Entry(
-                    version: clock, accessed: clock,
-                    signature: invalidating ? entries[path]?.signature : nil)
-                return clock
+                state.entries[path] = Entry(
+                    version: state.clock, accessed: state.clock,
+                    signature: invalidating ? state.entries[path]?.signature : nil)
+                return state.clock
             }
         }
 
         func refresh(_ signature: FileSignature, for url: URL) -> Bool {
-            lock.withLock {
-                clock &+= 1
+            state.withLock { state in
+                state.clock &+= 1
                 let path = url.standardizedFileURL.path
-                if var entry = entries[path], entry.signature == signature {
-                    entry.accessed = clock
-                    entries[path] = entry
+                if var entry = state.entries[path], entry.signature == signature {
+                    entry.accessed = state.clock
+                    state.entries[path] = entry
                     return false
                 }
-                if entries[path] == nil, entries.count >= 1024,
-                    let oldest = entries.filter({ retainedPaths[$0.key] == nil }).min(by: { $0.value.accessed < $1.value.accessed })?.key
+                if state.entries[path] == nil, state.entries.count >= 1024,
+                    let oldest = state.entries.filter({ state.retainedPaths[$0.key] == nil }).min(by: { $0.value.accessed < $1.value.accessed })?.key
                 {
-                    entries[oldest] = nil
+                    state.entries[oldest] = nil
                 }
-                entries[path] = Entry(version: clock, accessed: clock, signature: signature)
+                state.entries[path] = Entry(version: state.clock, accessed: state.clock, signature: signature)
                 return true
             }
         }
@@ -142,7 +146,7 @@ enum ImageThumbnail {
     private static let fileVersions = FileVersions()
 
     /// Active previews may contain more files than the idle version cache can hold
-    final class FileVersionLease: @unchecked Sendable {
+    final class FileVersionLease: Sendable {
         private let paths: [String]
 
         init(urls: [URL]) {
@@ -183,12 +187,14 @@ enum ImageThumbnail {
     /// `NSCache` is thread-safe but not annotated `Sendable`, so cross-thread use (a detached decode populating what the main actor reads) needs the guarantee asserted once here.
     final class ImageCache: @unchecked Sendable {
         let values = NSCache<NSString, NSImage>()
-        private let mutationLock = NSLock()
-        private var generation: UInt64 = 0
-        private var invalidationGeneration: UInt64 = 0
-        private var epochs: [String: UInt64] = [:]
-        private var keysByPath: [String: Set<NSString>] = [:]
-        private var trackedKeyCount = 0
+        private struct State: Sendable {
+            var generation: UInt64 = 0
+            var invalidationGeneration: UInt64 = 0
+            var epochs: [String: UInt64] = [:]
+            var keysByPath: [String: Set<String>] = [:]
+            var trackedKeyCount = 0
+        }
+        private let state = Mutex(State())
         private let metadataLimit: Int
 
         init(metadataLimit: Int = 2_048) {
@@ -196,81 +202,82 @@ enum ImageThumbnail {
             self.metadataLimit = metadataLimit
         }
 
-        struct Snapshot {
+        struct Snapshot: Sendable {
             let generation: UInt64
             let epoch: UInt64
             let invalidationGeneration: UInt64
         }
 
         func snapshot(for path: String) -> Snapshot {
-            mutationLock.withLock {
-                Snapshot(generation: generation, epoch: epochs[path] ?? 0,
-                         invalidationGeneration: invalidationGeneration)
+            state.withLock { state in
+                Snapshot(generation: state.generation, epoch: state.epochs[path] ?? 0,
+                         invalidationGeneration: state.invalidationGeneration)
             }
         }
 
         func isCurrent(_ snapshot: Snapshot, for path: String) -> Bool {
-            mutationLock.withLock {
-                if snapshot.generation == generation {
-                    return snapshot.epoch == (epochs[path] ?? 0)
+            state.withLock { state in
+                if snapshot.generation == state.generation {
+                    return snapshot.epoch == (state.epochs[path] ?? 0)
                 }
                 // Capacity eviction forgets epochs, but does not invalidate decoded content
                 // If a real invalidation also occurred, conservatively reject the old result
-                return snapshot.invalidationGeneration == invalidationGeneration
+                return snapshot.invalidationGeneration == state.invalidationGeneration
             }
         }
 
         func currentGeneration() -> UInt64 {
-            mutationLock.withLock { generation }
+            state.withLock { $0.generation }
         }
 
         func epoch(for path: String) -> UInt64 {
-            mutationLock.withLock { epochs[path] ?? 0 }
+            state.withLock { $0.epochs[path] ?? 0 }
         }
 
         func insert(
             _ image: NSImage, forKey key: NSString, path: String, epoch: UInt64,
             cost: Int, generation: UInt64
         ) {
-            mutationLock.withLock {
-                guard generation == self.generation, epoch == (epochs[path] ?? 0) else { return }
-                if trackedKeyCount + epochs.count >= metadataLimit {
-                    evictLocked()
+            let keyString = key as String
+            state.withLock { state in
+                guard generation == state.generation, epoch == (state.epochs[path] ?? 0) else { return }
+                if state.trackedKeyCount + state.epochs.count >= metadataLimit {
+                    evictLocked(&state)
                     return
                 }
                 values.setObject(image, forKey: key, cost: cost)
-                if keysByPath[path, default: []].insert(key).inserted { trackedKeyCount += 1 }
+                if state.keysByPath[path, default: []].insert(keyString).inserted { state.trackedKeyCount += 1 }
             }
         }
 
         /// Drops one source. In-flight decodes of that path cannot repopulate the cache.
         func invalidate(path: String) {
-            mutationLock.withLock {
-                invalidationGeneration &+= 1
-                if trackedKeyCount + epochs.count >= metadataLimit {
-                    evictLocked()
+            state.withLock { state in
+                state.invalidationGeneration &+= 1
+                if state.trackedKeyCount + state.epochs.count >= metadataLimit {
+                    evictLocked(&state)
                     return
                 }
-                epochs[path] = (epochs[path] ?? 0) &+ 1
-                let keys = keysByPath.removeValue(forKey: path) ?? []
-                trackedKeyCount -= keys.count
-                for key in keys { values.removeObject(forKey: key) }
+                state.epochs[path] = (state.epochs[path] ?? 0) &+ 1
+                let keys = state.keysByPath.removeValue(forKey: path) ?? []
+                state.trackedKeyCount -= keys.count
+                for key in keys { values.removeObject(forKey: key as NSString) }
             }
         }
 
         func purge() {
-            mutationLock.withLock {
-                invalidationGeneration &+= 1
-                evictLocked()
+            state.withLock { state in
+                state.invalidationGeneration &+= 1
+                evictLocked(&state)
             }
         }
 
         // NSCache eviction does not remove our metadata, so bound it independently
-        private func evictLocked() {
-            generation &+= 1
-            epochs.removeAll()
-            keysByPath.removeAll()
-            trackedKeyCount = 0
+        private func evictLocked(_ state: inout State) {
+            state.generation &+= 1
+            state.epochs.removeAll()
+            state.keysByPath.removeAll()
+            state.trackedKeyCount = 0
             values.removeAllObjects()
         }
     }
@@ -328,17 +335,16 @@ enum ImageThumbnail {
 
     actor DecodeCoordinator {
         /// Cancellation can arrive before actor registration or completion; record it synchronously.
-        private final class Consumer: @unchecked Sendable {
-            private enum State { case waiting, cancelled, completed }
-            private let lock = NSLock()
-            private var state = State.waiting
+        private final class Consumer: Sendable {
+            private enum State: Sendable { case waiting, cancelled, completed }
+            private let state = Mutex<State>(.waiting)
 
             func cancel() {
-                lock.withLock { if state == .waiting { state = .cancelled } }
+                state.withLock { if $0 == .waiting { $0 = .cancelled } }
             }
-            var isCancelled: Bool { lock.withLock { state == .cancelled } }
+            var isCancelled: Bool { state.withLock { $0 == .cancelled } }
             func complete() -> Bool {
-                lock.withLock {
+                state.withLock { state in
                     guard state == .waiting else { return false }
                     state = .completed
                     return true

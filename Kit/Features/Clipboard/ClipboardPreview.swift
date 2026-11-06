@@ -24,7 +24,7 @@ struct ClipboardPreview: View {
     var query: String = ""
     @Bindable var vm: PaletteViewModel
     let store: ClipboardStore
-    @ObservedObject var settings: AppSettings
+    let settings: AppSettings
 
     @State private var loadedPayload: ClipboardPreviewPayload?
     @State private var imageHighlights: ImageSearchHighlightPayload?
@@ -621,8 +621,8 @@ private struct ClipboardInfoSection: View {
     let item: ClipboardItem
     let details: ClipboardPreviewPayload.Details
 
-    @ObservedObject var store: ClipboardStore
-    @ObservedObject var settings: AppSettings
+    let store: ClipboardStore
+    let settings: AppSettings
 
     private struct InfoRow: Identifiable {
         let label: String

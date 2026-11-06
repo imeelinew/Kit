@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Vision
 
 /// Search metadata only: recognizing an image never changes its clipboard content or kind.
@@ -23,16 +24,15 @@ enum ClipboardImageTextRecognition {
     static let version = 1
     static let maxAttempts = 2
 
-    /// Vision's supported-language list is process-stable. The lock keeps the first lookup single-flight.
-    private final class LanguageSupportCache: @unchecked Sendable {
-        private let lock = NSLock()
-        private var languages: [String]?
+    /// Vision's supported-language list is process-stable. The mutex keeps the first lookup single-flight.
+    private final class LanguageSupportCache: Sendable {
+        private let languages = Mutex<[String]?>(nil)
 
         func allows(_ requested: [String], load: () throws -> [String]) throws -> Bool {
-            try lock.withLock {
-                if languages == nil { languages = try load() }
-                guard let languages else { return false }
-                return requested.allSatisfy(languages.contains)
+            try languages.withLock { cached in
+                if cached == nil { cached = try load() }
+                guard let cached else { return false }
+                return requested.allSatisfy(cached.contains)
             }
         }
     }

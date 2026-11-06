@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 
 struct GeneralSettingsView: View {
-    @ObservedObject private var updateService = AppCore.shared.updateService
-    @ObservedObject private var settings = AppCore.shared.settings
+    @Bindable var settings: AppSettings
+    let updateService: UpdateService
 
     var body: some View {
         PreferencesForm {
@@ -44,7 +44,7 @@ struct GeneralSettingsView: View {
 }
 
 struct AppearanceSettingsView: View {
-    @ObservedObject private var settings = AppCore.shared.settings
+    @Bindable var settings: AppSettings
 
     var body: some View {
         PreferencesForm {
@@ -90,7 +90,8 @@ struct AppearanceSettingsView: View {
 }
 
 struct SoundSettingsView: View {
-    @ObservedObject private var settings = AppCore.shared.settings
+    @Bindable var settings: AppSettings
+    let onPreviewSound: () -> Void
     @Environment(\.locale) private var locale
 
     var body: some View {
@@ -117,7 +118,7 @@ struct SoundSettingsView: View {
             }
         }
         .onChange(of: settings.copySoundEffect) {
-            AppCore.shared.previewCopySound()
+            onPreviewSound()
         }
     }
 }

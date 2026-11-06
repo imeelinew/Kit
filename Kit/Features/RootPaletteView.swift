@@ -4,7 +4,7 @@ import SwiftUI
 struct RootPaletteView: View {
     @Bindable var vm: PaletteViewModel
     let store: ClipboardStore
-    @ObservedObject var settings: AppSettings
+    let settings: AppSettings
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var isQueryEmpty: Bool {

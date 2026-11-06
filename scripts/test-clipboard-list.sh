@@ -8,9 +8,11 @@ singleton_dir="$HOME/Library/Application Support/$bundle_id"
 trap 'rm -rf "$test_dir" "$singleton_dir"' EXIT
 build_dir=${KIT_TEST_BUILD_DIR:-"$test_dir/build"}
 
-xcodebuild -quiet -project "$repo_root/Kit.xcodeproj" -scheme Kit \
-    -configuration Debug -derivedDataPath "$build_dir" \
-    CODE_SIGNING_ALLOWED=NO ENABLE_DEBUG_DYLIB=YES build
+if [[ ! -f "$build_dir/Build/Products/Debug/Kit.app/Contents/MacOS/Kit.debug.dylib" ]]; then
+    xcodebuild -quiet -project "$repo_root/Kit.xcodeproj" -scheme Kit \
+        -configuration Debug -destination 'platform=macOS' -derivedDataPath "$build_dir" \
+        CODE_SIGNING_ALLOWED=NO ENABLE_DEBUG_DYLIB=YES build
+fi
 
 products="$build_dir/Build/Products/Debug"
 packages="$build_dir/SourcePackages/checkouts"

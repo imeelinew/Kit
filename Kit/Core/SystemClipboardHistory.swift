@@ -1,15 +1,17 @@
 import Foundation
+import Observation
 
 /// Controls Spotlight's macOS 26+ clipboard-history preference. The shared pasteboard itself
 /// must remain running because Kit and every app's Copy/Paste commands depend on it.
 @MainActor
-final class SystemClipboardHistory: ObservableObject {
+@Observable
+final class SystemClipboardHistory {
     private static let preferenceDomain = "com.apple.Spotlight"
     private static let enabledKey = "PasteboardHistoryEnabled"
 
-    private let defaults: UserDefaults
+    @ObservationIgnored private let defaults: UserDefaults
 
-    @Published private(set) var isDisabled: Bool
+    private(set) var isDisabled: Bool
 
     init() {
         guard let defaults = UserDefaults(suiteName: Self.preferenceDomain) else {

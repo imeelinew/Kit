@@ -81,6 +81,10 @@
 		DE8C16A33B168FD7F3AC2C5B /* SystemClipboardHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B34CA7CF3889D8A18413F77 /* SystemClipboardHistory.swift */; };
 		DF868B19AE7D7BF3751879EF /* ClipboardCapturePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5FB3EB883C67D7DA6D8FEAF /* ClipboardCapturePipeline.swift */; };
 		E2C25F35DF0B1F8C9960CD38 /* ClipboardStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCFFE5C6B9CC83C972FD0B0D /* ClipboardStore.swift */; };
+		CB1500000000000000000001 /* ClipboardStackStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1500000000000000000002 /* ClipboardStackStore.swift */; };
+		CB1600000000000000000001 /* ClipboardRetentionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1600000000000000000002 /* ClipboardRetentionEngine.swift */; };
+		CB1700000000000000000001 /* ClipboardOCRIndexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1700000000000000000002 /* ClipboardOCRIndexer.swift */; };
+		CB1800000000000000000001 /* ClipboardFileMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1800000000000000000002 /* ClipboardFileMonitor.swift */; };
 		EE9F57DEDBD7C12EA72E7D9E /* InputSourceSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22A18A2E99B807E7716432E /* InputSourceSwitcher.swift */; };
 		F1E4B87385492A86C5F5CDFE /* ImageThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2FD6AB5017BBFF5EE420A4 /* ImageThumbnail.swift */; };
 		F2793D8EFF543BEDD5DF57C1 /* PaletteViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11927303CFC909AE918568B6 /* PaletteViewModel.swift */; };
@@ -169,6 +173,10 @@
 		FC1779D1C157B1B6F9C37365 /* GeneralSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsView.swift; sourceTree = "<group>"; };
 		FC678FC84A80AE731726D744 /* Paster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Paster.swift; sourceTree = "<group>"; };
 		FCFFE5C6B9CC83C972FD0B0D /* ClipboardStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardStore.swift; sourceTree = "<group>"; };
+		CB1500000000000000000002 /* ClipboardStackStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardStackStore.swift; sourceTree = "<group>"; };
+		CB1600000000000000000002 /* ClipboardRetentionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardRetentionEngine.swift; sourceTree = "<group>"; };
+		CB1700000000000000000002 /* ClipboardOCRIndexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardOCRIndexer.swift; sourceTree = "<group>"; };
+		CB1800000000000000000002 /* ClipboardFileMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardFileMonitor.swift; sourceTree = "<group>"; };
 		KK1000000000000000000002 /* Kit.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Kit.icon; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -217,6 +225,10 @@
 				CA8000000000000000000002 /* ClipboardSearch.swift */,
 				CA9000000000000000000002 /* ClipboardSQLite.swift */,
 				FCFFE5C6B9CC83C972FD0B0D /* ClipboardStore.swift */,
+				CB1500000000000000000002 /* ClipboardStackStore.swift */,
+				CB1600000000000000000002 /* ClipboardRetentionEngine.swift */,
+				CB1700000000000000000002 /* ClipboardOCRIndexer.swift */,
+				CB1800000000000000000002 /* ClipboardFileMonitor.swift */,
 				CA3000000000000000000002 /* ClipboardTextClassifier.swift */,
 				C6853210949502E0C47D69B9 /* EdgeDissolve.swift */,
 				AF2FD6AB5017BBFF5EE420A4 /* ImageThumbnail.swift */,
@@ -464,6 +476,10 @@
 				CA9000000000000000000001 /* ClipboardSQLite.swift in Sources */,
 				739ADE5F09C7B1A660B5BE9F /* ClipboardSettingsView.swift in Sources */,
 				E2C25F35DF0B1F8C9960CD38 /* ClipboardStore.swift in Sources */,
+				CB1500000000000000000001 /* ClipboardStackStore.swift in Sources */,
+				CB1600000000000000000001 /* ClipboardRetentionEngine.swift in Sources */,
+				CB1700000000000000000001 /* ClipboardOCRIndexer.swift in Sources */,
+				CB1800000000000000000001 /* ClipboardFileMonitor.swift in Sources */,
 				CA3000000000000000000001 /* ClipboardTextClassifier.swift in Sources */,
 				1D9AA5ECC0F41C5EE2E43336 /* ClipboardView.swift in Sources */,
 				CA4000000000000000000001 /* ClipboardTableCells.swift in Sources */,
