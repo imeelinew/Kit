@@ -76,7 +76,7 @@ struct RootPaletteView: View {
                         ? "Clipboard history is empty" : "No matching entries",
                     systemImage: "magnifyingglass"
                 )
-                .transition(contentTransition)
+                .transition(reduceMotion ? .opacity : Theme.Motion.emptyState)
             } else {
                 HStack(spacing: 0) {
                     ClipboardList(
@@ -288,7 +288,12 @@ struct RootPaletteView: View {
     private var contentTransition: AnyTransition {
         // Scaling the native scroll view leaves fractional geometry that AppKit rounds
         // differently on search resets and row updates, shifting the viewport by a pixel.
-        .opacity
+        // Drift and blur on exit keep 1:1 pixel geometry while the incoming rows cascade natively.
+        reduceMotion
+            ? .opacity
+            : .asymmetric(
+                insertion: .opacity,
+                removal: .opacity.combined(with: .offset(y: -8)).combined(with: .blur(radius: 5)))
     }
 
     private func menuTransition(_ anchor: UnitPoint) -> AnyTransition {
@@ -389,7 +394,7 @@ private struct MenuCircleButton: View {
             )
             .contentShape(.circle)
             .scaleEffect(pressed ? 0.9 : 1)
-            .animation(.easeOut(duration: 0.08), value: pressed)
+            .animation(Theme.Motion.button, value: pressed)
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
@@ -413,7 +418,7 @@ private struct FilterButtonStyle: ButtonStyle {
                         : hovered ? Theme.Colors.rowHover : Color.clear)
             }
             .scaleEffect(active && !reduceMotion ? 0.97 : 1)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.08), value: active)
+            .animation(reduceMotion ? nil : Theme.Motion.button, value: active)
             .padding(Theme.Spacing.xs)
             .background {
                 // Keep glass vibrancy and pointer feedback out of the readable label layer
@@ -444,7 +449,7 @@ private struct BarButton<Label: View>: View {
                     )
                 )
                 .scaleEffect(pressed ? 0.97 : 1)
-                .animation(.easeOut(duration: 0.08), value: pressed)
+                .animation(Theme.Motion.button, value: pressed)
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0 }

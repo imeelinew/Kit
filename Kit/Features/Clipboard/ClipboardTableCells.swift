@@ -447,6 +447,13 @@ final class ClipboardItemCellView: NSTableCellView {
         }
     }
 
+    func animateKindChange() {
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+            let layer = thumbnailView.layer
+        else { return }
+        Theme.Motion.rise(layer, lift: 3, scale: 0.72, key: "kitKindPop")
+    }
+
     private func setHighlightOpacity(_ opacity: Float) {
         fadeToken += 1
         entranceQueued = false
@@ -454,6 +461,8 @@ final class ClipboardItemCellView: NSTableCellView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         highlightView.layer?.removeAnimation(forKey: "hoverFade")
+        highlightView.layer?.removeAnimation(forKey: "hoverScale")
+        highlightView.layer?.transform = CATransform3DIdentity
         highlightView.alphaValue = CGFloat(opacity)
         CATransaction.commit()
     }
@@ -464,20 +473,42 @@ final class ClipboardItemCellView: NSTableCellView {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         highlightView.alphaValue = CGFloat(opacity)
+        layer.transform = CATransform3DIdentity
         layer.removeAnimation(forKey: "hoverFade")
+        layer.removeAnimation(forKey: "hoverScale")
         guard abs(current - opacity) > 0.01 else {
             CATransaction.commit()
             return
         }
+        let entering = opacity > current
         let animation = CABasicAnimation(keyPath: "opacity")
         animation.fromValue = current
         animation.toValue = opacity
-        animation.duration = opacity > current
+        animation.duration = entering
             ? HighlightMotion.enterDuration : HighlightMotion.exitDuration
-        animation.timingFunction = opacity > current
+        animation.timingFunction = entering
             ? CAMediaTimingFunction(controlPoints: 0.17, 0.82, 0.25, 1)
             : CAMediaTimingFunction(controlPoints: 0.32, 0, 0.68, 1)
         layer.add(animation, forKey: "hoverFade")
+        if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion, !layer.bounds.isEmpty {
+            if entering {
+                let start = current > 0.05
+                    ? (layer.presentation()?.transform ?? Theme.Motion.scaled(layer, by: 0.965))
+                    : Theme.Motion.scaled(layer, by: 0.965)
+                let scale = Theme.Motion.spring(
+                    "transform", from: NSValue(caTransform3D: start),
+                    to: NSValue(caTransform3D: CATransform3DIdentity))
+                layer.add(scale, forKey: "hoverScale")
+            } else {
+                let scale = CABasicAnimation(keyPath: "transform")
+                scale.fromValue = NSValue(
+                    caTransform3D: layer.presentation()?.transform ?? CATransform3DIdentity)
+                scale.toValue = NSValue(caTransform3D: Theme.Motion.scaled(layer, by: 0.985))
+                scale.duration = HighlightMotion.exitDuration
+                scale.timingFunction = CAMediaTimingFunction(controlPoints: 0.32, 0, 0.68, 1)
+                layer.add(scale, forKey: "hoverScale")
+            }
+        }
         CATransaction.commit()
     }
 

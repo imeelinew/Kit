@@ -150,6 +150,8 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private var lastResultsGeneration: UInt64?
         private var queryChangedSinceResults = false
         private var lastHasMoreResults = false
+        private var hasLaidOut = false
+        private var pendingCascade: Bool?
         private var hapticRow = -1
         private var suppressScrollHaptics = false
         private var dateGrouping = ClipboardDateGrouping.current
@@ -265,6 +267,14 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             let filterChanged = lastResultsKindFilter != nil
                 && (lastResultsKindFilter != resultsKindFilter
                     || lastResultsStackFilter != resultsStackFilter)
+            // Moving to a later type reads as advancing: rows rise from below, earlier types drop in.
+            let filterAdvances: Bool = {
+                guard let previous = lastResultsKindFilter, previous != resultsKindFilter,
+                    let from = ClipboardKindFilter.allCases.firstIndex(of: previous),
+                    let to = ClipboardKindFilter.allCases.firstIndex(of: resultsKindFilter)
+                else { return true }
+                return to > from
+            }()
             lastResultsKindFilter = resultsKindFilter
             lastResultsStackFilter = resultsStackFilter
             let previousRows = rows
@@ -279,20 +289,14 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
 
             let wasApplyingSelection = applyingSelection
             var animatedRows = false
+            var cascadeAdvancing: Bool?
             if contentChanged {
                 // Suppress AppKit's intermediate selections until the model is restored.
                 tableView.clearHover()
                 applyingSelection = true
                 if filterChanged {
-                    // Fade the entire viewport, including large replacements and empty results.
-                    if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
-                        let container = hostedContainerView
-                    {
-                        let transition = CATransition()
-                        transition.type = .fade
-                        transition.duration = Theme.Motion.contentDuration
-                        transition.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                        container.layer?.add(transition, forKey: "transition")
+                    if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                        cascadeAdvancing = filterAdvances
                     }
                     tableView.reloadData()
                 } else if dateChanged {
@@ -338,6 +342,36 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             tableView.interactionEnabled = interactionEnabled
             if !dateChanged { queueHoverRefresh() }
             reportGeometry(scrolling: false)
+            if let cascadeAdvancing { cascadeVisibleRows(in: tableView, advancing: cascadeAdvancing) }
+        }
+
+        /// Staggers the visible rows into place top to bottom on one shared spring.
+        private func cascadeVisibleRows(in tableView: ClipboardTableView, advancing: Bool) {
+            tableView.layoutSubtreeIfNeeded()
+            guard tableView.visibleRect.height > 0 else {
+                pendingCascade = advancing
+                return
+            }
+            pendingCascade = nil
+            let visible = tableView.rows(in: tableView.visibleRect)
+            guard visible.location != NSNotFound else { return }
+            let lift = Theme.Motion.cascadeOffset * (advancing ? 1 : -1)
+            var order = 0
+            for row in visible.location..<NSMaxRange(visible) {
+                guard let rowView = tableView.rowView(atRow: row, makeIfNecessary: true) else {
+                    continue
+                }
+                rowView.wantsLayer = true
+                rowView.layoutSubtreeIfNeeded()
+                guard let layer = rowView.layer else { continue }
+                let step = min(order, Theme.Motion.cascadeMaxRows)
+                order += 1
+                // Rows deeper in the cascade travel slightly further for a natural wave.
+                Theme.Motion.rise(
+                    layer, lift: lift * (1 + CGFloat(step) * 0.05),
+                    scale: Theme.Motion.cascadeScale,
+                    delay: Double(step) * Theme.Motion.cascadeStagger)
+            }
         }
 
         private var tableView: ClipboardTableView? {
@@ -430,6 +464,18 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 !difference.isEmpty, difference.count <= 32, retainedContentUnchanged
             else {
                 tableView.reloadData()
+                if animate {
+                    for (index, row) in rows.enumerated() {
+                        guard case .item(let item) = row,
+                            case .item(let old) = oldRowsByID[row.id],
+                            old.kind != item.kind,
+                            let cell = tableView.view(
+                                atColumn: 0, row: index, makeIfNecessary: false
+                            ) as? ClipboardItemCellView
+                        else { continue }
+                        cell.animateKindChange()
+                    }
+                }
                 return false
             }
             var removals = IndexSet()
@@ -442,7 +488,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             }
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = animate ? Theme.Motion.contentDuration : 0
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                context.timingFunction = Theme.Motion.springTiming
                 tableView.beginUpdates()
                 tableView.removeRows(
                     at: removals, withAnimation: animate ? [.effectFade, .slideUp] : [])
@@ -455,6 +501,18 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                     tableView.noteHeightOfRows(withIndexesChanged: IndexSet(integer: 0))
                 }
                 updateVisibleText(in: tableView)
+            }
+            if animate {
+                tableView.layoutSubtreeIfNeeded()
+                for index in insertions {
+                    guard let rowView = tableView.rowView(atRow: index, makeIfNecessary: true) else {
+                        continue
+                    }
+                    rowView.wantsLayer = true
+                    rowView.layoutSubtreeIfNeeded()
+                    guard let layer = rowView.layer else { continue }
+                    Theme.Motion.rise(layer, lift: 8, scale: 0.97)
+                }
             }
             return animate
         }
@@ -707,6 +765,22 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             guard let tableView, let scrollView = tableView.enclosingScrollView else { return }
             queueThumbnailPrefetch()
             let viewport = scrollView.contentView.bounds.height
+            if viewport > 0 {
+                if !hasLaidOut {
+                    hasLaidOut = true
+                    if pendingCascade == nil,
+                        tableView.window?.isVisible == true,
+                        (tableView.window?.alphaValue ?? 0) > 0,
+                        !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+                    {
+                        pendingCascade = true
+                    }
+                }
+                if let advancing = pendingCascade {
+                    pendingCascade = nil
+                    cascadeVisibleRows(in: tableView, advancing: advancing)
+                }
+            }
             let content =
                 tableView.bounds.height + scrollView.contentInsets.top
                 + scrollView.contentInsets.bottom

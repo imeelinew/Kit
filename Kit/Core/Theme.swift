@@ -1,16 +1,104 @@
+import QuartzCore
 import SwiftUI
 
 /// Central design tokens for Kit's adaptive palette UI.
 enum Theme {
     enum Motion {
         static let menuDuration = 0.14
-        static let menuScale: CGFloat = 0.96
-        static let contentDuration = 0.20
-        static let menu: Animation = .easeOut(duration: menuDuration)
-        static let content: Animation = .easeOut(duration: contentDuration)
+        static let menuScale: CGFloat = 0.92
+        static let contentDuration = 0.24
+        static let button: Animation = .spring(response: 0.24, dampingFraction: 0.72)
+        static let menu: Animation = .spring(response: 0.30, dampingFraction: 0.78)
+        /// Lively but settled spring shared by content swaps, with a hint of overshoot.
+        static let content: Animation = .spring(response: 0.36, dampingFraction: 0.82)
+
+        /// Spring constants mirrored by Core Animation so AppKit and SwiftUI move alike.
+        static let springStiffness: CGFloat = 320
+        static let springDamping: CGFloat = 26
+        static var springTiming: CAMediaTimingFunction {
+            CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
+        }
+        /// Fast curve for content or menus that are leaving.
+        static let exitDuration = 0.11
+        static var exitTiming: CAMediaTimingFunction {
+            CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
+        }
+        /// Delay between successive rows when a list cascades in.
+        static let cascadeStagger = 0.018
+        static let cascadeMaxRows = 10
+        static let cascadeOffset: CGFloat = 12
+        static let cascadeScale: CGFloat = 0.97
 
         static func transition(anchor: UnitPoint = .center) -> AnyTransition {
-            .opacity.combined(with: .scale(scale: menuScale, anchor: anchor))
+            .asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: menuScale, anchor: anchor))
+                    .combined(with: .blur(radius: 6)),
+                removal: .opacity.combined(with: .scale(scale: 0.96, anchor: anchor))
+                    .combined(with: .blur(radius: 4)))
+        }
+
+        /// Empty states drift up from a soft blur and sink back when replaced.
+        static var emptyState: AnyTransition {
+            .asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 0.9))
+                    .combined(with: .offset(y: 10)).combined(with: .blur(radius: 8)),
+                removal: .opacity.combined(with: .scale(scale: 0.94))
+                    .combined(with: .offset(y: -6)).combined(with: .blur(radius: 5)))
+        }
+
+        static func spring(
+            _ keyPath: String, from: Any?, to: Any?, velocity: CGFloat = 0,
+            in layer: CALayer? = nil, delay: CFTimeInterval = 0
+        ) -> CASpringAnimation {
+            let animation = CASpringAnimation(keyPath: keyPath)
+            animation.mass = 1
+            animation.stiffness = springStiffness
+            animation.damping = springDamping
+            animation.initialVelocity = velocity
+            animation.fromValue = from
+            animation.toValue = to
+            animation.duration = animation.settlingDuration
+            if delay > 0 {
+                let now = layer.map { $0.convertTime(CACurrentMediaTime(), from: nil) }
+                    ?? CACurrentMediaTime()
+                animation.beginTime = now + delay
+                animation.fillMode = .backwards
+            }
+            return animation
+        }
+
+        /// Rises a layer into place: opacity, a vertical lift and a slight scale settle on one spring.
+        /// `lift` is in screen points, positive means the layer starts below its resting spot.
+        static func rise(
+            _ layer: CALayer, lift: CGFloat, scale: CGFloat, fromOpacity: Float = 0,
+            delay: CFTimeInterval = 0, key: String = "kitRise"
+        ) {
+            let down: CGFloat = layer.superlayer?.contentsAreFlipped() == true ? 1 : -1
+            let start = scaled(layer, by: scale, offsetY: lift * down)
+            let opacity = spring(
+                "opacity", from: fromOpacity, to: 1, velocity: 12, in: layer, delay: delay)
+            // Opacity should finish early, a full spring tail would read as a slow fade.
+            opacity.stiffness = springStiffness * 1.8
+            opacity.damping = springDamping * 1.5
+            opacity.duration = opacity.settlingDuration
+            let transform = spring(
+                "transform", from: NSValue(caTransform3D: start),
+                to: NSValue(caTransform3D: CATransform3DIdentity), velocity: 10, in: layer,
+                delay: delay)
+            transform.isAdditive = false
+            layer.add(opacity, forKey: key + ".opacity")
+            layer.add(transform, forKey: key + ".transform")
+        }
+
+        /// Scales around the layer's visual center, AppKit backing layers anchor at their origin.
+        static func scaled(_ layer: CALayer, by scale: CGFloat, offsetY: CGFloat = 0) -> CATransform3D {
+            let size = layer.bounds.size
+            let pivot = CGPoint(x: (0.5 - layer.anchorPoint.x) * size.width,
+                                y: (0.5 - layer.anchorPoint.y) * size.height)
+            var transform = CATransform3DMakeTranslation(
+                pivot.x * (1 - scale), pivot.y * (1 - scale) + offsetY, 0)
+            transform = CATransform3DScale(transform, scale, scale, 1)
+            return transform
         }
     }
 
@@ -114,5 +202,22 @@ extension View {
     func frosted(in shape: some Shape) -> some View {
         glassEffect(.regular.interactive().tint(Theme.Colors.glassFrost), in: shape)
             .tint(.clear)
+    }
+}
+
+private struct BlurTransitionModifier: ViewModifier {
+    let radius: CGFloat
+
+    func body(content: Content) -> some View {
+        content.blur(radius: radius)
+    }
+}
+
+extension AnyTransition {
+    /// Softens content into focus as it arrives and out of focus as it leaves.
+    static func blur(radius: CGFloat) -> AnyTransition {
+        .modifier(
+            active: BlurTransitionModifier(radius: radius),
+            identity: BlurTransitionModifier(radius: 0))
     }
 }

@@ -268,10 +268,12 @@ private final class ThinScrollbarView: NSView {
                 spring.damping = 2 * 0.85 * frequency
                 spring.duration = spring.settlingDuration
                 change = spring
+            } else if opacity > 0 {
+                change = Theme.Motion.spring(target.0, from: starts[index], to: target.1)
             } else {
                 change = CABasicAnimation(keyPath: target.0)
-                change.duration = 0.18
-                change.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                change.duration = Theme.Motion.exitDuration
+                change.timingFunction = Theme.Motion.exitTiming
             }
             change.fromValue = starts[index]
             change.toValue = target.1

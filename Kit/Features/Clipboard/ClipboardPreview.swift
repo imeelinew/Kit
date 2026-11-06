@@ -341,8 +341,9 @@ private struct ClipboardPreviewImage: View {
                         .strokeBorder(Theme.Colors.cardStroke, lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(lifted ? 0.14 : 0), radius: 6, x: 0, y: 3)
+                .scaleEffect(lifted && !reduceMotion ? 1.015 : 1)
                 .offset(y: lifted && !reduceMotion ? -2 : 0)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: lifted)
+                .animation(reduceMotion ? nil : Theme.Motion.menu, value: lifted)
         }
         .buttonStyle(.plain)
         .onHover {
@@ -387,7 +388,8 @@ private struct ClipboardPreviewContainer<Content: View, Information: View>: NSVi
 
 private final class ClipboardPreviewContainerView: NSView {
     private var current: ClipboardPreviewPane?
-    private var retiring: [ClipboardPreviewPane] = []
+    private var pendingEntrance = false
+    private var reduceMotion = false
     override var isFlipped: Bool { true }
 
     override init(frame: NSRect) {
@@ -398,15 +400,22 @@ private final class ClipboardPreviewContainerView: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    private var canAnimate: Bool {
+        !reduceMotion && window?.isVisible == true && (window?.alphaValue ?? 0) > 0
+    }
+
     func update(
         itemID: ClipboardItem.ID?, kind: ClipboardItem.Kind?, informationHeight: CGFloat,
         reduceMotion: Bool, locale: Locale, content: AnyView, information: AnyView
     ) {
+        self.reduceMotion = reduceMotion
+        let hadCurrent = current != nil
         let changed = current?.itemID != itemID
         if changed, let old = current {
             old.retireSelection()
+            old.clear()
+            old.removeFromSuperview()
             current = nil
-            retiring.append(old)
         }
         if let itemID, let kind {
             if current == nil {
@@ -422,25 +431,33 @@ private final class ClipboardPreviewContainerView: NSView {
         needsLayout = true
         layoutSubtreeIfNeeded()
         guard changed else { return }
-        let outgoing = retiring
         let incoming = current
-        incoming?.alphaValue = 0
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = reduceMotion ? 0 : Theme.Motion.menuDuration
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            incoming?.animator().alphaValue = 1
-            outgoing.forEach { $0.animator().alphaValue = 0 }
-        } completionHandler: { [weak self] in
-            MainActor.assumeIsolated {
-                outgoing.forEach { $0.clear(); $0.removeFromSuperview() }
-                self?.retiring.removeAll { pane in outgoing.contains { $0 === pane } }
-            }
+        incoming?.alphaValue = 1
+        guard canAnimate else {
+            pendingEntrance = !reduceMotion && incoming != nil && bounds.isEmpty
+            return
+        }
+        if bounds.isEmpty {
+            pendingEntrance = incoming != nil
+            return
+        }
+        pendingEntrance = false
+        if let layer = incoming?.layer {
+            // Removing the previous pane immediately avoids overlapping two pages of text.
+            Theme.Motion.rise(layer, lift: 7, scale: 0.985, fromOpacity: hadCurrent ? 0.25 : 0)
         }
     }
 
     override func layout() {
         super.layout()
         current?.frame = bounds
+        if pendingEntrance, !bounds.isEmpty {
+            pendingEntrance = false
+            if canAnimate, let layer = current?.layer {
+                current?.layoutSubtreeIfNeeded()
+                Theme.Motion.rise(layer, lift: 8, scale: 0.975)
+            }
+        }
     }
 
     func invalidateContentLayout(for itemID: ClipboardItem.ID?) {
@@ -452,12 +469,9 @@ private final class ClipboardPreviewContainerView: NSView {
     }
 
     func clear() {
-        ([current].compactMap { $0 } + retiring).forEach {
-            $0.clear()
-            $0.removeFromSuperview()
-        }
+        current?.clear()
+        current?.removeFromSuperview()
         current = nil
-        retiring.removeAll()
     }
 }
 
@@ -516,6 +530,10 @@ private final class ClipboardPreviewPane: NSView, PreviewSelectionOwner {
     func update(kind: ClipboardItem.Kind, informationHeight: CGFloat, reduceMotion: Bool,
                 locale: Locale, content root: AnyView, information: AnyView) {
         let changedKind = self.kind != kind
+        self.kind = kind
+        self.informationHeight = informationHeight
+        title.stringValue = AppLocalization.string("Information", locale: locale)
+        self.information.update(content: information, height: max(0, informationHeight - 40))
         if changedKind {
             let old = content
             let replacement = NSHostingController(rootView: root)
@@ -523,26 +541,19 @@ private final class ClipboardPreviewPane: NSView, PreviewSelectionOwner {
             replacement.view.frame = old.view.frame
             addSubview(replacement.view, positioned: .above, relativeTo: old.view)
             content = replacement
-            replacement.view.alphaValue = 0
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = reduceMotion ? 0 : Theme.Motion.contentDuration
-                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                replacement.view.animator().alphaValue = 1
-                old.view.animator().alphaValue = 0
-            } completionHandler: {
-                MainActor.assumeIsolated {
-                    old.rootView = AnyView(EmptyView())
-                    old.view.removeFromSuperview()
-                }
+            old.rootView = AnyView(EmptyView())
+            old.view.removeFromSuperview()
+            needsLayout = true
+            layoutSubtreeIfNeeded()
+            if !reduceMotion, window?.isVisible == true, (window?.alphaValue ?? 0) > 0,
+                let layer = replacement.view.layer
+            {
+                Theme.Motion.rise(layer, lift: 7, scale: 0.98, fromOpacity: 0.2)
             }
         } else {
             content.rootView = root
+            needsLayout = true
         }
-        self.kind = kind
-        self.informationHeight = informationHeight
-        title.stringValue = AppLocalization.string("Information", locale: locale)
-        self.information.update(content: information, height: max(0, informationHeight - 40))
-        needsLayout = true
     }
 
     override func layout() {
@@ -664,11 +675,6 @@ private struct ClipboardInfoSection: View {
                             Text(row.value)
                         }
                     }
-                    .contentTransition(.opacity)
-                    .animation(
-                        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-                            ? nil : Theme.Motion.content,
-                        value: item.kind)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 }

@@ -322,7 +322,8 @@ final class PaletteMenuOverlayView: NSView {
 
 }
 
-/// Every overlay menu uses the same reversible opacity and scale transition
+/// Every overlay menu uses the same reversible opacity and scale transition, springing open
+/// from its anchor corner and tucking back in on a quick accelerating curve
 @MainActor
 private enum PaletteMenuTransition {
     static func animate(_ view: NSView, appearing: Bool, placement: Int, reduceMotion: Bool) {
@@ -331,27 +332,46 @@ private enum PaletteMenuTransition {
             if !appearing { view.removeFromSuperview() }
             return
         }
-        let scale = Theme.Motion.menuScale
+        let scale = appearing ? Theme.Motion.menuScale : 0.96
+        let shiftY: CGFloat = (placement < 2 ? 1 : -1) * (appearing ? 6 : 4)
         let anchor = CGPoint(x: placement == 0 ? 0 : view.bounds.width,
                              y: placement < 2 ? view.bounds.height : 0)
         let pivot = CGPoint(x: anchor.x - layer.anchorPoint.x * view.bounds.width,
                             y: anchor.y - layer.anchorPoint.y * view.bounds.height)
-        var small = CATransform3DMakeTranslation(pivot.x * (1 - scale), pivot.y * (1 - scale), 0)
+        var small = CATransform3DMakeTranslation(
+            pivot.x * (1 - scale), pivot.y * (1 - scale) + shiftY, 0)
         small = CATransform3DScale(small, scale, scale, 1)
         let presentation = layer.presentation()
-        let opacity = CABasicAnimation(keyPath: "opacity")
-        opacity.fromValue = appearing ? 0 : (presentation?.opacity ?? 1)
-        opacity.toValue = appearing ? 1 : 0
-        let transform = CABasicAnimation(keyPath: "transform")
-        transform.fromValue = NSValue(caTransform3D:
-            appearing ? small : (presentation?.transform ?? CATransform3DIdentity))
-        transform.toValue = NSValue(caTransform3D: appearing ? CATransform3DIdentity : small)
-        let transition = CAAnimationGroup()
-        opacity.duration = Theme.Motion.menuDuration
-        transform.duration = Theme.Motion.menuDuration
-        transition.animations = [opacity, transform]
-        transition.duration = Theme.Motion.menuDuration
-        transition.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        let currentOpacity = presentation?.opacity ?? (appearing ? 0 : 1)
+        let currentTransform = presentation?.transform ?? (appearing ? small : CATransform3DIdentity)
+        let transition: CAAnimation
+        if appearing {
+            // Resume from wherever an interrupted close left the menu so reopening never jumps.
+            let resuming = layer.animation(forKey: "paletteMenuTransition") != nil
+            let opacity = Theme.Motion.spring("opacity", from: resuming ? currentOpacity : 0, to: 1)
+            opacity.stiffness = Theme.Motion.springStiffness * 1.6
+            opacity.damping = Theme.Motion.springDamping * 1.6
+            opacity.duration = opacity.settlingDuration
+            let transform = Theme.Motion.spring(
+                "transform", from: NSValue(caTransform3D: resuming ? currentTransform : small),
+                to: NSValue(caTransform3D: CATransform3DIdentity))
+            let group = CAAnimationGroup()
+            group.animations = [opacity, transform]
+            group.duration = max(opacity.duration, transform.duration)
+            transition = group
+        } else {
+            let opacity = CABasicAnimation(keyPath: "opacity")
+            opacity.fromValue = currentOpacity
+            opacity.toValue = 0
+            let transform = CABasicAnimation(keyPath: "transform")
+            transform.fromValue = NSValue(caTransform3D: currentTransform)
+            transform.toValue = NSValue(caTransform3D: small)
+            let group = CAAnimationGroup()
+            group.animations = [opacity, transform]
+            group.duration = Theme.Motion.exitDuration
+            group.timingFunction = Theme.Motion.exitTiming
+            transition = group
+        }
 
         CATransaction.begin()
         CATransaction.setDisableActions(true)
