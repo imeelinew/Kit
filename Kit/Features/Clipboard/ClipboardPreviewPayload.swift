@@ -113,6 +113,9 @@ final class ClipboardPreviewPayload {
             guard !Task.isCancelled else { return details }
             details.fileAvailability = item.fileURLs.map { ClipboardFileAccess.availability(of: $0) }
             if let text = item.text {
+                if item.kind == .markdown {
+                    MarkdownPreview.prewarm(text)
+                }
                 details.characters = text.utf16.count
                 var count = 0
                 var inWord = false

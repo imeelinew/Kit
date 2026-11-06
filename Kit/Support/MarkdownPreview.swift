@@ -42,36 +42,20 @@ private enum MarkdownPreviewCache {
     }()
 }
 
-/// GitHub-flavored Markdown preview for stored Markdown items. Parsing and deterministic AppKit
-/// layout run off the main actor. Keep the pane empty until the result is ready instead of
-/// flashing raw Markdown; the original source remains the payload used by clipboard actions.
-struct MarkdownPreview: View {
+/// GitHub-flavored Markdown preview for stored Markdown items. Parsed documents are cached in
+/// `MarkdownPreviewCache` so first-frame layout and search highlight updates never flash or jump.
+struct MarkdownPreview: View, Equatable {
     let source: String
     var query: String = ""
     var fontSize: CGFloat? = nil
-    var onRender: (() -> Void)? = nil
 
-    @State private var rendered: Rendered?
-    @State private var renderedID: RenderID?
-
-    private var currentRendered: Rendered? {
-        if renderedID == RenderID(source: source, fontSize: fontSize) {
-            return rendered
-        }
-        // Reopening a cached preview should never briefly show the raw Markdown.
-        return MarkdownPreviewCache.shared.values.object(
-            forKey: MarkdownPreviewCache.Key(source: source, fontSize: fontSize)
-        ).map { Self.renderedContent(markdown: $0.markdown) }
-    }
-
-    private enum Rendered: @unchecked Sendable {
+    private enum Rendered {
         case plainText
         case appKit(NSAttributedString)
     }
 
-    private struct RenderID: Hashable {
-        let source: String
-        let fontSize: CGFloat?
+    nonisolated static func prewarm(_ source: String, fontSize: CGFloat? = nil) {
+        _ = render(source, fontSize: fontSize)
     }
 
     private nonisolated static func render(
@@ -88,56 +72,22 @@ struct MarkdownPreview: View {
                 MarkdownPreviewCache.Entry(markdown: markdown), forKey: key,
                 cost: max(source.utf8.count, markdown?.length ?? 0))
         }
-        return renderedContent(markdown: markdown)
-    }
-
-    private nonisolated static func renderedContent(
-        markdown: NSAttributedString?
-    ) -> Rendered {
         if let markdown { return .appKit(markdown) }
         return .plainText
     }
 
     var body: some View {
-        Group {
-            switch currentRendered {
-            case .appKit(let value):
-                previewText(nsAttributed: SearchHighlight.applying(to: value, query: query))
-            case .plainText:
-                previewText(attributed: SearchHighlight.attributed(source, query: query))
-            case nil:
-                Color.clear
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+        switch Self.render(source, fontSize: fontSize) {
+        case .appKit(let value):
+            AttributedTextPreview(
+                nsAttributed: SearchHighlight.applying(to: value, query: query),
+                contentID: PreviewContentID(source: source, query: query),
+                fontSize: fontSize)
+        case .plainText:
+            AttributedTextPreview(
+                attributed: SearchHighlight.attributed(source, query: query),
+                contentID: PreviewContentID(source: source, query: query),
+                fontSize: fontSize)
         }
-        .task(id: RenderID(source: source, fontSize: fontSize)) {
-            // Search changes only update highlighting; keep the parsed document intact.
-            let task = Task.detached(priority: .userInitiated) {
-                Self.render(source, fontSize: fontSize)
-            }
-            let result = await withTaskCancellationHandler {
-                await task.value
-            } onCancel: {
-                task.cancel()
-            }
-            guard !Task.isCancelled else { return }
-            rendered = result
-            renderedID = RenderID(source: source, fontSize: fontSize)
-            onRender?()
-        }
-    }
-
-    private func previewText(attributed: AttributedString) -> AttributedTextPreview {
-        AttributedTextPreview(
-            attributed: attributed,
-            contentID: PreviewContentID(source: source, query: query, rendered: currentRendered != nil),
-            fontSize: fontSize)
-    }
-
-    private func previewText(nsAttributed: NSAttributedString) -> AttributedTextPreview {
-        AttributedTextPreview(
-            nsAttributed: nsAttributed,
-            contentID: PreviewContentID(source: source, query: query, rendered: currentRendered != nil),
-            fontSize: fontSize)
     }
 }
