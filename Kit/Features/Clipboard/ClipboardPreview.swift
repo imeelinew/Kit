@@ -341,7 +341,6 @@ private struct ClipboardPreviewImage: View {
                         .strokeBorder(Theme.Colors.cardStroke, lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(lifted ? 0.14 : 0), radius: 6, x: 0, y: 3)
-                .scaleEffect(lifted && !reduceMotion ? 1.015 : 1)
                 .offset(y: lifted && !reduceMotion ? -2 : 0)
                 .animation(reduceMotion ? nil : Theme.Motion.menu, value: lifted)
         }
@@ -508,7 +507,7 @@ private final class ClipboardPreviewPane: NSView, PreviewSelectionOwner {
         self.kind = kind
         super.init(frame: .zero)
         wantsLayer = true
-        prepare(content)
+        prepare(content, for: kind)
         addSubview(content.view)
         title.font = .systemFont(ofSize: 11)
         title.textColor = .secondaryLabelColor
@@ -519,12 +518,13 @@ private final class ClipboardPreviewPane: NSView, PreviewSelectionOwner {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    private func prepare(_ hosting: NSHostingController<AnyView>) {
+    private func prepare(_ hosting: NSHostingController<AnyView>, for kind: ClipboardItem.Kind) {
         hosting.sizingOptions = []
         hosting.safeAreaRegions = []
-        // A hosted renderer must not draw over the header or information region
+        // A hosted renderer must not draw over the header or information region, while
+        // image previews need unclipped bounds for their hover lift and drop shadow.
         hosting.view.wantsLayer = true
-        hosting.view.layer?.masksToBounds = true
+        hosting.view.layer?.masksToBounds = kind != .image
     }
 
     func update(kind: ClipboardItem.Kind, informationHeight: CGFloat, reduceMotion: Bool,
@@ -537,7 +537,7 @@ private final class ClipboardPreviewPane: NSView, PreviewSelectionOwner {
         if changedKind {
             let old = content
             let replacement = NSHostingController(rootView: root)
-            prepare(replacement)
+            prepare(replacement, for: kind)
             replacement.view.frame = old.view.frame
             addSubview(replacement.view, positioned: .above, relativeTo: old.view)
             content = replacement
