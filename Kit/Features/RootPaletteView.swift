@@ -101,6 +101,21 @@ struct RootPaletteView: View {
                         onLoadMore: { vm.loadMoreResults() }
                     )
                     .frame(width: Theme.Size.clipboardListWidth)
+                    .mask {
+                        VStack(spacing: 0) {
+                            LinearGradient(
+                                colors: [.clear, .black],
+                                startPoint: .top, endPoint: .bottom
+                            )
+                            .frame(height: 12)
+                            Rectangle()
+                            LinearGradient(
+                                colors: [.black, .clear],
+                                startPoint: .top, endPoint: .bottom
+                            )
+                            .frame(height: 12)
+                        }
+                    }
                     Rectangle()
                         .fill(Theme.Colors.separator)
                         .frame(width: 1)
