@@ -17,10 +17,14 @@ struct PaletteSnapGeometry {
     let screenFrame: CGRect
     let visibleFrame: CGRect
 
-    // Vertical guides follow the reference recording, the top guide follows the original placement
+    // Vertical guides follow the reference recording, the top guide matches Raycast's default placement
     var left: CGFloat { screenFrame.minX + screenFrame.width * 0.28 }
     var right: CGFloat { screenFrame.minX + screenFrame.width * 0.72 }
-    var top: CGFloat { visibleFrame.maxY - visibleFrame.height * 0.18 }
+    var top: CGFloat {
+        let reference = Theme.Size.panelHeight
+        let factor: CGFloat = screenFrame.height < reference * 1.8 ? 0.54 : 0.73
+        return (screenFrame.minY + reference + factor * (screenFrame.height - reference)).rounded()
+    }
 
     func defaultFrame(preferredSize: CGSize) -> CGRect {
         let width = min(preferredSize.width, max(1, visibleFrame.width - 32))

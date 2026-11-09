@@ -21,7 +21,7 @@ enum WindowGeometryTests {
             visibleFrame: CGRect(x: 0, y: 0, width: 1_920, height: 1_160)
         )
         let defaultFrame = main.defaultFrame(preferredSize: CGSize(width: 640, height: 600))
-        try TestSupport.expect(close(defaultFrame, CGRect(x: 640, y: 351.2, width: 640, height: 600)),
+        try TestSupport.expect(close(defaultFrame, CGRect(x: 640, y: 404, width: 640, height: 600)),
                                "The default frame is centered and hangs below the top guide")
 
         let oversized = main.defaultFrame(preferredSize: CGSize(width: 2_400, height: 1_800))
@@ -43,7 +43,7 @@ enum WindowGeometryTests {
             visibleFrame: CGRect(x: -1_920, y: 0, width: 1_920, height: 1_160)
         )
         let negativeFrame = negative.defaultFrame(preferredSize: CGSize(width: 640, height: 600))
-        try TestSupport.expect(close(negativeFrame, CGRect(x: -1_280, y: 351.2, width: 640, height: 600)),
+        try TestSupport.expect(close(negativeFrame, CGRect(x: -1_280, y: 404, width: 640, height: 600)),
                                "Default placement translates to a display with a negative origin")
     }
 
