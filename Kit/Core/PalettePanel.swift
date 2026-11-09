@@ -464,7 +464,7 @@ final class PalettePanel: NSPanel {
         hosting.sizingOptions = []
         hosting.autoresizingMask = [.width, .height]
 
-        let backdrop = NSVisualEffectView(frame: frame)
+        let backdrop = PaletteBackdropView(frame: frame)
         backdrop.autoresizingMask = [.width, .height]
         backdrop.material = .headerView
         backdrop.blendingMode = .behindWindow
@@ -490,6 +490,17 @@ final class PalettePanel: NSPanel {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+}
+
+private final class PaletteBackdropView: NSVisualEffectView {
+    override func updateLayer() {
+        super.updateLayer()
+        for variant in layer?.sublayers ?? [] {
+            for sublayer in variant.sublayers ?? [] where sublayer.name == "fill" {
+                sublayer.opacity = 0.38
+            }
+        }
+    }
 }
 
 private final class TransparentPaletteHostingView<Content: View>: NSHostingView<Content> {
