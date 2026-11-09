@@ -464,6 +464,12 @@ final class PalettePanel: NSPanel {
         hosting.sizingOptions = []
         hosting.autoresizingMask = [.width, .height]
 
+        let backdrop = NSVisualEffectView(frame: frame)
+        backdrop.autoresizingMask = [.width, .height]
+        backdrop.material = .headerView
+        backdrop.blendingMode = .behindWindow
+        backdrop.state = .active
+
         let glass = NSGlassEffectView(frame: frame)
         glass.autoresizingMask = [.width, .height]
         glass.style = .regular
@@ -477,6 +483,7 @@ final class PalettePanel: NSPanel {
         shell.layer?.backgroundColor = NSColor.clear.cgColor
         shell.layer?.cornerRadius = Theme.Radius.panel
         shell.layer?.masksToBounds = true
+        shell.addSubview(backdrop)
         shell.addSubview(glass)
         contentView = shell
     }
