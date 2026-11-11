@@ -47,7 +47,9 @@ struct ClipboardPreview: View {
                 ?? (loadedPayload?.matches(item) == true ? loadedPayload : nil)
         }
         let information = item.map {
-            ClipboardInfoSection(item: $0, details: payload?.details ?? .init(), store: store, settings: settings)
+            ClipboardInfoSection(
+                item: $0, details: payload?.details ?? .init(), store: store,
+                storeRevision: store.revision, settings: settings)
         }
         ClipboardPreviewContainer(
             itemID: item?.id, kind: item.map { $0.hasImagePreview ? .image : $0.kind }, informationHeight: information?.contentHeight ?? 0,
@@ -551,7 +553,7 @@ private final class ClipboardPreviewPane: NSView, PreviewSelectionOwner {
         let available = max(0, previewHeight - padding * 2)
         let fitted = content.sizeThatFits(in: CGSize(width: width, height: available))
         content.view.frame = NSRect(x: 20, y: padding, width: width, height: min(available, fitted.height))
-        title.frame = NSRect(x: 28, y: previewHeight + 12 + (28 - title.intrinsicContentSize.height) / 2,
+        title.frame = NSRect(x: 24, y: previewHeight + 12 + (28 - title.intrinsicContentSize.height) / 2,
                              width: max(0, width - 16), height: title.intrinsicContentSize.height)
         information.frame = NSRect(x: 20, y: previewHeight + 40,
                                     width: width, height: max(0, infoHeight - 40))
@@ -616,6 +618,7 @@ private struct ClipboardInfoSection: View {
     let details: ClipboardPreviewPayload.Details
 
     let store: ClipboardStore
+    let storeRevision: UInt64
     let settings: AppSettings
 
     private struct InfoRow: Identifiable {
