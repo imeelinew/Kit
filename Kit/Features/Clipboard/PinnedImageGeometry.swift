@@ -87,3 +87,39 @@ struct PinnedImageGeometry {
         value.isFinite && value > 0 ? value : fallback
     }
 }
+
+/// Screen coordinates, positive Y points upward
+struct PinnedImageResizeEdge: Equatable {
+    let x: CGFloat
+    let y: CGFloat
+    static let hitWidth: CGFloat = 14
+
+    static func hit(at point: CGPoint, in bounds: CGRect) -> Self? {
+        guard bounds.contains(point) else { return nil }
+        let x: CGFloat = point.x < bounds.minX + hitWidth ? -1
+            : point.x > bounds.maxX - hitWidth ? 1 : 0
+        let y: CGFloat = point.y < bounds.minY + hitWidth ? -1
+            : point.y > bounds.maxY - hitWidth ? 1 : 0
+        return x == 0 && y == 0 ? nil : Self(x: x, y: y)
+    }
+
+    func frame(from start: CGRect, delta: CGSize, minimum: CGSize, visible: CGRect) -> CGRect {
+        let anchor = CGPoint(x: x < 0 ? start.maxX : x > 0 ? start.minX : start.midX,
+                             y: y < 0 ? start.maxY : y > 0 ? start.minY : start.midY)
+        let horizontal = x * delta.width / start.width
+        let vertical = y * delta.height / start.height
+        let change = x == 0 ? vertical : y == 0 ? horizontal
+            : (abs(horizontal) > abs(vertical) ? horizontal : vertical)
+        let availableWidth = x < 0 ? anchor.x - visible.minX : x > 0
+            ? visible.maxX - anchor.x : 2 * min(anchor.x - visible.minX, visible.maxX - anchor.x)
+        let availableHeight = y < 0 ? anchor.y - visible.minY : y > 0
+            ? visible.maxY - anchor.y : 2 * min(anchor.y - visible.minY, visible.maxY - anchor.y)
+        let maximum = max(0.001, min(availableWidth / start.width, availableHeight / start.height))
+        let lower = min(max(minimum.width / start.width, minimum.height / start.height), maximum)
+        let scale = min(max(1 + change, lower), maximum)
+        let size = CGSize(width: start.width * scale, height: start.height * scale)
+        return CGRect(x: anchor.x - (x < 0 ? size.width : x == 0 ? size.width / 2 : 0),
+                      y: anchor.y - (y < 0 ? size.height : y == 0 ? size.height / 2 : 0),
+                      width: size.width, height: size.height)
+    }
+}
