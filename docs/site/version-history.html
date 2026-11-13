@@ -110,6 +110,60 @@
     <body>
         <main>
             <section>
+                <span class="tag">v0.5.3</span>
+                <p class="date">2026 年 11 月 13 日</p>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>
+                            统一面板、菜单、按钮与列表高亮的弹簧动效，打开面板与切换筛选时列表行级联入场
+                        </li>
+                        <li>
+                            在面板液态玻璃背板增加微暗背景层，并为列表上下边缘添加渐隐遮罩
+                        </li>
+                        <li>
+                            调整面板顶部吸附与默认垂直位置，优化不同尺寸屏幕下的展示比例
+                        </li>
+                        <li>
+                            移除图片预览悬停缩放效果，允许悬浮阴影无裁切完整显示
+                        </li>
+                        <li>
+                            预热并缓存 Markdown 预览排版，切换条目时即时显示
+                        </li>
+                        <li>微调预览区「信息」标题的对齐位置</li>
+                        <li>
+                            优化搜索、分页加载与列表行高缓存，提升连续输入、撤销删除及翻页响应
+                        </li>
+                    </ul>
+                </div>
+                <div class="group">
+                    <h3>修复</h3>
+                    <ul>
+                        <li>
+                            修复调整或重命名条目所属 Stack 后，预览信息区未同步刷新的问题
+                        </li>
+                        <li>
+                            修复仅存在单个 Stack 且条目已在其中时，操作菜单仍显示「添加到 Stack」的问题
+                        </li>
+                    </ul>
+                </div>
+            </section>
+
+            <section>
+                <span class="tag">v0.5.2</span>
+                <p class="date">2026 年 11 月 6 日</p>
+                <div class="group">
+                    <h3>改进</h3>
+                    <ul>
+                        <li>更新剪贴板列表中文件失效标记的图标与间距</li>
+                        <li>
+                            重构底层剪贴板存储、状态观测与并发同步架构，降低运行开销并提升稳定性
+                        </li>
+                    </ul>
+                </div>
+            </section>
+
+            <section>
                 <span class="tag">v0.5.1</span>
                 <p class="date">2026 年 10 月 30 日</p>
                 <div class="group">
