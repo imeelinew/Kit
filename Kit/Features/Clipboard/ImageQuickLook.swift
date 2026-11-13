@@ -396,6 +396,7 @@ struct ImageQuickLookContent: View {
     var sourceVersion: UInt64 = 0
     @State private var image: NSImage?
     @State private var loadFailed = false
+    @State private var textLayout: ImageTextLayout?
     @Environment(\.displayScale) private var displayScale
 
     var body: some View {
@@ -407,6 +408,9 @@ struct ImageQuickLookContent: View {
                     .aspectRatio(contentMode: .fit)
                     .overlay {
                         ImageSearchHighlightOverlay(imageSize: image.size, regions: highlights)
+                        if let textLayout {
+                            ImageTextSelectionOverlay(layout: textLayout, imageSize: image.size)
+                        }
                     }
             } else if loadFailed {
                 Image(systemName: "photo.badge.exclamationmark")
@@ -416,6 +420,12 @@ struct ImageQuickLookContent: View {
             }
         }
         .frame(width: size.width, height: size.height)
+        .task(id: "\(url.absoluteString)#\(sourceVersion)") {
+            textLayout = nil
+            let payload = await ImageSearchHighlightPayload.load(url)
+            guard !Task.isCancelled else { return }
+            textLayout = payload?.layout
+        }
         .task(id: "\(url.absoluteString)#\(Int(size.width))x\(Int(size.height))#\(sourceVersion)#\(displayScale)") {
             image = nil
             loadFailed = false
@@ -426,5 +436,112 @@ struct ImageQuickLookContent: View {
             image = loaded
             loadFailed = loaded == nil
         }
+    }
+}
+
+private struct ImageTextSelectionOverlay: NSViewRepresentable {
+    let layout: ImageTextLayout
+    let imageSize: CGSize
+    @Environment(\.locale) private var locale
+
+    func makeNSView(context: Context) -> ImageTextSelectionView {
+        ImageTextSelectionView()
+    }
+
+    func updateNSView(_ view: ImageTextSelectionView, context: Context) {
+        view.configure(layout: layout, imageSize: imageSize)
+        view.copyTitle = AppLocalization.string("Copy", locale: locale)
+    }
+}
+
+private final class ImageTextSelectionView: NSView {
+    var copyTitle = "Copy"
+    private var textLayout: ImageTextLayout?
+    private var imageSize: CGSize = .zero
+    private var anchor: Int?
+    private var selection: NSRange?
+    override var isFlipped: Bool { true }
+    override var acceptsFirstResponder: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    func configure(layout: ImageTextLayout, imageSize: CGSize) {
+        if textLayout?.text != layout.text { selection = nil; anchor = nil }
+        textLayout = layout
+        self.imageSize = imageSize
+        needsDisplay = true
+        window?.invalidateCursorRects(for: self)
+    }
+
+    private func rect(_ region: ImageTextLayout.Region) -> CGRect {
+        ImageSearchHighlightOverlay.displayRect(region.bounds,
+            imageRect: ImageSearchHighlightOverlay.imageRect(imageSize: imageSize, in: bounds.size))
+    }
+
+    override func resetCursorRects() {
+        for region in textLayout?.regions ?? [] { addCursorRect(rect(region), cursor: .iBeam) }
+    }
+
+    private func regionIndex(at point: CGPoint, nearest: Bool) -> Int? {
+        guard let regions = textLayout?.regions, !regions.isEmpty else { return nil }
+        if let hit = regions.firstIndex(where: { rect($0).contains(point) }) { return hit }
+        guard nearest else { return nil }
+        return regions.indices.min { a, b in
+            func distance(_ index: Int) -> CGFloat {
+                let box = rect(regions[index])
+                let dx = max(box.minX - point.x, 0, point.x - box.maxX)
+                let dy = max(box.minY - point.y, 0, point.y - box.maxY)
+                return dx * dx + dy * dy
+            }
+            return distance(a) < distance(b)
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        anchor = regionIndex(at: convert(event.locationInWindow, from: nil), nearest: false)
+        selection = anchor.flatMap { textLayout?.regions[$0].range }
+        needsDisplay = true
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let anchor, let layout = textLayout,
+            let end = regionIndex(at: convert(event.locationInWindow, from: nil), nearest: true)
+        else { return }
+        selection = NSUnionRange(layout.regions[anchor].range, layout.regions[end].range)
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let selection else { return }
+        NSColor.selectedTextBackgroundColor.withAlphaComponent(0.4).setFill()
+        let path = NSBezierPath()
+        for region in textLayout?.regions ?? [] where NSIntersectionRange(selection, region.range).length > 0 {
+            path.append(NSBezierPath(rect: rect(region)))
+        }
+        path.fill()
+    }
+
+    @objc func copy(_ sender: Any?) {
+        guard let layout = textLayout, let selection, selection.length > 0 else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString((layout.text as NSString).substring(with: selection), forType: .string)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard window?.firstResponder === self,
+            event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+            event.charactersIgnoringModifiers?.lowercased() == "c", selection != nil
+        else { return super.performKeyEquivalent(with: event) }
+        copy(nil)
+        return true
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        guard selection != nil else { return nil }
+        let menu = NSMenu()
+        let item = NSMenuItem(title: copyTitle, action: #selector(copy(_:)), keyEquivalent: "c")
+        item.target = self
+        menu.addItem(item)
+        return menu
     }
 }
