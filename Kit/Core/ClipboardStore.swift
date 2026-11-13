@@ -284,7 +284,7 @@ final class ClipboardStore {
 
     @discardableResult
     func remove(_ item: ClipboardItem) -> Bool {
-        guard let item = self.item(id: item.id), let stmt = deleteByIDStmt else { return false }
+        guard let item = loadItem(id: item.id), let stmt = deleteByIDStmt else { return false }
         var backup: URL?
         if item.imagePath != nil {
             guard let imageURL = imageURL(for: item) else { return false }
@@ -387,6 +387,10 @@ final class ClipboardStore {
     }
 
     func clearAll() {
+        guard transaction({
+            ClipboardSQLite.execute("DELETE FROM items", in: db)
+                && ClipboardSQLite.execute("DELETE FROM stack_items", in: db)
+        }) else { return }
         captureGeneration &+= 1
         imageTextSearchGeneration &+= 1
         searchMetadataTask?.cancel()
@@ -395,9 +399,8 @@ final class ClipboardStore {
         thumbnailWarmTask = nil
         imageOCRRebuildIDs = nil
         pendingSearchMetadata.removeAll()
-        guard ClipboardSQLite.execute("DELETE FROM items", in: db) else { return }
         discardDeletion()
-        ClipboardSQLite.execute("DELETE FROM stack_items", in: db)
+        hasDeferredHistoryUpdates = false
         stackMembership.removeAll()
         items = []
         try? FileManager.default.removeItem(at: imagesDir)
@@ -474,7 +477,7 @@ final class ClipboardStore {
         }
         publishDeferredHistoryUpdates()
         // Publish one complete revision, without briefly removing the selected item.
-        items = Array(([updated] + items.filter { $0.id != updated.id }).prefix(Self.memoryWindow))
+        items = [updated] + items.lazy.filter { $0.id != updated.id }.prefix(Self.memoryWindow - 1)
         pruneIfDue()
         if externalCapture { onItemCaptured?() }
         return true
@@ -484,9 +487,7 @@ final class ClipboardStore {
     private func insert(_ item: ClipboardItem) -> Bool {
         guard let stmt = insertStmt, bindAndInsert(stmt, item) else { return false }
         publishDeferredHistoryUpdates()
-        items.removeAll { $0.id == item.id }
-        items.insert(item, at: 0)
-        if items.count > Self.memoryWindow { items.removeLast() }
+        items = [item] + items.lazy.filter { $0.id != item.id }.prefix(Self.memoryWindow - 1)
         pruneIfDue()
         scheduleSearchMetadataUpdate(for: item)
         if item.hasImagePreview { startImageOCRWorkerIfNeeded() }
@@ -537,30 +538,23 @@ final class ClipboardStore {
     }
 
     private func textItem(matching text: String, sourceBundleID: String?) -> ClipboardItem? {
-        guard let stmt = textByContentStmt else { return nil }
-        ClipboardSQLite.bindText(text, to: stmt, at: 1)
-        ClipboardSQLite.bindText(sourceBundleID, to: stmt, at: 2)
-        let item = sqlite3_step(stmt) == SQLITE_ROW ? ClipboardSQLite.row(stmt) : nil
-        ClipboardSQLite.reset(stmt)
-        return item
+        findItem(using: textByContentStmt, matching: text, sourceBundleID)
     }
 
     private func fileItem(
         matching fileURLs: [URL], sourceBundleID: String?
     ) -> ClipboardItem? {
-        guard let stmt = fileByContentStmt,
-            let encodedURLs = ClipboardSQLite.encodedFileURLs(fileURLs)
-        else { return nil }
-        ClipboardSQLite.bindText(encodedURLs, to: stmt, at: 1)
-        ClipboardSQLite.bindText(sourceBundleID, to: stmt, at: 2)
-        let item = sqlite3_step(stmt) == SQLITE_ROW ? ClipboardSQLite.row(stmt) : nil
-        ClipboardSQLite.reset(stmt)
-        return item
+        guard let encodedURLs = ClipboardSQLite.encodedFileURLs(fileURLs) else { return nil }
+        return findItem(using: fileByContentStmt, matching: encodedURLs, sourceBundleID)
     }
 
-    private func findItem(using stmt: OpaquePointer?, matching value: String) -> ClipboardItem? {
+    private func findItem(
+        using stmt: OpaquePointer?, matching values: String?...
+    ) -> ClipboardItem? {
         guard let stmt else { return nil }
-        ClipboardSQLite.bindText(value, to: stmt, at: 1)
+        for (index, value) in values.enumerated() {
+            ClipboardSQLite.bindText(value, to: stmt, at: Int32(index + 1))
+        }
         let item = sqlite3_step(stmt) == SQLITE_ROW ? ClipboardSQLite.row(stmt) : nil
         ClipboardSQLite.reset(stmt)
         return item

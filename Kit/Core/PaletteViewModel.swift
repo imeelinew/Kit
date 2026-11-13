@@ -138,6 +138,12 @@ enum PaletteHaptics {
 @MainActor
 @Observable
 final class PaletteViewModel {
+    private struct SearchRequest: Equatable {
+        let query: String
+        let kind: ClipboardKindFilter
+        let stackID: ClipboardStack.ID?
+    }
+
     var query = "" {
         didSet { queryChanged() }
     }
@@ -201,24 +207,34 @@ final class PaletteViewModel {
     @ObservationIgnored private unowned let core: AppCore
     private static let pageSize = 160
     @ObservationIgnored private var searchTask: Task<Void, Never>?
-    @ObservationIgnored private var previewWarmTask: Task<Void, Never>?
-    @ObservationIgnored private var loadMoreTask: Task<Void, Never>?
+    @ObservationIgnored private var normalizedQuery = ""
     private var nextCursor: ClipboardSearchCursor?
     @ObservationIgnored private var loadedPageCount = 1
     @ObservationIgnored private var pendingRestoredItemID: ClipboardItem.ID?
+    @ObservationIgnored private var isBatchingSearchUpdates = false
     private var deletionWasLastEdit = false
     @ObservationIgnored private var revisionObserver: ObservationToken?
 
     init(core: AppCore) {
         self.core = core
         revisionObserver = core.clipboardStore.observeRevision { [weak self] in
-            guard let self, !self.core.clipboardStore.hasDeferredHistoryUpdates else { return }
+            guard let self, !self.isBatchingSearchUpdates,
+                !self.core.clipboardStore.hasDeferredHistoryUpdates
+            else { return }
             refreshResults(resetSelection: !searchReady, blockCommands: false)
         }
         refreshResults(resetSelection: true, blockCommands: true)
     }
 
     var menuOpen: Bool { overlay.isOpen }
+
+    private var searchRequest: SearchRequest {
+        SearchRequest(query: normalizedQuery, kind: kindFilter, stackID: stackFilter)
+    }
+
+    private func searchIsCurrent(_ request: SearchRequest) -> Bool {
+        !Task.isCancelled && searchRequest == request
+    }
 
     // Keep routing to deletion undo after it is consumed. A second Command-Z must
     // not fall through to an older text edit; typing/naming still owns text undo.
@@ -285,10 +301,11 @@ final class PaletteViewModel {
             if item.hasImagePreview || item.kind == .file || item.kind == .path {
                 actions.append(.revealInFinder(item))
             }
-            if !core.clipboardStore.stacks.isEmpty {
+            let currentStack = core.clipboardStore.stackID(for: item.id)
+            if core.clipboardStore.stacks.contains(where: { $0.id != currentStack }) {
                 actions.append(.addToStack(item))
             }
-            if core.clipboardStore.stackID(for: item.id) != nil {
+            if currentStack != nil {
                 actions.append(.removeFromStack(item))
             }
             actions.append(.delete(item))
@@ -323,16 +340,12 @@ final class PaletteViewModel {
     }
 
     func openStackActions(_ stack: ClipboardStack) {
-        stackNameEdit = nil
-        overlay = .stackActions(stack.id)
-        menuSelection = 0
+        openMenu(.stackActions(stack.id))
     }
 
     /// Reset while hidden so clearing a previous search does not delay the next shortcut.
     func prepareForNextPresentation() {
         isPreviewActive = false
-        previewWarmTask?.cancel()
-        previewWarmTask = nil
         preparedPreview = nil
         resetPresentationState()
         scrollIntent = ScrollIntent(kind: .top)
@@ -393,39 +406,38 @@ final class PaletteViewModel {
     func openActions(for id: ClipboardItem.ID) {
         guard searchReady, item(withID: id) != nil else { return }
         select(id)
-        overlay = .actions(id)
-        menuSelection = 0
+        openMenu(.actions(id))
     }
 
     func toggleAppMenu() {
-        overlay = overlay == .appMenu ? .none : .appMenu
-        menuSelection = 0
+        openMenu(overlay == .appMenu ? .none : .appMenu)
     }
 
     func toggleTypeFilter() {
         if overlay == .typeFilter {
-            overlay = .none
-            menuSelection = 0
+            closeMenu()
         } else {
-            overlay = .typeFilter
-            menuSelection = ClipboardKindFilter.allCases.firstIndex(of: kindFilter) ?? 0
+            openMenu(
+                .typeFilter,
+                selection: ClipboardKindFilter.allCases.firstIndex(of: kindFilter) ?? 0)
         }
     }
 
     func toggleStackFilter() {
         if overlay == .stackFilter {
-            overlay = .none
-            menuSelection = 0
+            closeMenu()
         } else {
-            overlay = .stackFilter
-            if let stackFilter,
-                let index = core.clipboardStore.stacks.firstIndex(where: { $0.id == stackFilter })
-            {
-                menuSelection = index + 1
-            } else {
-                menuSelection = 0
-            }
+            openMenu(.stackFilter, selection: stackMenuSelection(stackFilter))
         }
+    }
+
+    private func stackMenuSelection(_ stackID: ClipboardStack.ID?) -> Int {
+        core.clipboardStore.stacks.firstIndex { $0.id == stackID }.map { $0 + 1 } ?? 0
+    }
+
+    private func openMenu(_ menu: PaletteOverlay, selection: Int = 0) {
+        overlay = menu
+        menuSelection = selection
     }
 
     func closeMenu() {
@@ -437,52 +449,22 @@ final class PaletteViewModel {
     private func dismissMenuLayer() {
         switch overlay {
         case .stackActions(let id):
-            overlay = .stackFilter
-            if let index = core.clipboardStore.stacks.firstIndex(where: { $0.id == id }) {
-                menuSelection = index + 1
-            } else {
-                menuSelection = 0
-            }
+            openMenu(.stackFilter, selection: stackMenuSelection(id))
         case .addToStack(let id):
             overlay = .actions(id)
-            menuSelection = menuActions.firstIndex {
+            let selection = menuActions.firstIndex {
                 if case .addToStack = $0 { return true }
                 return false
-            } ?? 0
+            }
+            menuSelection = selection ?? 0
         default:
-            overlay = .none
-            menuSelection = 0
+            closeMenu()
         }
     }
 
     func activateMenuItem(at index: Int) {
         let actions = menuActions
         guard actions.indices.contains(index) else { return }
-        switch actions[index] {
-        case .paste(let item), .pasteKeepingOpen(let item):
-            guard canPaste, canCopy(item) else { return }
-        case .copy(let item):
-            guard canCopy(item) else { return }
-        default:
-            break
-        }
-        if case .newStack = actions[index] {
-            beginStackName()
-            return
-        }
-        if case .addToStack(let item) = actions[index] {
-            let currentStack = core.clipboardStore.stackID(for: item.id)
-            guard core.clipboardStore.stacks.contains(where: { $0.id != currentStack }) else { return }
-            overlay = .addToStack(item.id)
-            menuSelection = 0
-            return
-        }
-        if case .deleteStack = actions[index] {
-            perform(actions[index])
-            return
-        }
-        overlay = .none
-        menuSelection = 0
         perform(actions[index])
     }
 
@@ -503,16 +485,12 @@ final class PaletteViewModel {
             }
         case .pasteKeepingOpen:
             guard searchReady, canPaste, !isNamingStack, let item = actionTarget, canCopy(item) else { return true }
-            closeMenu()
-            core.pasteKeepingWindowOpen(item)
+            perform(.pasteKeepingOpen(item))
         case .copy:
-            guard searchReady, let item = actionTarget, canCopy(item) else { return true }
-            overlay = .none
-            core.copyToClipboard(item)
+            guard searchReady, let item = actionTarget else { return true }
+            perform(.copy(item))
         case .delete:
             guard searchReady, !isNamingStack, let item = actionTarget else { return true }
-            overlay = .none
-            menuSelection = 0
             perform(.delete(item))
         case .undoDelete:
             guard !isNamingStack else { return true }
@@ -531,17 +509,18 @@ final class PaletteViewModel {
             }
         case .toggleActions:
             guard searchReady, let id = selectedID else { return true }
-            overlay = overlay == .actions(id) ? .none : .actions(id)
-            menuSelection = 0
+            if overlay == .actions(id) {
+                closeMenu()
+            } else {
+                openMenu(.actions(id))
+            }
         case .pinToScreen:
             guard searchReady, let item = actionTarget, item.hasImagePreview else { return true }
-            overlay = .none
-            core.pinToScreen(item)
+            perform(.pinToScreen(item))
         case .revealInFinder:
             guard searchReady, let item = actionTarget,
                 item.hasImagePreview || item.kind == .file || item.kind == .path else { return true }
-            overlay = .none
-            core.revealClipboardItem(item)
+            perform(.revealInFinder(item))
         case .cycleStack(let delta):
             cycleStack(by: delta)
         case .cycleType(let delta):
@@ -550,11 +529,9 @@ final class PaletteViewModel {
             guard !menuOpen else { return true }
             if !queryIsEmpty { query = "" }
         case .settings:
-            overlay = .none
-            core.showSettings()
+            perform(.settings)
         case .quit:
-            overlay = .none
-            core.requestQuit()
+            perform(.quit)
         }
         return true
     }
@@ -602,35 +579,46 @@ final class PaletteViewModel {
     private func perform(_ action: PaletteMenuAction) {
         switch action {
         case .about:
+            closeMenu()
             core.showAbout()
         case .checkForUpdates:
+            closeMenu()
             core.checkForUpdates()
         case .settings:
+            closeMenu()
             core.showSettings()
         case .quit:
+            closeMenu()
             core.requestQuit()
         case .paste(let item):
-            guard canCopy(item) else { return }
+            guard canPaste, canCopy(item) else { return }
+            closeMenu()
             core.paste(item)
         case .pasteKeepingOpen(let item):
-            guard canCopy(item) else { return }
+            guard canPaste, canCopy(item) else { return }
+            closeMenu()
             core.pasteKeepingWindowOpen(item)
         case .copy(let item):
             guard canCopy(item) else { return }
+            closeMenu()
             core.copyToClipboard(item)
         case .pinToScreen(let item):
             guard item.hasImagePreview else { return }
+            closeMenu()
             core.pinToScreen(item)
         case .revealInFinder(let item):
+            closeMenu()
             core.revealClipboardItem(item)
         case .addToStack(let item):
-            overlay = .addToStack(item.id)
-            menuSelection = 0
+            openMenu(.addToStack(item.id))
         case .assignToStack(let item, let stack):
+            closeMenu()
             core.clipboardStore.assign(item.id, to: stack.id)
         case .removeFromStack(let item):
+            closeMenu()
             if !core.clipboardStore.removeFromStack(item.id) { NSSound.beep() }
         case .delete(let item):
+            closeMenu()
             let removedIndex = selectionIndex
             imageQuickLookOpen = false
             ImageQuickLook.close()
@@ -647,13 +635,15 @@ final class PaletteViewModel {
                 selectedID = results[min(removedIndex, results.count - 1)].id
             }
         case .setKindFilter(let filter):
+            closeMenu()
             applyKindFilter(filter)
             onSearchFocusRequested?()
         case .setStackFilter(let stack):
+            closeMenu()
             applyStackFilter(stack?.id)
             onSearchFocusRequested?()
         case .newStack:
-            break
+            beginStackName()
         case .renameStack(let stack):
             beginRename(stack)
         case .deleteStack(let stack):
@@ -663,20 +653,24 @@ final class PaletteViewModel {
 
     private func undoDeletion() {
         guard core.clipboardStore.canUndoDeletion else { return }
+        isBatchingSearchUpdates = true
+        defer { isBatchingSearchUpdates = false }
         guard let restored = core.clipboardStore.undoLastDeletion() else {
             NSSound.beep()
             return
         }
-        overlay = .none
+        closeMenu()
         imageQuickLookOpen = false
         ImageQuickLook.close()
-        // Keep useful filters, but never leave a restored entry hidden by the current scope.
-        if !queryIsEmpty,
-            !restored.matches(query, includeImageText: core.clipboardStore.imageTextSearchEnabled)
-        { query = "" }
-        if let kind = kindFilter.kind, restored.kind != kind { applyKindFilter(.all) }
+        if !normalizedQuery.isEmpty,
+            !restored.matches(
+                normalizedQuery, includeImageText: core.clipboardStore.imageTextSearchEnabled)
+        {
+            query = ""
+        }
+        if let kind = kindFilter.kind, restored.kind != kind { kindFilter = .all }
         if let stackFilter, core.clipboardStore.stackID(for: restored.id) != stackFilter {
-            applyStackFilter(nil)
+            self.stackFilter = nil
         }
         pendingRestoredItemID = restored.id
         deletionWasLastEdit = true
@@ -692,10 +686,7 @@ final class PaletteViewModel {
     func beginRename(_ stack: ClipboardStack) {
         stackNameDraft = stack.name
         stackNameEdit = .rename(stack.id)
-        overlay = .stackFilter
-        if let index = core.clipboardStore.stacks.firstIndex(where: { $0.id == stack.id }) {
-            menuSelection = index + 1
-        }
+        openMenu(.stackFilter, selection: stackMenuSelection(stack.id))
     }
 
     func cancelStackName() {
@@ -711,17 +702,11 @@ final class PaletteViewModel {
         switch edit {
         case .create:
             guard let stack = core.clipboardStore.createStack(name: name) else { return }
-            stackNameEdit = nil
-            stackNameDraft = ""
-            overlay = .none
-            menuSelection = 0
+            closeMenu()
             applyStackFilter(stack.id)
         case .rename(let id):
             guard core.clipboardStore.renameStack(id, to: name) else { return }
-            stackNameEdit = nil
-            stackNameDraft = ""
-            overlay = .none
-            menuSelection = 0
+            closeMenu()
             onSearchFocusRequested?()
         }
     }
@@ -742,8 +727,7 @@ final class PaletteViewModel {
         alert.buttons.first?.hasDestructiveAction = true
         guard core.runModalAlert(alert) == .alertFirstButtonReturn else { return }
         guard core.clipboardStore.deleteStack(stack.id) else { return }
-        overlay = .none
-        menuSelection = 0
+        closeMenu()
         if stackFilter == stack.id {
             applyStackFilter(nil)
         }
@@ -751,15 +735,16 @@ final class PaletteViewModel {
 
     /// Clipboard is the first stop, then stacks in menu order. The list wraps.
     private func cycleStack(by delta: Int) {
-        let destinations: [ClipboardStack.ID?] = [nil] + core.clipboardStore.stacks.map(\.id)
-        guard destinations.count > 1, delta != 0 else { return }
-        let current = destinations.firstIndex(of: stackFilter) ?? 0
-        let count = destinations.count
+        let stacks = core.clipboardStore.stacks
+        let count = stacks.count + 1
+        guard count > 1, delta != 0 else { return }
+        let current = stackFilter.flatMap { id in
+            stacks.firstIndex(where: { $0.id == id }).map { $0 + 1 }
+        } ?? 0
         let next = ((current + delta) % count + count) % count
         guard next != current else { return }
-        overlay = .none
-        menuSelection = 0
-        applyStackFilter(destinations[next])
+        closeMenu()
+        applyStackFilter(next == 0 ? nil : stacks[next - 1].id)
         onSearchFocusRequested?()
     }
 
@@ -771,8 +756,7 @@ final class PaletteViewModel {
         let count = destinations.count
         let next = ((current + delta) % count + count) % count
         guard next != current else { return }
-        overlay = .none
-        menuSelection = 0
+        closeMenu()
         applyKindFilter(destinations[next])
         onSearchFocusRequested?()
     }
@@ -790,11 +774,11 @@ final class PaletteViewModel {
     }
 
     private func queryChanged() {
+        normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         onSearchQueryChanged?()
         deletionWasLastEdit = false
-        overlay = .none
-        menuSelection = 0
-        searchCriteriaChanged()
+        closeMenu()
+        if !isBatchingSearchUpdates { searchCriteriaChanged() }
     }
 
     private func searchCriteriaChanged() {
@@ -807,28 +791,23 @@ final class PaletteViewModel {
 
     private func refreshResults(resetSelection: Bool, blockCommands: Bool) {
         searchTask?.cancel()
-        loadMoreTask?.cancel()
-        loadMoreTask = nil
         nextCursor = nil
         if resetSelection { loadedPageCount = 1 }
-        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if blockCommands { searchReady = false }
 
-        let stackID = stackFilter
-        let filter = kindFilter
+        let request = searchRequest
         let pageLimit = Self.pageSize * loadedPageCount
         let startingPageCount = loadedPageCount
         let restoredID = pendingRestoredItemID
         searchTask = Task { [weak self] in
             guard let self else { return }
             if restoredID != nil { await core.clipboardStore.waitForSearchMetadata() }
-            guard !Task.isCancelled else { return }
+            guard self.searchIsCurrent(request) else { return }
             var page = await core.clipboardStore.searchAsync(
-                query, kind: filter.kind, stackID: stackID,
+                request.query, kind: request.kind.kind, stackID: request.stackID,
                 after: nil, limit: pageLimit)
             if page.failed {
-                self.keepCurrentResultsAfterFailedSearch(
-                    query: query, filter: filter, stackID: stackID)
+                self.keepCurrentResultsAfterFailedSearch(request)
                 return
             }
             var pageCount = startingPageCount
@@ -836,27 +815,24 @@ final class PaletteViewModel {
             // Load through that entry so selection and subsequent pagination stay coherent.
             if let restoredID {
                 var restoredResults = page.items
+                var seen = Set(restoredResults.map(\.id))
                 while !restoredResults.contains(where: { $0.id == restoredID }),
                     let cursor = page.nextCursor, !Task.isCancelled
                 {
                     page = await core.clipboardStore.searchAsync(
-                        query, kind: filter.kind, stackID: stackID,
+                        request.query, kind: request.kind.kind, stackID: request.stackID,
                         after: cursor, limit: Self.pageSize)
                     if page.failed {
-                        self.keepCurrentResultsAfterFailedSearch(
-                            query: query, filter: filter, stackID: stackID)
+                        self.keepCurrentResultsAfterFailedSearch(request)
                         return
                     }
-                    restoredResults.append(contentsOf: page.items)
+                    restoredResults.append(
+                        contentsOf: page.items.filter { seen.insert($0.id).inserted })
                     pageCount += 1
                 }
                 page = ClipboardSearchPage(items: restoredResults, nextCursor: page.nextCursor)
             }
-            guard !Task.isCancelled,
-                self.query.trimmingCharacters(in: .whitespacesAndNewlines) == query,
-                self.kindFilter == filter,
-                self.stackFilter == stackID
-            else { return }
+            guard self.searchIsCurrent(request) else { return }
             nextCursor = page.nextCursor
             loadedPageCount = pageCount
             applyResults(page.items, resetSelection: resetSelection)
@@ -872,47 +848,36 @@ final class PaletteViewModel {
     }
 
     func loadMoreResults() {
-        guard searchReady, let cursor = nextCursor, loadMoreTask == nil else { return }
-        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let filter = kindFilter
-        let stackID = stackFilter
-        loadMoreTask = Task { [weak self] in
+        guard searchReady, let initialCursor = nextCursor, searchTask == nil else { return }
+        let request = searchRequest
+        searchTask = Task { [weak self] in
             guard let self else { return }
-            let page = await core.clipboardStore.searchAsync(
-                query, kind: filter.kind, stackID: stackID,
-                after: cursor, limit: Self.pageSize)
-            guard !Task.isCancelled,
-                self.query.trimmingCharacters(in: .whitespacesAndNewlines) == query,
-                self.kindFilter == filter,
-                self.stackFilter == stackID,
-                self.nextCursor == cursor
-            else { return }
-            if page.failed {
-                loadMoreTask = nil
-                return
+            var cursor = initialCursor
+            var seen = Set(results.map(\.id))
+            while true {
+                let page = await core.clipboardStore.searchAsync(
+                    request.query, kind: request.kind.kind, stackID: request.stackID,
+                    after: cursor, limit: Self.pageSize)
+                guard self.searchIsCurrent(request), self.nextCursor == cursor else { return }
+                if page.failed { break }
+                nextCursor = page.nextCursor
+                loadedPageCount += 1
+                let additions = page.items.filter { seen.insert($0.id).inserted }
+                if !additions.isEmpty {
+                    results.append(contentsOf: additions)
+                    resultsGeneration &+= 1
+                    break
+                }
+                guard let next = page.nextCursor else { break }
+                cursor = next
             }
-            nextCursor = page.nextCursor
-            loadedPageCount += 1
-            let seen = Set(results.map(\.id))
-            let additions = page.items.filter { !seen.contains($0.id) }
-            if !additions.isEmpty {
-                results.append(contentsOf: additions)
-                resultsGeneration &+= 1
-            }
-            loadMoreTask = nil
-            if additions.isEmpty && hasMoreResults { loadMoreResults() }
+            searchTask = nil
         }
     }
 
     /// A database error is not an empty history. Leave the visible page in place when this search is still current.
-    private func keepCurrentResultsAfterFailedSearch(
-        query: String, filter: ClipboardKindFilter, stackID: ClipboardStack.ID?
-    ) {
-        guard !Task.isCancelled,
-            self.query.trimmingCharacters(in: .whitespacesAndNewlines) == query,
-            kindFilter == filter,
-            stackFilter == stackID
-        else { return }
+    private func keepCurrentResultsAfterFailedSearch(_ request: SearchRequest) {
+        guard searchIsCurrent(request) else { return }
         searchReady = true
         searchTask = nil
     }
@@ -929,18 +894,10 @@ final class PaletteViewModel {
         results = newResults
         resultsGeneration &+= 1
         searchReady = true
-        previewWarmTask?.cancel()
-        previewWarmTask = nil
-        if isPreviewActive, let first = newResults.first {
-            let url = core.clipboardStore.imageURL(for: first)
-            previewWarmTask = Task { [store = core.clipboardStore] in
-                _ = await ClipboardPreviewPayload.load(for: first, imageURL: url, store: store)
-            }
-        }
 
         guard !newResults.isEmpty else {
             selectedID = nil
-            overlay = .none
+            closeMenu()
             return
         }
         if resetSelection {
@@ -957,7 +914,7 @@ final class PaletteViewModel {
         switch overlay {
         case .actions(let id), .addToStack(let id):
             if !newResults.contains(where: { $0.id == id }) {
-                overlay = .none
+                closeMenu()
             }
         case .none, .appMenu, .typeFilter, .stackFilter, .stackActions:
             break

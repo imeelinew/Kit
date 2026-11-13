@@ -6,18 +6,11 @@ struct ClipboardPreview: View {
     private struct LoadID: Hashable {
         let itemID: ClipboardItem.ID
         let copiedAt: Date
-        let imageVersion: UInt64
-        let fileRevision: UInt64
     }
 
     private struct HighlightLoadID: Hashable {
         let url: URL
         let version: UInt64
-    }
-
-    private struct FileRefreshID: Hashable {
-        let itemID: ClipboardItem.ID
-        let copiedAt: Date
     }
 
     let item: ClipboardItem?
@@ -26,17 +19,12 @@ struct ClipboardPreview: View {
     let store: ClipboardStore
     let settings: AppSettings
 
-    @State private var loadedPayload: ClipboardPreviewPayload?
     @State private var imageHighlights: ImageSearchHighlightPayload?
-    @State private var fileRevision: UInt64 = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var loadID: LoadID? {
         item.map {
-            LoadID(
-                itemID: $0.id, copiedAt: $0.lastCopiedAt,
-                imageVersion: store.imageURL(for: $0).map { ImageThumbnail.fileVersion(for: $0) } ?? 0,
-                fileRevision: fileRevision)
+            LoadID(itemID: $0.id, copiedAt: $0.lastCopiedAt)
         }
     }
 
@@ -44,7 +32,6 @@ struct ClipboardPreview: View {
         let payload = item.flatMap { item in
             (vm.preparedPreview?.matches(item) == true ? vm.preparedPreview : nil)
                 ?? ClipboardPreviewPayload.cached(for: item)
-                ?? (loadedPayload?.matches(item) == true ? loadedPayload : nil)
         }
         let information = item.map {
             ClipboardInfoSection(
@@ -57,38 +44,32 @@ struct ClipboardPreview: View {
             content: Group { if let item { content(for: item, payload: payload) } },
             information: Group { if let information { information } })
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: loadID) {
-            guard let item else {
-                loadedPayload = nil
-                return
-            }
-            let payload = await ClipboardPreviewPayload.load(
-                for: item, imageURL: store.imageURL(for: item), store: store)
-            guard !Task.isCancelled else { return }
-            loadedPayload = payload
-            vm.acceptPreview(payload)
-        }
-        .task(id: vm.isPreviewActive && item?.isFileBacked == true ? item.map {
-            FileRefreshID(itemID: $0.id, copiedAt: $0.lastCopiedAt)
-        } : nil) {
-            guard vm.isPreviewActive, let item, item.isFileBacked else { return }
-            let access = await ClipboardFileAccess.acquire(item, store: store, interactive: false)
-            defer { withExtendedLifetime(access) {} }
+        .task(id: vm.isPreviewActive ? loadID : nil) {
+            guard vm.isPreviewActive, let item else { return }
             while !Task.isCancelled {
-                let changed = await Task.detached(priority: .utility) {
-                    var changed = false
-                    for url in item.fileURLs {
-                        if ImageThumbnail.refreshFile(at: url) { changed = true }
-                    }
-                    return changed
-                }.value
+                let payload = await ClipboardPreviewPayload.load(
+                    for: item, imageURL: store.imageURL(for: item), store: store)
                 guard !Task.isCancelled else { return }
-                if changed {
-                    await store.refreshFileReference(item)
-                    fileRevision &+= 1
-                    NotificationCenter.default.post(name: ImageThumbnail.fileDidChange, object: nil)
+                vm.acceptPreview(payload)
+                guard item.isFileBacked else { return }
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                    let changed = await Task.detached(priority: .utility) {
+                        var changed = false
+                        for url in item.fileURLs {
+                            changed = ImageThumbnail.refreshFile(at: url) || changed
+                        }
+                        return changed
+                    }.value
+                    guard !Task.isCancelled else { return }
+                    if changed || !payload.matches(item) {
+                        if changed {
+                            NotificationCenter.default.post(
+                                name: ImageThumbnail.fileDidChange, object: nil)
+                        }
+                        break
+                    }
                 }
-                do { try await Task.sleep(for: .seconds(1)) } catch { return }
             }
         }
         .task(id: imageHighlightURL.map {

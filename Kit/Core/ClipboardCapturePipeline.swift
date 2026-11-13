@@ -48,7 +48,7 @@ actor ClipboardCapturePipeline {
         }
 
         if let text = snapshot.text,
-            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            text.unicodeScalars.contains(where: { !CharacterSet.whitespacesAndNewlines.contains($0) }),
             text.utf8.count <= Self.maxTextBytes
         {
             return ClipboardCapture(
@@ -59,12 +59,9 @@ actor ClipboardCapturePipeline {
     }
 
     private static func normalizedImageData(_ data: Data) -> Data? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        return normalizedPNG(from: source)
-    }
-
-    private static func normalizedPNG(from source: CGImageSource) -> Data? {
-        guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+            let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+        else { return nil }
         return NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
     }
 }
@@ -90,7 +87,7 @@ enum ClipboardCapturePolicy {
         disabledApps: [String]
     ) -> Bool {
         if types.contains(internalType) { return false }
-        if !Set(types).isDisjoint(with: sensitiveTypes) { return false }
+        if types.contains(where: sensitiveTypes.contains) { return false }
         if let sourceBundleID, disabledApps.contains(sourceBundleID) { return false }
         return true
     }

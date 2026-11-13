@@ -17,10 +17,6 @@ enum MarkdownAttributedRenderer {
         return NSAttributedString(attributedString: renderer.output)
     }
 
-    nonisolated static func isMarkdown(_ source: String) -> Bool {
-        MarkdownDetection.isMarkdown(source)
-    }
-
     private struct InlineStyle: OptionSet, Sendable {
         let rawValue: UInt8
 

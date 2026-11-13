@@ -24,6 +24,11 @@ final class ClipboardRowThumbnailCache: Sendable {
 
     private let state = Mutex(State())
     private let byteLimit: Int
+    private static let fileKeys: Set<URLResourceKey> = [.isRegularFileKey, .isSymbolicLinkKey]
+    private static let entryKeys: Set<URLResourceKey> = [
+        .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey,
+    ]
+    private static let directoryKeys: Set<URLResourceKey> = [.isDirectoryKey, .isSymbolicLinkKey]
 
     init(byteLimit: Int = 64 * 1024 * 1024) {
         precondition(byteLimit > 0)
@@ -41,9 +46,8 @@ final class ClipboardRowThumbnailCache: Sendable {
     private static func signature(for source: URL) -> String? {
         // URL resource values can be cached on an existing URL, even after file deletion.
         let freshURL = URL(fileURLWithPath: source.path)
-        guard let values = try? freshURL.resourceValues(forKeys: [
-            .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey,
-        ]), values.isRegularFile == true, values.isSymbolicLink != true,
+        guard let values = try? freshURL.resourceValues(forKeys: Self.entryKeys),
+            values.isRegularFile == true, values.isSymbolicLink != true,
             let size = values.fileSize, let date = values.contentModificationDate
         else { return nil }
         return "\(size)#\(date.timeIntervalSince1970)"
@@ -64,7 +68,7 @@ final class ClipboardRowThumbnailCache: Sendable {
             let freshURL = URL(fileURLWithPath: ticket.destination.path)
             guard ticket.generation == state.generation,
                 Self.isCacheDirectory(ticket.destination.deletingLastPathComponent()),
-                let values = try? freshURL.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
+                let values = try? freshURL.resourceValues(forKeys: Self.fileKeys),
                 values.isRegularFile == true, values.isSymbolicLink != true
             else { return nil }
             // Persist recency so eviction remains useful after restarting the app.
@@ -94,12 +98,12 @@ final class ClipboardRowThumbnailCache: Sendable {
             // A replaced source must not leave multiple versions of its thumbnail behind.
             let prefix = Self.prefix(for: ticket.source)
             for url in entries.keys.filter({ $0.lastPathComponent.hasPrefix(prefix) }) {
-                if removeFile(url) { entries[url] = nil }
+                if ClipboardStore.removeImageFile(at: url) { entries[url] = nil }
             }
             var bytes = entries.values.reduce(0) { $0 + $1.bytes }
             for (url, entry) in entries.sorted(by: { $0.value.accessed < $1.value.accessed }) {
                 guard bytes + data.length > byteLimit else { break }
-                if removeFile(url) { bytes -= entry.bytes; entries[url] = nil }
+                if ClipboardStore.removeImageFile(at: url) { bytes -= entry.bytes; entries[url] = nil }
             }
             guard bytes + data.length <= byteLimit else { return }
             if (try? (data as Data).write(to: ticket.destination, options: .atomic)) != nil {
@@ -116,7 +120,7 @@ final class ClipboardRowThumbnailCache: Sendable {
             guard Self.isCacheDirectory(directory) else { state.directories[directory] = nil; return }
             var entries = state.directories[directory] ?? inventory(in: directory)
             for url in entries.keys.filter({ $0.lastPathComponent.hasPrefix(prefix) }) {
-                if removeFile(url) { entries[url] = nil }
+                if ClipboardStore.removeImageFile(at: url) { entries[url] = nil }
             }
             // Do not retain empty directories belonging to discarded temporary stores.
             state.directories[directory] = entries.isEmpty ? nil : entries
@@ -132,24 +136,14 @@ final class ClipboardRowThumbnailCache: Sendable {
         }
     }
 
-    private func removeFile(_ url: URL) -> Bool {
-        do {
-            try FileManager.default.removeItem(at: url)
-            return true
-        } catch let error as CocoaError where error.code == .fileNoSuchFile {
-            return true
-        } catch {
-            return false
-        }
-    }
-
     private func inventory(in directory: URL) -> [URL: Entry] {
         guard Self.isCacheDirectory(directory) else { return [:] }
-        let keys: Set<URLResourceKey> = [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey]
         let urls = (try? FileManager.default.contentsOfDirectory(
-            at: directory, includingPropertiesForKeys: Array(keys), options: [.skipsHiddenFiles])) ?? []
+            at: directory, includingPropertiesForKeys: Array(Self.entryKeys),
+            options: [.skipsHiddenFiles])) ?? []
         return Dictionary(uniqueKeysWithValues: urls.compactMap { url in
-            guard url.pathExtension == "png", let values = try? url.resourceValues(forKeys: keys),
+            guard url.pathExtension == "png",
+                let values = try? url.resourceValues(forKeys: Self.entryKeys),
                 values.isRegularFile == true, values.isSymbolicLink != true, let bytes = values.fileSize
             else { return nil }
             return (url, Entry(bytes: bytes, accessed: values.contentModificationDate ?? .distantPast))
@@ -158,7 +152,7 @@ final class ClipboardRowThumbnailCache: Sendable {
 
     private static func isCacheDirectory(_ directory: URL) -> Bool {
         let freshURL = URL(fileURLWithPath: directory.path)
-        guard let values = try? freshURL.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard let values = try? freshURL.resourceValues(forKeys: Self.directoryKeys)
         else { return false }
         return values.isDirectory == true && values.isSymbolicLink != true
     }

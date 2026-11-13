@@ -30,10 +30,11 @@ final class ClipboardSectionCellView: NSTableCellView {
     required init?(coder: NSCoder) { fatalError() }
 
     func configure(title: String, isFirst: Bool, centered: Bool = false) {
-        titleLabel.stringValue = title
+        if titleLabel.stringValue != title { titleLabel.stringValue = title }
+        topConstraint.constant = isFirst ? Theme.Spacing.xs : Theme.Spacing.sectionSpacing
+        guard centerYConstraint.isActive != centered else { return }
         NSLayoutConstraint.deactivate([topConstraint, centerYConstraint])
         NSLayoutConstraint.activate([centered ? centerYConstraint : topConstraint])
-        topConstraint.constant = isFirst ? Theme.Spacing.xs : Theme.Spacing.sectionSpacing
     }
 }
 
@@ -48,9 +49,10 @@ final class ClipboardItemCellView: NSTableCellView {
         }
     }
 
-    private static var titleFont: NSFont {
-        ClipboardPreviewFont.regular(
-            ofSize: NSFont.preferredFont(forTextStyle: .subheadline).pointSize + 1)
+    private struct TitleState: Equatable {
+        let item: ClipboardItem
+        let query: String
+        let locale: Locale
     }
 
     private enum HighlightMotion {
@@ -96,16 +98,20 @@ final class ClipboardItemCellView: NSTableCellView {
     private var standardConstraints: [NSLayoutConstraint] = []
     private var imageConstraints: [NSLayoutConstraint] = []
     private var usesImageLayout = false
+    private var imageLayoutActive = false
     private var onFileStatusChange: ((Bool) -> Void)?
     private var truncatesFromHead = false
     private var renderedTitleWidth: CGFloat = -1
     private var representedID: ClipboardItem.ID?
+    private var titleState: TitleState?
     private var selected = false
     private var hovered = false
     private var highlighted = false
     private var fadeToken = 0
     private var entranceQueued = false
     private var selectionBeganAt: CFTimeInterval?
+    private static let titleFont = ClipboardPreviewFont.regular(
+        ofSize: NSFont.preferredFont(forTextStyle: .subheadline).pointSize + 1)
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -196,6 +202,7 @@ final class ClipboardItemCellView: NSTableCellView {
         setFileMissing(false)
         onFileStatusChange = nil
         representedID = nil
+        titleState = nil
         selected = false
         hovered = false
         highlighted = false
@@ -236,6 +243,9 @@ final class ClipboardItemCellView: NSTableCellView {
     }
 
     func updateTitle(item: ClipboardItem, query: String, locale: Locale) {
+        let state = TitleState(item: item, query: query, locale: locale)
+        guard state != titleState else { return }
+        titleState = state
         missingFileIndicator.setAccessibilityLabel(AppLocalization.string("File Not Found", locale: locale))
         let customTitle = item.customTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasCustomTitle = customTitle?.isEmpty == false
@@ -244,15 +254,14 @@ final class ClipboardItemCellView: NSTableCellView {
         usesImageLayout = isImage
         updateRowLayout()
         titleLabel.isHidden = isImage && !showsImageTitle
+        let title = Self.listTitle(for: item, customTitle: customTitle, locale: locale)
         // Keep inline image rows identifiable to VoiceOver without a redundant visible label.
         thumbnailView.setAccessibilityElement(isImage)
         thumbnailView.setAccessibilityRole(isImage ? .image : .unknown)
         thumbnailView.setAccessibilityLabel(isImage ? item.displayTitle(locale: locale) : nil)
         truncatesFromHead = item.kind == .path && !hasCustomTitle
         fullTitle = SearchHighlight.nsAttributed(
-            Self.listTitle(for: item, customTitle: customTitle, locale: locale),
-            query: query,
-            font: Self.titleFont)
+            title, query: query, font: Self.titleFont)
         renderedTitleWidth = -1
         renderTitle()
     }
@@ -276,6 +285,8 @@ final class ClipboardItemCellView: NSTableCellView {
 
     private func updateRowLayout() {
         let expanded = usesImageLayout && missingFileIndicator.isHidden
+        guard imageLayoutActive != expanded else { return }
+        imageLayoutActive = expanded
         NSLayoutConstraint.deactivate(expanded ? standardConstraints : imageConstraints)
         NSLayoutConstraint.activate(expanded ? imageConstraints : standardConstraints)
     }
@@ -321,7 +332,7 @@ final class ClipboardItemCellView: NSTableCellView {
         // The table can clip a cell before NSTextField gets a chance to draw its own ellipsis.
         titleLabel.attributedStringValue = Self.truncatedTitle(
             fullTitle, toFit: width - 3, fromHead: truncatesFromHead,
-            font: titleLabel.font ?? Self.titleFont)
+            font: Self.titleFont)
     }
 
     private static func truncatedTitle(
@@ -541,9 +552,16 @@ private final class ClipboardThumbnailView: NSView {
     private let symbolView = NSImageView()
     private var symbolWidthConstraint: NSLayoutConstraint!
     private var symbolHeightConstraint: NSLayoutConstraint!
-    private var representedID: ClipboardItem.ID?
-    private var representedURL: URL?
-    private var representedVersion: UInt64?
+    private struct State: Equatable {
+        let id: ClipboardItem.ID
+        let url: URL?
+        var version: UInt64?
+        let kind: ClipboardItem.Kind
+        let hasImagePreview: Bool
+        let isFileBacked: Bool
+    }
+
+    private var state: State?
     private var loadTask: Task<Void, Never>?
     private var displayedImage: NSImage?
     private var displayedFileIcon: NSImage?
@@ -612,16 +630,15 @@ private final class ClipboardThumbnailView: NSView {
     func configure(item: ClipboardItem, imageURL: URL?, store: ClipboardStore? = nil) {
         let sourceURL = imageURL ?? item.fileURLs.first
         let sourceVersion = sourceURL.map { ImageThumbnail.fileVersion(for: $0) }
-        let usesFileContents = item.hasImagePreview || item.kind == .file
-        if usesFileContents, representedID == item.id, representedURL == sourceURL,
-            representedVersion == sourceVersion,
+        let nextState = State(
+            id: item.id, url: sourceURL, version: sourceVersion, kind: item.kind,
+            hasImagePreview: item.hasImagePreview, isFileBacked: item.isFileBacked)
+        if state == nextState,
             finishedLoading || loadTask != nil
         { return }
         loadTask?.cancel()
         loadTask = nil
-        representedID = item.id
-        representedURL = sourceURL
-        representedVersion = sourceVersion
+        state = nextState
         displayedImage = nil
         displayedFileIcon = nil
         finishedLoading = false
@@ -651,9 +668,9 @@ private final class ClipboardThumbnailView: NSView {
                 if item.isFileBacked {
                     _ = await Task.detached(priority: .utility) { ImageThumbnail.refreshFile(at: sourceURL) }.value
                 }
-                guard !Task.isCancelled, let self, representedID == id else { return }
+                guard !Task.isCancelled, let self, state?.id == id else { return }
                 let version = ImageThumbnail.fileVersion(for: sourceURL)
-                representedVersion = version
+                state?.version = version
                 let image: NSImage?
                 if item.hasImagePreview {
                     image = await ImageThumbnail.loadAsync(sourceURL, maxPixel: Self.imageMaxPixel)
@@ -663,8 +680,8 @@ private final class ClipboardThumbnailView: NSView {
                     }.value
                     image = available ? await IconCache.loadAsync(forFile: sourceURL.path, version: version) : nil
                 }
-                guard !Task.isCancelled, representedID == id,
-                    representedVersion == version,
+                guard !Task.isCancelled, state?.id == id,
+                    state?.version == version,
                     version == ImageThumbnail.fileVersion(for: sourceURL) else { return }
                 loadTask = nil
                 finishedLoading = true
@@ -678,9 +695,7 @@ private final class ClipboardThumbnailView: NSView {
         super.prepareForReuse()
         loadTask?.cancel()
         loadTask = nil
-        representedID = nil
-        representedURL = nil
-        representedVersion = nil
+        state = nil
         displayedImage = nil
         displayedFileIcon = nil
         finishedLoading = false

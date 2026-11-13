@@ -92,7 +92,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ nsView: ClipboardTableContainerView, coordinator: Coordinator) {
-        coordinator.stopThumbnailPrefetch()
+        coordinator.stop()
     }
 
     func updateNSView(_ containerView: ClipboardTableContainerView, context: Context) {
@@ -120,6 +120,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         private var rows: [ClipboardTableRow] = []
         private var itemRowIndex: [ClipboardItem.ID: Int] = [:]
+        private var rowHeights: [CGFloat] = []
         private var missingFileIDs: Set<ClipboardItem.ID> = []
         private var selectedID: ClipboardItem.ID?
         private var query = ""
@@ -156,9 +157,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
         private var suppressScrollHaptics = false
         private var dateGrouping = ClipboardDateGrouping.current
         private var dateGroupingIsOverridden = false
-        private lazy var dateRefresh = ClipboardDateRefresh { [weak self] grouping in
-            self?.refreshDateGrouping(grouping)
-        }
+        private var dateRefresh: ClipboardDateRefresh?
 
         private let itemIdentifier = NSUserInterfaceItemIdentifier("ClipboardItemCell")
         private let headerIdentifier = NSUserInterfaceItemIdentifier("ClipboardHeaderCell")
@@ -225,6 +224,10 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
 
             let containerView = ClipboardTableContainerView(scrollView: scrollView)
             hostedContainerView = containerView
+            let dateRefresh = ClipboardDateRefresh { [weak self] grouping in
+                self?.refreshDateGrouping(grouping)
+            }
+            self.dateRefresh = dateRefresh
             dateRefresh.start()
             return containerView
         }
@@ -275,16 +278,17 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 else { return true }
                 return to > from
             }()
-            lastResultsKindFilter = resultsKindFilter
-            lastResultsStackFilter = resultsStackFilter
             let previousRows = rows
             if contentChanged {
+                lastResultsKindFilter = resultsKindFilter
+                lastResultsStackFilter = resultsStackFilter
                 rebuildRows(results, hasMoreResults: hasMoreResults)
                 lastResultsGeneration = resultsGeneration
                 lastHasMoreResults = hasMoreResults
             }
             self.query = query
             self.locale = locale
+            let selectionChanged = self.selectedID != selectedID
             self.selectedID = selectedID
 
             let wasApplyingSelection = applyingSelection
@@ -317,7 +321,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             // Input/highlights arrive before asynchronous search results. Pagination-only
             // updates must not consume this flag and let the later results slide the rows.
             if resultsChanged { queryChangedSinceResults = false }
-            applySelection(selectedID, to: tableView)
+            if selectionChanged || contentChanged { applySelection(selectedID, to: tableView) }
             applyingSelection = wasApplyingSelection
             if let viewport { restoreViewport(viewport, in: tableView) }
 
@@ -340,7 +344,8 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
                 }
             }
             tableView.interactionEnabled = interactionEnabled
-            if !dateChanged { queueHoverRefresh() }
+            if contentChanged && !dateChanged { queueHoverRefresh() }
+            if contentChanged { queueThumbnailPrefetch() }
             reportGeometry(scrolling: false)
             if let cascadeAdvancing { cascadeVisibleRows(in: tableView, advancing: cascadeAdvancing) }
         }
@@ -380,10 +385,17 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
 
         private func rebuildRows(_ results: [ClipboardItem], hasMoreResults: Bool) {
             rows = Self.makeRows(results, hasMoreResults: hasMoreResults, grouping: dateGrouping)
-            itemRowIndex = Dictionary(uniqueKeysWithValues: rows.enumerated().compactMap { index, row in
-                guard case .item(let item) = row else { return nil }
-                return (item.id, index)
-            })
+            itemRowIndex.removeAll(keepingCapacity: true)
+            rowHeights = rows.enumerated().map { index, row in
+                switch row {
+                case .item(let item):
+                    itemRowIndex[item.id] = index
+                    return ClipboardItemCellView.rowHeight(
+                        for: item, fileMissing: missingFileIDs.contains(item.id))
+                case .header: return index == 0 ? 24 : 32
+                case .more: return 32
+                }
+            }
         }
 
         private struct ViewportAnchor {
@@ -581,8 +593,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             }
 
             var rows: [ClipboardTableRow] = []
-            for section in grouped.keys.sorted(by: { $0.start > $1.start }) {
-                guard let items = grouped[section], !items.isEmpty else { continue }
+            for (section, items) in grouped.sorted(by: { $0.key.start > $1.key.start }) {
                 rows.append(.header(section))
                 rows.append(contentsOf: items.map(ClipboardTableRow.item))
             }
@@ -617,7 +628,9 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             guard missingFileIDs.contains(id) != missing else { return }
             if missing { missingFileIDs.insert(id) } else { missingFileIDs.remove(id) }
             guard let row = itemRowIndex[id], rows.indices.contains(row),
-                case .item(let item) = rows[row], item.hasImagePreview, let tableView else { return }
+                case .item(let item) = rows[row],
+                item.hasImagePreview, let tableView else { return }
+            rowHeights[row] = ClipboardItemCellView.rowHeight(for: item, fileMissing: missing)
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0
                 tableView.noteHeightOfRows(withIndexesChanged: IndexSet(integer: row))
@@ -626,12 +639,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
 
         private func rowHeight(at row: Int) -> CGFloat {
             guard rows.indices.contains(row) else { return 0 }
-            switch rows[row] {
-            case .item(let item):
-                return ClipboardItemCellView.rowHeight(for: item, fileMissing: missingFileIDs.contains(item.id))
-            case .header: return row == 0 ? 24 : 32
-            case .more: return 32
-            }
+            return rowHeights[row]
         }
 
         func tableView(
@@ -763,7 +771,6 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
 
         private func reportGeometry(scrolling: Bool) {
             guard let tableView, let scrollView = tableView.enclosingScrollView else { return }
-            queueThumbnailPrefetch()
             let viewport = scrollView.contentView.bounds.height
             if viewport > 0 {
                 if !hasLaidOut {
@@ -792,6 +799,7 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             let geometry = ClipboardTableGeometry(offset: offset, content: content, viewport: viewport)
             guard geometry != lastGeometry || scrolling else { return }
             lastGeometry = geometry
+            queueThumbnailPrefetch()
             if !rows.isEmpty, maxOffset - offset < viewport {
                 onLoadMore?()
             }
@@ -808,7 +816,17 @@ private struct ClipboardTableRepresentable: NSViewRepresentable {
             reportGeometry(scrolling: scrolling)
         }
 
-        func stopThumbnailPrefetch() {
+        func stop() {
+            pendingScrollApply?.cancel()
+            cancelQueuedHoverRefresh()
+            fileStatusRefreshTask?.cancel()
+            dateRefresh = nil
+            boundsToken = nil
+            fileDidChangeToken = nil
+            onSelect = nil
+            onActivate = nil
+            onActions = nil
+            onLoadMore = nil
             thumbnailPrefetchStopped = true
             thumbnailPrefetcher.cancel()
         }

@@ -1,6 +1,5 @@
 import AppKit
 import CoreText
-import QuartzCore
 import SwiftUI
 
 enum ClipboardPreviewFont {

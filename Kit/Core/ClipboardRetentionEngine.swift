@@ -119,15 +119,11 @@ extension ClipboardStore {
             ClipboardSQLite.bindDouble(cutoff.timeIntervalSince1970, to: imagesStmt, at: 1)
             guard stepAndReset(imagesStmt) else { return false }
             guard let members = prepare("""
-                SELECT item_id FROM stack_items
-                WHERE item_id IN (SELECT id FROM items WHERE created_at < ?)
-                """) else { return false }
-            defer { sqlite3_finalize(members) }
-            guard let deleteMembers = prepare("""
                 DELETE FROM stack_items
                 WHERE item_id IN (SELECT id FROM items WHERE created_at < ?)
+                RETURNING item_id
                 """) else { return false }
-            defer { sqlite3_finalize(deleteMembers) }
+            defer { sqlite3_finalize(members) }
             ClipboardSQLite.bindDouble(cutoff.timeIntervalSince1970, to: members, at: 1)
             var status = sqlite3_step(members)
             while status == SQLITE_ROW {
@@ -137,8 +133,6 @@ extension ClipboardStore {
                 status = sqlite3_step(members)
             }
             guard status == SQLITE_DONE else { return false }
-            ClipboardSQLite.bindDouble(cutoff.timeIntervalSince1970, to: deleteMembers, at: 1)
-            guard sqlite3_step(deleteMembers) == SQLITE_DONE else { return false }
             ClipboardSQLite.bindDouble(cutoff.timeIntervalSince1970, to: deleteStmt, at: 1)
             guard stepAndReset(deleteStmt) else { return false }
             deletedCount = Int(sqlite3_changes(db))

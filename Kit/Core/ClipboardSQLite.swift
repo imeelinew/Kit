@@ -159,60 +159,33 @@ extension ClipboardSQLite {
         let database: OpaquePointer
 
         func prepare() -> Bool {
-            execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=1000;")
-                && execute(Self.coreSchema)
-                && migrateCopyMetadata()
-                && migrateFileURLs()
-                && execute(Self.fileURLsSchema)
-                && execute(Self.searchSchema)
-                && migrateImageSearch()
-        }
-
-        /// The legacy created_at column stores the most recent copy time
-        /// Older first-copy times and copy counts cannot be reconstructed
-        private func migrateCopyMetadata() -> Bool {
-            migrateColumns([
-                ("first_copied_at", "REAL"), ("copy_count", "INTEGER NOT NULL DEFAULT 1"),
-            ]) {
-                execute("UPDATE items SET first_copied_at = created_at WHERE first_copied_at IS NULL")
-            }
-        }
-
-        private func migrateImageSearch() -> Bool {
-            migrateColumns([
-                ("ocr_text", "TEXT"), ("ocr_status", "TEXT"), ("ocr_version", "INTEGER"),
-                ("ocr_attempts", "INTEGER NOT NULL DEFAULT 0"),
-            ]) {
-                guard execute(Self.imageSearchSchema) else { return false }
-                // Keep prior searchable text until the newer recognizer replaces it in the background
-                return execute("""
-                    UPDATE items SET ocr_status = NULL, ocr_version = NULL, ocr_attempts = 0
-                    WHERE \(ClipboardSQLite.imageBackedPredicate)
-                      AND ocr_version IS NOT NULL
-                      AND ocr_version != \(ClipboardImageTextRecognition.version)
-                    """)
-            }
-        }
-
-        private func migrateFileURLs() -> Bool {
-            migrateColumns([("file_urls", "TEXT"), ("file_bookmarks", "BLOB"), ("file_signature", "TEXT"),
-                ("file_is_image", "INTEGER NOT NULL DEFAULT 0")]) {
-                execute("""
-                    UPDATE items SET file_is_image = 1, kind = 'file'
-                    WHERE kind = 'image' AND file_urls IS NOT NULL AND image_path IS NULL
-                    """)
-            }
-        }
-
-        private func migrateColumns(
-            _ definitions: [(name: String, type: String)], then body: () -> Bool
-        ) -> Bool {
-            guard let columns = itemColumns() else { return false }
+            guard execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=1000;"),
+                execute(Self.coreSchema), let columns = itemColumns()
+            else { return false }
             return ClipboardSQLite.transaction(in: database) {
+                let definitions = [
+                    ("first_copied_at", "REAL"), ("copy_count", "INTEGER NOT NULL DEFAULT 1"),
+                    ("file_urls", "TEXT"), ("file_bookmarks", "BLOB"), ("file_signature", "TEXT"),
+                    ("file_is_image", "INTEGER NOT NULL DEFAULT 0"),
+                    ("ocr_text", "TEXT"), ("ocr_status", "TEXT"), ("ocr_version", "INTEGER"),
+                    ("ocr_attempts", "INTEGER NOT NULL DEFAULT 0"),
+                ]
                 for (name, type) in definitions where !columns.contains(name) {
                     guard execute("ALTER TABLE items ADD COLUMN \(name) \(type)") else { return false }
                 }
-                return body()
+                // Preserve copy history and searchable text while upgrading legacy rows
+                return execute("""
+                    UPDATE items SET first_copied_at = created_at WHERE first_copied_at IS NULL;
+                    UPDATE items SET file_is_image = 1, kind = 'file'
+                    WHERE kind = 'image' AND file_urls IS NOT NULL AND image_path IS NULL;
+                    UPDATE items SET ocr_status = NULL, ocr_version = NULL, ocr_attempts = 0
+                    WHERE \(ClipboardSQLite.imageBackedPredicate)
+                      AND ocr_version IS NOT NULL
+                      AND ocr_version != \(ClipboardImageTextRecognition.version);
+                    """)
+                    && execute(Self.fileURLsSchema)
+                    && execute(Self.searchSchema)
+                    && execute(Self.imageSearchSchema)
             }
         }
 

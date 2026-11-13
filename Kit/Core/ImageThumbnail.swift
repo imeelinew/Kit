@@ -60,6 +60,8 @@ enum ImageThumbnail {
     }
 
     private final class FileVersions: Sendable {
+        private static let limit = 1024
+
         private struct Entry: Sendable {
             let version: UInt64
             var accessed: UInt64
@@ -84,11 +86,7 @@ enum ImageThumbnail {
                     if let count = state.retainedPaths[path], count > 1 { state.retainedPaths[path] = count - 1 }
                     else { state.retainedPaths[path] = nil }
                 }
-                if state.entries.count > 1024 {
-                    let removable = state.entries.filter { state.retainedPaths[$0.key] == nil }
-                        .sorted { $0.value.accessed < $1.value.accessed }
-                    for entry in removable.prefix(state.entries.count - 1024) { state.entries[entry.key] = nil }
-                }
+                trim(&state)
             }
         }
 
@@ -101,14 +99,10 @@ enum ImageThumbnail {
                     state.entries[path] = entry
                     return entry.version
                 }
-                if state.entries[path] == nil, state.entries.count >= 1024,
-                    let oldest = state.entries.filter({ state.retainedPaths[$0.key] == nil }).min(by: { $0.value.accessed < $1.value.accessed })?.key
-                {
-                    state.entries[oldest] = nil
-                }
-                state.entries[path] = Entry(
+                insert(Entry(
                     version: state.clock, accessed: state.clock,
-                    signature: invalidating ? state.entries[path]?.signature : nil)
+                    signature: invalidating ? state.entries[path]?.signature : nil),
+                    for: path, into: &state)
                 return state.clock
             }
         }
@@ -122,14 +116,30 @@ enum ImageThumbnail {
                     state.entries[path] = entry
                     return false
                 }
-                if state.entries[path] == nil, state.entries.count >= 1024,
-                    let oldest = state.entries.filter({ state.retainedPaths[$0.key] == nil }).min(by: { $0.value.accessed < $1.value.accessed })?.key
-                {
-                    state.entries[oldest] = nil
-                }
-                state.entries[path] = Entry(version: state.clock, accessed: state.clock, signature: signature)
+                insert(Entry(version: state.clock, accessed: state.clock, signature: signature),
+                       for: path, into: &state)
                 return true
             }
+        }
+
+        private func insert(_ entry: Entry, for path: String, into state: inout State) {
+            let retainedPaths = state.retainedPaths
+            if state.entries[path] == nil, state.entries.count >= Self.limit,
+                let oldest = state.entries.lazy
+                    .filter({ retainedPaths[$0.key] == nil })
+                    .min(by: { $0.value.accessed < $1.value.accessed })?.key
+            {
+                state.entries[oldest] = nil
+            }
+            state.entries[path] = entry
+        }
+
+        private func trim(_ state: inout State) {
+            let excess = state.entries.count - Self.limit
+            guard excess > 0 else { return }
+            let removable = state.entries.filter { state.retainedPaths[$0.key] == nil }
+                .sorted { $0.value.accessed < $1.value.accessed }
+            for entry in removable.prefix(excess) { state.entries[entry.key] = nil }
         }
     }
 
@@ -296,15 +306,12 @@ enum ImageThumbnail {
         return cache
     }()
 
-    /// Longest-edge size at or below which a decode is a "row" thumbnail; larger is a "preview".
-    private static let rowThreshold = rowMaxPixel
-
-    private static func pick(_ maxPixel: CGFloat) -> ImageCache {
-        maxPixel <= rowThreshold ? rowCache : previewCache
+    private static func pick(_ maxPixel: Int) -> ImageCache {
+        maxPixel <= Int(rowMaxPixel) ? rowCache : previewCache
     }
 
-    private static func cacheKey(_ url: URL, _ maxPixel: CGFloat, version: UInt64) -> NSString {
-        "\(url.path)#\(Int(maxPixel))#\(version)" as NSString
+    private static func cacheKey(_ url: URL, _ maxPixel: Int, version: UInt64) -> NSString {
+        "\(url.path)#\(maxPixel)#\(version)" as NSString
     }
 
     struct DecodeRequest: Hashable, Sendable {
@@ -314,16 +321,6 @@ enum ImageThumbnail {
         let sourceVersion: UInt64
         let cacheEpoch: UInt64
 
-        init(
-            url: URL, maxPixel: Int, generation: UInt64, sourceVersion: UInt64 = 0,
-            cacheEpoch: UInt64 = 0
-        ) {
-            self.url = url
-            self.maxPixel = maxPixel
-            self.generation = generation
-            self.sourceVersion = sourceVersion
-            self.cacheEpoch = cacheEpoch
-        }
     }
 
     /// A freshly-decoded, thereafter-immutable image is safe to move across the actor boundary.
@@ -384,10 +381,6 @@ enum ImageThumbnail {
             cacheImage = cache
         }
 
-        var activity: (running: Int, queued: Int, consumers: Int) {
-            (running, queue.count, jobs.values.reduce(0) { $0 + $1.waiters.count })
-        }
-
         func decode(_ request: DecodeRequest, priority: Priority? = nil) async -> Decoded {
             let id = UUID()
             let consumer = Consumer()
@@ -440,15 +433,19 @@ enum ImageThumbnail {
             while running < limit, !queue.isEmpty {
                 // A preview cannot take the slot reserved for visible row images. Already
                 // running synchronous work cannot be preempted, so bound previews at start.
-                let eligible = queue.indices.filter { index in
-                    guard let job = jobs[queue[index]] else { return true }
-                    return job.request.maxPixel <= Int(rowMaxPixel) || runningPreviews < previewLimit
+                var selected: (index: Int, priority: Int)?
+                for index in queue.indices {
+                    guard let job = jobs[queue[index]] else {
+                        selected = (index, .min)
+                        break
+                    }
+                    guard job.request.maxPixel <= Int(rowMaxPixel) || runningPreviews < previewLimit else {
+                        continue
+                    }
+                    let priority = job.waiters.values.lazy.map(\.priority.rawValue).min() ?? .max
+                    if priority < selected?.priority ?? .max { selected = (index, priority) }
                 }
-                guard let index = eligible.min(by: { left, right in
-                    let lhs = jobs[queue[left]]?.waiters.values.map(\.priority.rawValue).min() ?? Int.max
-                    let rhs = jobs[queue[right]]?.waiters.values.map(\.priority.rawValue).min() ?? Int.max
-                    return lhs == rhs ? left < right : lhs < rhs
-                }) else { break }
+                guard let index = selected?.index else { break }
                 let jobID = queue.remove(at: index)
                 guard var job = jobs[jobID] else { continue }
                 // Skip consumers cancelled before their cancellation message reaches this actor.
@@ -494,12 +491,11 @@ enum ImageThumbnail {
     private static let decodeCoordinator = DecodeCoordinator(
         limit: 2,
         previewLimit: 1,
-        decode: { load($0.url, maxPixel: CGFloat($0.maxPixel)) },
+        decode: { load($0.url, maxPixel: $0.maxPixel) },
         cache: { request, result in
             guard let image = result.image else { return }
-            pick(CGFloat(request.maxPixel)).insert(
-                image, forKey: cacheKey(
-                    request.url, CGFloat(request.maxPixel), version: request.sourceVersion),
+            pick(request.maxPixel).insert(
+                image, forKey: cacheKey(request.url, request.maxPixel, version: request.sourceVersion),
                 path: request.url.standardizedFileURL.path, epoch: request.cacheEpoch,
                 cost: result.cost, generation: request.generation)
         })
@@ -522,11 +518,6 @@ enum ImageThumbnail {
         rowCache.purge()
         previewCache.purge()
         rowDiskCache.removeAll(in: imagesDirectory)
-    }
-
-    /// Drop only decoded row bitmaps; persistent thumbnails remain available for a cold reload.
-    static func purgeRowMemory() {
-        rowCache.purge()
     }
 
     @MainActor
@@ -559,14 +550,15 @@ enum ImageThumbnail {
 
     /// Cache-only lookup (never touches disk) so views render an already-decoded thumbnail on the same frame.
     static func cached(_ url: URL, maxPixel: CGFloat) -> NSImage? {
-        pick(CGFloat(Int(maxPixel))).values.object(
+        let maxPixel = Int(maxPixel)
+        return pick(maxPixel).values.object(
             forKey: cacheKey(url, maxPixel, version: fileVersion(for: url)))
     }
 
     /// Capacity eviction never discards a valid decode, source invalidation still rejects stale results
     static func loadAsync(_ url: URL, maxPixel: CGFloat, priority: Priority? = nil) async -> NSImage? {
         guard !Task.isCancelled else { return nil }
-        let maxPixel = CGFloat(Int(maxPixel))
+        let maxPixel = Int(maxPixel)
         let version = fileVersion(for: url)
         let path = url.standardizedFileURL.path
         let cache = pick(maxPixel)
@@ -574,7 +566,7 @@ enum ImageThumbnail {
         if let cached = cache.values.object(
             forKey: cacheKey(url, maxPixel, version: version)) { return cached }
         let decoded = await decodeCoordinator.decode(DecodeRequest(
-            url: url, maxPixel: Int(maxPixel), generation: snapshot.generation, sourceVersion: version,
+            url: url, maxPixel: maxPixel, generation: snapshot.generation, sourceVersion: version,
             cacheEpoch: snapshot.epoch),
             priority: priority)
         guard !Task.isCancelled, version == fileVersion(for: url),
@@ -583,10 +575,10 @@ enum ImageThumbnail {
     }
 
     /// ImageIO is synchronous; cancellation checks surround the expensive decode and bitmap creation.
-    private static func load(_ url: URL, maxPixel: CGFloat) -> Decoded {
+    private static func load(_ url: URL, maxPixel: Int) -> Decoded {
         autoreleasepool {
             guard !Task.isCancelled else { return .empty }
-            let usesDiskCache = maxPixel == rowMaxPixel
+            let usesDiskCache = maxPixel == Int(rowMaxPixel)
                 && managedImageDirectories.contains(url.deletingLastPathComponent())
             let ticket = usesDiskCache ? rowDiskCache.ticket(for: url) : nil
             let options: [CFString: Any] = [
@@ -600,7 +592,8 @@ enum ImageThumbnail {
                 guard let cachedURL = rowDiskCache.cachedURL(for: ticket),
                     let source = CGImageSourceCreateWithURL(cachedURL as CFURL, sourceOptions)
                 else { return nil }
-                return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+                return CGImageSourceCreateImageAtIndex(
+                    source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary)
             }
             let cgImage: CGImage
             if let cachedImage {

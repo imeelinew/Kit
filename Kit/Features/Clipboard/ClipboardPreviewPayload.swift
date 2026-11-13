@@ -84,6 +84,7 @@ final class ClipboardPreviewPayload {
     static func load(
         for item: ClipboardItem, imageURL: URL?, store: ClipboardStore? = nil
     ) async -> ClipboardPreviewPayload {
+        let generation = cacheGeneration
         let versionLease = ImageThumbnail.FileVersionLease(urls: item.fileURLs)
         let access: FileAccessLease?
         if item.isFileBacked, let store {
@@ -105,7 +106,6 @@ final class ClipboardPreviewPayload {
             }
         }
         if let hit = cached(for: item) { return hit }
-        let generation = cacheGeneration
         let imageVersion = imageURL.map { ImageThumbnail.fileVersion(for: $0) } ?? 0
         let fileVersions = item.fileURLs.map { ImageThumbnail.fileVersion(for: $0) }
         let detailsTask = Task.detached(priority: .userInitiated) {

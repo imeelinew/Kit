@@ -41,8 +41,8 @@ extension ClipboardStore {
         for item in references {
             guard !Task.isCancelled else { return }
             await refreshFileReference(item)
-            await Task.yield()
         }
+        startImageOCRWorkerIfNeeded()
     }
 
     func refreshFileReference(_ item: ClipboardItem) async {
@@ -58,8 +58,7 @@ extension ClipboardStore {
         }.value
         defer { withExtendedLifetime(snapshot.0) {} }
         guard !Task.isCancelled, generation == captureGeneration else { return }
-        reconcileFileSource(item, signature: snapshot.1)
-        startImageOCRWorkerIfNeeded()
+        if reconcileFileSource(item, signature: snapshot.1) { startImageOCRWorkerIfNeeded() }
         if snapshot.2 { NotificationCenter.default.post(name: ImageThumbnail.fileDidChange, object: nil) }
     }
 
@@ -103,9 +102,6 @@ extension ClipboardStore {
         if values?.contentType?.conforms(to: .image) == true {
             return true
         }
-        guard let type = UTType(filenameExtension: url.pathExtension),
-            type.conforms(to: .image)
-        else { return false }
-        return true
+        return UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true
     }
 }

@@ -33,43 +33,40 @@ extension ClipboardStore {
     func clearImageTextIndex() -> Bool {
         guard transaction({
             guard let select = prepare("""
-                SELECT id, text, file_urls IS NOT NULL FROM items
+                SELECT id, text FROM items
                 WHERE \(ClipboardSQLite.imageBackedPredicate) AND ocr_text IS NOT NULL
+                  AND file_urls IS NOT NULL
                 """)
             else { return false }
             defer { sqlite3_finalize(select) }
-            var rows: [(id: String, text: String?, isFileBacked: Bool)] = []
+            var rows: [(id: String, text: String)] = []
             var status = sqlite3_step(select)
             while status == SQLITE_ROW {
                 guard let id = ClipboardSQLite.columnString(select, 0) else { return false }
-                rows.append((
-                    id: id, text: ClipboardSQLite.columnString(select, 1),
-                    isFileBacked: sqlite3_column_int(select, 2) != 0))
+                rows.append((id, ClipboardSQLite.columnString(select, 1) ?? ""))
                 status = sqlite3_step(select)
             }
-            guard status == SQLITE_DONE else { return false }
-            guard let update = prepare("""
+            guard status == SQLITE_DONE, let update = prepare("""
                 UPDATE items SET ocr_text = NULL, ocr_status = 'complete',
                                  ocr_version = \(ClipboardImageTextRecognition.version),
-                                 pinyin = ?, pinyin_initials = ?
-                WHERE id = ? AND \(ClipboardSQLite.imageBackedPredicate)
+                                 pinyin = ?, pinyin_initials = ? WHERE id = ?
                 """)
             else { return false }
             defer { sqlite3_finalize(update) }
             for row in rows {
-                var full: String?
-                var initials: String?
-                if row.isFileBacked {
-                    let forms = Pinyin.searchForms(for: row.text ?? "")
-                    full = forms.full.isEmpty ? nil : forms.full
-                    initials = forms.initials.isEmpty ? nil : forms.initials
-                }
-                ClipboardSQLite.bindText(full, to: update, at: 1)
-                ClipboardSQLite.bindText(initials, to: update, at: 2)
+                let forms = Pinyin.searchForms(for: row.text)
+                ClipboardSQLite.bindText(forms.full.isEmpty ? nil : forms.full, to: update, at: 1)
+                ClipboardSQLite.bindText(forms.initials.isEmpty ? nil : forms.initials, to: update, at: 2)
                 ClipboardSQLite.bindText(row.id, to: update, at: 3)
                 guard stepAndReset(update) else { return false }
             }
-            return true
+            return ClipboardSQLite.execute("""
+                UPDATE items SET ocr_text = NULL, ocr_status = 'complete',
+                                 ocr_version = \(ClipboardImageTextRecognition.version),
+                                 pinyin = NULL, pinyin_initials = NULL
+                WHERE \(ClipboardSQLite.imageBackedPredicate) AND ocr_text IS NOT NULL
+                  AND file_urls IS NULL
+                """, in: db)
         }) else { return false }
         imageTextSearchGeneration &+= 1
         imageOCRTask?.cancel()

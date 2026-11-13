@@ -148,7 +148,6 @@ final class ClipboardManager {
         guard !Task.isCancelled else { return nil }
         let pasteboard = NSPasteboard.general
         guard pasteboard.changeCount == changeCount else { return nil }
-        let text = pasteboard.string(forType: .string)
         var fileURLs: [URL] = []
         var fileBookmarks: [String: Data] = [:]
         let legacyFileURLsType = NSPasteboard.PasteboardType("NSFilenamesPboardType")
@@ -174,11 +173,12 @@ final class ClipboardManager {
         if !fileURLs.isEmpty {
             guard !Task.isCancelled, pasteboard.changeCount == changeCount else { return nil }
             return PasteboardSnapshot(
-                text: text, imageData: nil, imageIsPNG: false, fileURLs: fileURLs,
+                text: nil, imageData: nil, imageIsPNG: false, fileURLs: fileURLs,
                 sourceBundleID: sourceBundleID, generation: generation,
                 fileBookmarks: fileBookmarks)
         }
 
+        let text = pasteboard.string(forType: .string)
         var imageData: Data?
         var imageIsPNG = false
         for type in imageTypes {

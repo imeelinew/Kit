@@ -27,7 +27,6 @@ extension ClipboardStore {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let stmt = insertStackStmt else { return nil }
         let stack = ClipboardStack(id: UUID(), name: trimmed)
-        ClipboardSQLite.reset(stmt)
         ClipboardSQLite.bindText(stack.id.uuidString, to: stmt, at: 1)
         ClipboardSQLite.bindText(trimmed, to: stmt, at: 2)
         ClipboardSQLite.bindInt64(Int64(stacks.count), to: stmt, at: 3)
@@ -59,12 +58,9 @@ extension ClipboardStore {
         guard stacks.contains(where: { $0.id == id }) else { return false }
         var contents: (itemIDs: Set<ClipboardItem.ID>, imageURLs: [URL])?
         guard transaction({
-            contents = stackContents(id)
+            contents = deleteStackItems(id)
             guard contents != nil else { return false }
-            return deleteStackRows(
-                "DELETE FROM items WHERE id IN (SELECT item_id FROM stack_items WHERE stack_id = ?)",
-                stackID: id)
-                && deleteStackRows("DELETE FROM stack_items WHERE stack_id = ?", stackID: id)
+            return deleteStackRows("DELETE FROM stack_items WHERE stack_id = ?", stackID: id)
                 && deleteStackRows("DELETE FROM stacks WHERE id = ?", stackID: id)
         }), let contents
         else { return false }
@@ -86,14 +82,13 @@ extension ClipboardStore {
         return true
     }
 
-    private func stackContents(
+    private func deleteStackItems(
         _ id: ClipboardStack.ID
     ) -> (itemIDs: Set<ClipboardItem.ID>, imageURLs: [URL])? {
         guard let stmt = prepare(
             """
-            SELECT i.id, i.image_path FROM items i
-            JOIN stack_items s ON s.item_id = i.id
-            WHERE s.stack_id = ?
+            DELETE FROM items WHERE id IN (SELECT item_id FROM stack_items WHERE stack_id = ?)
+            RETURNING id, image_path
             """)
         else { return nil }
         defer { sqlite3_finalize(stmt) }
@@ -122,7 +117,7 @@ extension ClipboardStore {
     }
 
     func loadStackState() {
-        stacks = []
+        var loadedStacks: [ClipboardStack] = []
         stackMembership = [:]
         if let stmt = prepare("SELECT id, name FROM stacks ORDER BY position, rowid") {
             while sqlite3_step(stmt) == SQLITE_ROW {
@@ -130,11 +125,12 @@ extension ClipboardStore {
                     let id = UUID(uuidString: idString),
                     let name = ClipboardSQLite.columnString(stmt, 1)
                 {
-                    stacks.append(ClipboardStack(id: id, name: name))
+                    loadedStacks.append(ClipboardStack(id: id, name: name))
                 }
             }
             sqlite3_finalize(stmt)
         }
+        stacks = loadedStacks
         ClipboardSQLite.execute(
             "DELETE FROM stack_items WHERE item_id NOT IN (SELECT id FROM items)", in: db)
         if let stmt = prepare("SELECT item_id, stack_id FROM stack_items") {
@@ -154,7 +150,6 @@ extension ClipboardStore {
 
     func writeMembership(_ itemID: ClipboardItem.ID, stackID: ClipboardStack.ID) -> Bool {
         guard let stmt = upsertMembershipStmt else { return false }
-        ClipboardSQLite.reset(stmt)
         ClipboardSQLite.bindText(itemID.uuidString, to: stmt, at: 1)
         ClipboardSQLite.bindText(stackID.uuidString, to: stmt, at: 2)
         return stepAndReset(stmt)
@@ -162,7 +157,6 @@ extension ClipboardStore {
 
     func deleteMembership(_ itemID: ClipboardItem.ID) -> Bool {
         guard let stmt = deleteMembershipStmt else { return false }
-        ClipboardSQLite.reset(stmt)
         ClipboardSQLite.bindText(itemID.uuidString, to: stmt, at: 1)
         return stepAndReset(stmt)
     }
