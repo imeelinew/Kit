@@ -403,15 +403,7 @@ struct ImageQuickLookContent: View {
         ZStack {
             Color(nsColor: .windowBackgroundColor)
             if let image {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .overlay {
-                        ImageSearchHighlightOverlay(imageSize: image.size, regions: highlights)
-                        if let textLayout {
-                            ImageTextSelectionOverlay(layout: textLayout, imageSize: image.size)
-                        }
-                    }
+                ImageTextSelectionOverlay(image: image, layout: textLayout, highlights: highlights)
             } else if loadFailed {
                 Image(systemName: "photo.badge.exclamationmark")
             } else {
@@ -440,8 +432,9 @@ struct ImageQuickLookContent: View {
 }
 
 private struct ImageTextSelectionOverlay: NSViewRepresentable {
-    let layout: ImageTextLayout
-    let imageSize: CGSize
+    let image: NSImage
+    let layout: ImageTextLayout?
+    let highlights: [CGRect]
     @Environment(\.locale) private var locale
 
     func makeNSView(context: Context) -> ImageTextSelectionView {
@@ -449,7 +442,7 @@ private struct ImageTextSelectionOverlay: NSViewRepresentable {
     }
 
     func updateNSView(_ view: ImageTextSelectionView, context: Context) {
-        view.configure(layout: layout, imageSize: imageSize)
+        view.configure(image: image, layout: layout, highlights: highlights)
         view.copyTitle = AppLocalization.string("Copy", locale: locale)
     }
 }
@@ -458,18 +451,35 @@ private final class ImageTextSelectionView: NSView {
     var copyTitle = "Copy"
     private var textLayout: ImageTextLayout?
     private var imageSize: CGSize = .zero
+    private var image: NSImage?
+    private var highlights: [CGRect] = []
     private var anchor: Int?
     private var selection: NSRange?
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    func configure(layout: ImageTextLayout, imageSize: CGSize) {
-        if textLayout?.text != layout.text { selection = nil; anchor = nil }
+    func configure(image: NSImage, layout: ImageTextLayout?, highlights: [CGRect]) {
+        if self.image !== image || textLayout?.text != layout?.text { selection = nil; anchor = nil }
+        self.image = image
         textLayout = layout
-        self.imageSize = imageSize
+        imageSize = image.size
+        self.highlights = highlights
         needsDisplay = true
         window?.invalidateCursorRects(for: self)
+    }
+
+    private var imageRect: CGRect {
+        ImageSearchHighlightOverlay.imageRect(imageSize: imageSize, in: bounds.size)
+    }
+
+    private var lineRects: [CGRect] {
+        var lines: [Int: CGRect] = [:]
+        for region in textLayout?.regions ?? [] {
+            let box = rect(region)
+            lines[region.line] = lines[region.line].map { $0.union(box) } ?? box
+        }
+        return lines.values.map { $0.insetBy(dx: -2, dy: -2).intersection(imageRect) }
     }
 
     private func rect(_ region: ImageTextLayout.Region) -> CGRect {
@@ -478,13 +488,20 @@ private final class ImageTextSelectionView: NSView {
     }
 
     override func resetCursorRects() {
-        for region in textLayout?.regions ?? [] { addCursorRect(rect(region), cursor: .iBeam) }
+        super.resetCursorRects()
+        for rect in lineRects { addCursorRect(rect, cursor: .iBeam) }
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        needsDisplay = true
+        window?.invalidateCursorRects(for: self)
     }
 
     private func regionIndex(at point: CGPoint, nearest: Bool) -> Int? {
         guard let regions = textLayout?.regions, !regions.isEmpty else { return nil }
         if let hit = regions.firstIndex(where: { rect($0).contains(point) }) { return hit }
-        guard nearest else { return nil }
+        guard nearest || lineRects.contains(where: { $0.contains(point) }) else { return nil }
         return regions.indices.min { a, b in
             func distance(_ index: Int) -> CGFloat {
                 let box = rect(regions[index])
@@ -512,6 +529,15 @@ private final class ImageTextSelectionView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        image?.draw(in: imageRect, from: .zero, operation: .sourceOver,
+                    fraction: 1, respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
+        NSColor(SearchHighlight.background).setFill()
+        let searchPath = NSBezierPath()
+        for region in highlights {
+            let box = ImageSearchHighlightOverlay.displayRect(region, imageRect: imageRect)
+            searchPath.append(NSBezierPath(rect: box))
+        }
+        searchPath.fill()
         guard let selection else { return }
         NSColor.selectedTextBackgroundColor.withAlphaComponent(0.4).setFill()
         let path = NSBezierPath()
