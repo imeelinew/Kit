@@ -55,6 +55,38 @@ final class PinnedImagePanel: NSPanel {
             return
         }
         super.sendEvent(event)
+        // Apply after hosting dispatch so SwiftUI cannot replace the edge cursor with its arrow
+        if event.type == .mouseMoved || event.type == .leftMouseUp {
+            updateResizeCursor(at: event.locationInWindow)
+        }
+    }
+
+    func updateResizeCursor(at location: CGPoint) {
+        guard let contentView else { return }
+        let point = contentView.convert(location, from: nil)
+        let bounds = contentView.bounds
+        // Hosting coordinates are flipped, resize geometry uses a lower-left origin
+        let local = CGPoint(x: point.x - bounds.minX,
+                            y: contentView.isFlipped ? bounds.maxY - point.y : point.y - bounds.minY)
+        let rect = CGRect(origin: .zero, size: bounds.size)
+        guard rect.contains(local) else { return }
+        let close = CGRect(x: 10, y: rect.maxY - 38, width: 28, height: 28)
+        guard !close.contains(local), let edge = PinnedImageResizeEdge.hit(at: local, in: rect) else {
+            NSCursor.arrow.set()
+            return
+        }
+        let position: NSCursor.FrameResizePosition
+        switch (edge.x, edge.y) {
+        case (-1, -1): position = .bottomLeft
+        case (-1, 1): position = .topLeft
+        case (1, -1): position = .bottomRight
+        case (1, 1): position = .topRight
+        case (-1, _): position = .left
+        case (1, _): position = .right
+        case (_, -1): position = .bottom
+        default: position = .top
+        }
+        NSCursor.frameResize(position: position, directions: .all).set()
     }
 
     private func isCloseShortcut(_ event: NSEvent) -> Bool {

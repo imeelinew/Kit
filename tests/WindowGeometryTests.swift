@@ -1,3 +1,5 @@
+import AppKit
+import SwiftUI
 import CoreGraphics
 import Foundation
 @testable import Kit
@@ -8,11 +10,46 @@ enum WindowGeometryTests {
         try paletteDefaultFrames()
         try paletteSnapping()
         try pinnedImageResizeEdges()
+        try pinnedImageResizeCursors()
         try pinnedImageSizing()
         try pinnedImageInvalidInputs()
         try pinnedImageZoom()
         try pinnedImageAdoptionAndDisplayChanges()
         print("PASS: palette frames, snapping, pinned sizing, zoom, adoption, and display changes")
+    }
+
+    @MainActor
+    private static func pinnedImageResizeCursors() throws {
+        let panel = PinnedImagePanel(contentRect: CGRect(x: 100, y: 100, width: 400, height: 300),
+                                    styleMask: [.borderless, .resizable], backing: .buffered, defer: false)
+        let hosting = NSHostingView(rootView: Color.clear)
+        hosting.sizingOptions = []
+        panel.contentView = hosting
+        panel.acceptsMouseMovedEvents = true
+        defer { panel.close(); NSCursor.arrow.set() }
+        let cases: [(CGPoint, NSCursor.FrameResizePosition)] = [
+            (CGPoint(x: 12, y: 150), .left), (CGPoint(x: 388, y: 150), .right),
+            (CGPoint(x: 200, y: 12), .bottom), (CGPoint(x: 200, y: 288), .top),
+            (CGPoint(x: 5, y: 5), .bottomLeft), (CGPoint(x: 395, y: 5), .bottomRight),
+            (CGPoint(x: 5, y: 295), .topLeft), (CGPoint(x: 395, y: 295), .topRight)]
+        func move(to point: CGPoint) {
+            let event = NSEvent.mouseEvent(with: .mouseMoved, location: point, modifierFlags: [],
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil,
+                eventNumber: 0, clickCount: 0, pressure: 0)!
+            panel.sendEvent(event)
+        }
+        for (point, position) in cases {
+            NSCursor.arrow.set()
+            move(to: point)
+            let expected = NSCursor.frameResize(position: position, directions: .all)
+            try TestSupport.expect(NSCursor.current == expected,
+                                   "Window mouse dispatch sets the matching resize cursor")
+        }
+        for point in [CGPoint(x: 200, y: 150), CGPoint(x: 12, y: 280)] {
+            move(to: point)
+            try TestSupport.expect(NSCursor.current == NSCursor.arrow,
+                                   "Interior and close button restore the arrow")
+        }
     }
 
     @MainActor

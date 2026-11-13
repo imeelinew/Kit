@@ -466,7 +466,6 @@ private final class ImageTextSelectionView: NSView {
         imageSize = image.size
         self.highlights = highlights
         needsDisplay = true
-        window?.invalidateCursorRects(for: self)
     }
 
     private var imageRect: CGRect {
@@ -487,15 +486,9 @@ private final class ImageTextSelectionView: NSView {
             imageRect: ImageSearchHighlightOverlay.imageRect(imageSize: imageSize, in: bounds.size))
     }
 
-    override func resetCursorRects() {
-        super.resetCursorRects()
-        for rect in lineRects { addCursorRect(rect, cursor: .iBeam) }
-    }
-
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         needsDisplay = true
-        window?.invalidateCursorRects(for: self)
     }
 
     private func regionIndex(at point: CGPoint, nearest: Bool) -> Int? {

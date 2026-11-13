@@ -76,32 +76,24 @@ private final class PinnedImageDragView: NSView {
 
     private var resize: (edge: PinnedImageResizeEdge, frame: CGRect, mouse: CGPoint)?
 
-    override func resetCursorRects() {
-        super.resetCursorRects()
-        let inset = PinnedImageResizeEdge.hitWidth
-        let xs = [bounds.minX, bounds.minX + inset, bounds.maxX - inset, bounds.maxX]
-        let ys = [bounds.minY, bounds.minY + inset, bounds.maxY - inset, bounds.maxY]
-        let positions: [[NSCursor.FrameResizePosition?]] = [
-            [.bottomLeft, .left, .topLeft],
-            [.bottom, nil, .top],
-            [.bottomRight, .right, .topRight]]
-        for x in 0..<3 {
-            for y in 0..<3 {
-                guard let position = positions[x][y] else { continue }
-                let rect = CGRect(x: xs[x], y: ys[y], width: xs[x + 1] - xs[x], height: ys[y + 1] - ys[y])
-                // Leave the close button's entire padded area to SwiftUI
-                let close = CGRect(x: bounds.minX + 10, y: bounds.maxY - 38, width: 28, height: 28)
-                let overlap = rect.intersection(close)
-                let pieces = overlap.isNull ? [rect] : [
-                    CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: overlap.minY - rect.minY),
-                    CGRect(x: rect.minX, y: overlap.maxY, width: rect.width, height: rect.maxY - overlap.maxY),
-                    CGRect(x: rect.minX, y: overlap.minY, width: overlap.minX - rect.minX, height: overlap.height),
-                    CGRect(x: overlap.maxX, y: overlap.minY, width: rect.maxX - overlap.maxX, height: overlap.height)]
-                for piece in pieces where !piece.isEmpty {
-                    addCursorRect(piece, cursor: .frameResize(position: position, directions: .all))
-                }
-            }
-        }
+    private var cursorTrackingArea: NSTrackingArea?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        window?.acceptsMouseMovedEvents = true
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let cursorTrackingArea { removeTrackingArea(cursorTrackingArea) }
+        let area = NSTrackingArea(rect: .zero,
+            options: [.cursorUpdate, .activeAlways, .inVisibleRect], owner: self, userInfo: nil)
+        addTrackingArea(area)
+        cursorTrackingArea = area
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        (window as? PinnedImagePanel)?.updateResizeCursor(at: event.locationInWindow)
     }
 
     override func mouseDown(with event: NSEvent) {
