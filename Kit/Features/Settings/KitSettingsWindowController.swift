@@ -46,7 +46,10 @@ final class KitSettingsWindowController {
         let panes = SettingsTab.allCases.map { tab in
             KitSettingsPane(
                 tabName: AppLocalization.string(tab.localizationKey, locale: core.settings.language.locale),
-                tabImage: NSImage(named: tab.iconAsset),
+                tabImage: NSImage(
+                    systemSymbolName: tab.symbolName,
+                    accessibilityDescription: nil
+                ),
                 tabIdentifier: String(tab.rawValue),
                 content: settingsPage(for: tab)
             )
@@ -120,7 +123,7 @@ final class KitSettingsWindowController {
 }
 
 private enum SettingsPaneMetrics {
-    static let contentSize = NSSize(width: 582, height: 509)
+    static let contentSize = NSSize(width: 528, height: 366)
 }
 
 private struct LocalizedSettingsPage: View {
