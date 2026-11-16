@@ -11,6 +11,10 @@ struct ClipboardListSuite {
         let bundleID = Bundle.main.bundleIdentifier!
         precondition(bundleID.hasPrefix("com.eli.Kit.tests.clipboard-list."),
                      "The list harness requires an isolated bundle identity")
+        if CommandLine.arguments.contains("--file-preview") {
+            try await ClipboardPreviewLifecycleTests.multiFilePreviewLayout()
+            return
+        }
         await ClipboardPreviewTests.run()
         try await ClipboardPreviewLifecycleTests.run()
         try await ClipboardUndoTests.run()

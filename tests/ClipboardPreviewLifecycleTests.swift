@@ -124,7 +124,7 @@ enum ClipboardPreviewLifecycleTests {
         print("PASS: real popover teardown, shortcut hide, reentrant close, settled hidden tree")
     }
 
-    private static func multiFilePreviewLayout() async throws {
+    static func multiFilePreviewLayout() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("kit-file-layout-\(UUID())")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -145,6 +145,18 @@ enum ClipboardPreviewLifecycleTests {
         func descendants(_ view: NSView) -> [NSView] {
             [view] + view.subviews.flatMap { descendants($0) }
         }
+        hosting.layoutSubtreeIfNeeded()
+        await settle()
+        let loadingPane = descendants(hosting).first {
+            String(describing: type(of: $0)) == "ClipboardPreviewPane"
+        }!
+        precondition(descendants(loadingPane.subviews.first!).allSatisfy { !($0 is NSScrollView) },
+                     "Pending availability must not flash an unverified file list")
+        core.palette.select(item.id)
+        let ready = await ClipboardPreviewPayload.load(for: item, imageURL: nil, store: store)
+        core.palette.acceptPreview(ready)
+        hosting.rootView = ClipboardPreview(
+            item: item, vm: core.palette, store: store, settings: core.settings)
         for height: CGFloat in [280, 160, 420] {
             window.setContentSize(NSSize(width: 420, height: height))
             hosting.layoutSubtreeIfNeeded()
@@ -167,7 +179,21 @@ enum ClipboardPreviewLifecycleTests {
             precondition(content.layer?.masksToBounds == true,
                          "Hosted preview content cannot draw into adjacent palette regions")
         }
-        print("PASS: multi-file preview viewport, internal scrolling and clipping across pane sizes")
+        for url in urls { try FileManager.default.removeItem(at: url) }
+        let missing = await ClipboardPreviewPayload.load(for: item, imageURL: nil, store: store)
+        precondition(missing.details.contentState == .notFound)
+        core.palette.acceptPreview(missing)
+        hosting.rootView = ClipboardPreview(
+            item: item, vm: core.palette, store: store, settings: core.settings)
+        await settle()
+        hosting.layoutSubtreeIfNeeded()
+        let missingPane = descendants(hosting).first {
+            String(describing: type(of: $0)) == "ClipboardPreviewPane"
+        }!
+        precondition(descendants(missingPane.subviews.first!).allSatisfy { !($0 is NSScrollView) },
+                     "Confirmed missing files never render the original file list")
+        ClipboardPreviewPayload.purge()
+        print("PASS: pending and missing file previews stay hidden, ready groups scroll within their pane")
     }
 
     private static func settingsScrollEdges() async {

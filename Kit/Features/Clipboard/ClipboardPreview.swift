@@ -140,15 +140,16 @@ struct ClipboardPreview: View {
             case .code:
                 CodePreview(code: item.text ?? "", query: query)
             case .file:
-                if let state = payload?.details.contentState,
-                    state == .notFound || state == .unavailablePreview
-                {
-                    ClipboardUnavailablePreview(symbol: "doc", state: state)
-                } else if item.fileURLs.count == 1 {
-                    ClipboardFilePreview(url: item.fileURLs[0])
+                if let state = payload?.details.contentState, state == .ready {
+                    if item.fileURLs.count == 1 {
+                        ClipboardFilePreview(url: item.fileURLs[0])
+                    } else {
+                        ClipboardFileCollectionPreview(
+                            urls: item.fileURLs, availability: payload?.details.fileAvailability ?? [])
+                    }
                 } else {
-                    ClipboardFileCollectionPreview(
-                        urls: item.fileURLs, availability: payload?.details.fileAvailability ?? [])
+                    ClipboardUnavailablePreview(
+                        symbol: "doc", state: payload?.details.contentState ?? .loading)
                 }
             case .image:
                 EmptyView()
