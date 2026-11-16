@@ -87,9 +87,6 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
             // Commit the complete selection, preview and footer while still offscreen.
             panel.contentView?.layoutSubtreeIfNeeded()
             panel.displayIfNeeded()
-            if core.settings.switchToEnglishInputOnOpen {
-                InputSourceSwitcher.selectEnglish()
-            }
             panel.makeKeyAndOrderFront(nil)
             panel.orderFrontRegardless()
             panel.requestSearchFocus()
@@ -120,9 +117,6 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         core.palette.imageQuickLookOpen = false
         ImageQuickLook.close(immediately: true)
         if let panel, panel.isVisible {
-            if core.settings.switchToEnglishInputOnOpen {
-                InputSourceSwitcher.restore()
-            }
             panel.orderOut(nil)
         }
         // A popover can defer the window's removal from the compositor after orderOut

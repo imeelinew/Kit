@@ -123,7 +123,7 @@ final class KitSettingsWindowController {
 }
 
 private enum SettingsPaneMetrics {
-    static let contentSize = NSSize(width: 528, height: 366)
+    static let contentSize = NSSize(width: 528, height: 420)
 }
 
 private struct LocalizedSettingsPage: View {

@@ -86,7 +86,6 @@
 		CB1600000000000000000001 /* ClipboardRetentionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1600000000000000000002 /* ClipboardRetentionEngine.swift */; };
 		CB1700000000000000000001 /* ClipboardOCRIndexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1700000000000000000002 /* ClipboardOCRIndexer.swift */; };
 		CB1800000000000000000001 /* ClipboardFileMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB1800000000000000000002 /* ClipboardFileMonitor.swift */; };
-		EE9F57DEDBD7C12EA72E7D9E /* InputSourceSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22A18A2E99B807E7716432E /* InputSourceSwitcher.swift */; };
 		F1E4B87385492A86C5F5CDFE /* ImageThumbnail.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2FD6AB5017BBFF5EE420A4 /* ImageThumbnail.swift */; };
 		F2793D8EFF543BEDD5DF57C1 /* PaletteViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11927303CFC909AE918568B6 /* PaletteViewModel.swift */; };
 		F3C7ADFBEBBA4EF387C9A15F /* MarkdownAttributedRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81D51FA4C7914F68805A9D72 /* MarkdownAttributedRenderer.swift */; };
@@ -161,7 +160,6 @@
 		CAD000000000000000000002 /* ImageSearchHighlight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSearchHighlight.swift; sourceTree = "<group>"; };
 		CAE000000000000000000002 /* ClipboardDateSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardDateSection.swift; sourceTree = "<group>"; };
 		CE39A396D47F5CC467AA9FA1 /* KitSettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KitSettingsWindowController.swift; sourceTree = "<group>"; };
-		D22A18A2E99B807E7716432E /* InputSourceSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputSourceSwitcher.swift; sourceTree = "<group>"; };
 		D3E59B58F324A9600EE4325C /* Kit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Kit.entitlements; sourceTree = "<group>"; };
 		DB2357C425F1390F61CEB545 /* NerdFontsSymbolsOnly-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "NerdFontsSymbolsOnly-LICENSE.txt"; sourceTree = "<group>"; };
 		E1C61CC3EAF30E7A03C2A141 /* Kit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kit.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -235,7 +233,6 @@
 				C6853210949502E0C47D69B9 /* EdgeDissolve.swift */,
 				AF2FD6AB5017BBFF5EE420A4 /* ImageThumbnail.swift */,
 				CB1000000000000000000002 /* ClipboardRowThumbnailCache.swift */,
-				D22A18A2E99B807E7716432E /* InputSourceSwitcher.swift */,
 				A490C2CECA4C191B712DB9F2 /* LaunchAtLogin.swift */,
 				BB41A0000000000000000001 /* MenuBarController.swift */,
 				CC1000000000000000000002 /* CopySoundPlayer.swift */,
@@ -505,7 +502,6 @@
 				CA7100000000000000000001 /* PinnedImageGeometry.swift in Sources */,
 				F1E4B87385492A86C5F5CDFE /* ImageThumbnail.swift in Sources */,
 				CB1000000000000000000001 /* ClipboardRowThumbnailCache.swift in Sources */,
-				EE9F57DEDBD7C12EA72E7D9E /* InputSourceSwitcher.swift in Sources */,
 				2637AC2FB6592F5FCA9ADA7C /* LaunchAtLogin.swift in Sources */,
 				BB41A0000000000000000002 /* MenuBarController.swift in Sources */,
 				5F74A5E6F4687BA1EDA15D8F /* NerdSymbolsFont.swift in Sources */,

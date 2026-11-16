@@ -10,7 +10,6 @@ enum AppSettingsTests {
         static let disabledApps = "clipboardDisabledApps"
         static let paused = "clipboardPaused"
         static let pauseUntil = "clipboardPauseUntil"
-        static let switchToEnglishInputOnOpen = "switchToEnglishInputOnOpen"
         static let renderMarkdown = "renderMarkdown"
         static let imageTextSearchEnabled = "imageTextSearchEnabled"
         static let language = "appLanguage"
@@ -50,8 +49,6 @@ enum AppSettingsTests {
                                    "Missing history update preference defaults to true")
             try TestSupport.expect(settings.clipboardDisabledApps == defaultDisabledApps,
                                    "Missing disabled apps uses the protected defaults")
-            try TestSupport.expect(settings.switchToEnglishInputOnOpen == false,
-                                   "Missing input switch preference defaults to false")
             try TestSupport.expect(settings.renderMarkdown,
                                    "Missing Markdown preference defaults to true")
             try TestSupport.expect(settings.imageTextSearchEnabled,
@@ -85,7 +82,6 @@ enum AppSettingsTests {
             for key in defaultTrueBooleanKeys {
                 defaults.set("invalid-boolean", forKey: key)
             }
-            defaults.set("invalid-boolean", forKey: DefaultsKey.switchToEnglishInputOnOpen)
 
             let settings = AppSettings(defaults: defaults)
             try TestSupport.expect(settings.clipboardRetention == .threeMonths,
@@ -98,8 +94,6 @@ enum AppSettingsTests {
                                    "Invalid pinned image size falls back to medium")
             try TestSupport.expect(settings.copySoundEffect == .woodTap,
                                    "Invalid sound effect falls back to wood tap")
-            try TestSupport.expect(!settings.switchToEnglishInputOnOpen,
-                                   "Invalid false-default boolean falls back to false")
             for (key, value) in defaultTrueBooleanValues(settings) {
                 try TestSupport.expect(value,
                                        "Invalid \(key) boolean falls back to true")
@@ -118,7 +112,6 @@ enum AppSettingsTests {
             settings.animateMenuBarIconOnCopy = false
             settings.soundEffectsEnabled = false
             settings.hapticFeedbackEnabled = false
-            settings.switchToEnglishInputOnOpen = true
 
             let reopened = AppSettings(defaults: defaults)
             try TestSupport.expect(!reopened.updateHistoryAfterAction,
@@ -135,8 +128,6 @@ enum AppSettingsTests {
                                    "Explicit false sound preference round-trips")
             try TestSupport.expect(!reopened.hapticFeedbackEnabled,
                                    "Explicit false haptic preference round-trips")
-            try TestSupport.expect(reopened.switchToEnglishInputOnOpen,
-                                   "Explicit true input switch preference round-trips")
         }
     }
 

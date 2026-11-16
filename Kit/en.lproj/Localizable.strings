@@ -65,7 +65,6 @@
 "Information" = "Information";
 "Items in this stack will also be deleted. This can't be undone." = "Items in this stack will also be deleted. This can't be undone.";
 "Rename…" = "Rename…";
-"Input Method" = "Input Method";
 "Keep history for" = "Keep history for";
 "Change history retention to %@?" = "Change history retention to %@?";
 "Delete and Change" = "Delete and Change";
@@ -78,7 +77,6 @@
 "Link" = "Link";
 "Markdown" = "Markdown";
 "Launch at Login" = "Launch at Login";
-"Switch to English When Opening" = "Switch to English When Opening";
 "No matching entries" = "No matching entries";
 "Scroll for more" = "Scroll for more";
 "Name" = "Name";

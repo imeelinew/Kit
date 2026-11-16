@@ -139,7 +139,6 @@ final class AppSettings {
         static let clipboardPaused = "clipboardPaused"
         static let clipboardPauseUntil = "clipboardPauseUntil"
         static let launchAtLogin = "launchAtLogin"
-        static let switchToEnglishInputOnOpen = "switchToEnglishInputOnOpen"
         static let renderMarkdown = "renderMarkdown"
         static let imageTextSearchEnabled = "imageTextSearchEnabled"
         static let language = "appLanguage"
@@ -189,11 +188,6 @@ final class AppSettings {
             launchAtLogin = actual
             reconcilingLaunchAtLogin = false
         }
-    }
-
-    /// When enabled, opening the palette selects the English keyboard so pinyin search can be typed directly.
-    var switchToEnglishInputOnOpen: Bool {
-        didSet { defaults.set(switchToEnglishInputOnOpen, forKey: Key.switchToEnglishInputOnOpen) }
     }
 
     var renderMarkdown: Bool {
@@ -330,7 +324,6 @@ final class AppSettings {
             defaults.stringArray(forKey: Key.clipboardDisabledApps)
             ?? ["com.apple.keychainaccess", "com.apple.Passwords"]
         launchAtLogin = LaunchAtLogin.isEnabled
-        switchToEnglishInputOnOpen = defaults.bool(forKey: Key.switchToEnglishInputOnOpen)
         renderMarkdown = defaults.object(forKey: Key.renderMarkdown) as? Bool ?? true
         imageTextSearchEnabled =
             defaults.object(forKey: Key.imageTextSearchEnabled) as? Bool ?? true

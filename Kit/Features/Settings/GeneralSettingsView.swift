@@ -20,13 +20,6 @@ struct GeneralSettingsView: View {
                 .pickerStyle(.menu)
             }
 
-            Section("Input Method") {
-                Toggle(
-                    "Switch to English When Opening",
-                    isOn: $settings.switchToEnglishInputOnOpen
-                )
-            }
-
             Section("Updates") {
                 Toggle(
                     "Automatically Check for Updates",
