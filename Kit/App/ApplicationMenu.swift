@@ -48,8 +48,6 @@ final class ApplicationMenu: NSObject, NSMenuItemValidation {
         add("Copy", action: #selector(copyText(_:)), key: "c", to: editMenu, target: self)
         add("Paste", action: #selector(NSText.paste(_:)), key: "v", to: editMenu)
         editMenu.addItem(.separator())
-        add("Delete to Beginning of Line", action: #selector(NSResponder.deleteToBeginningOfLine(_:)),
-            key: "\u{8}", to: editMenu)
         add("Select All", action: #selector(NSText.selectAll(_:)), key: "a", to: editMenu)
         NSApp.mainMenu = mainMenu
     }
