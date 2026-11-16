@@ -1,5 +1,5 @@
 {
-  "originHash" : "7e5503916fcb6e7abb39413218752faaec7f3ba1c626e14dc4ca4a3555cd94d4",
+  "originHash" : "ddc22eb95e4069ccdf7350dc77c1190ba93e59412d82bb9cffa5435f54f59f2b",
   "pins" : [
     {
       "identity" : "keyboardshortcuts",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "1aef85578fdd4f9eaeeb8d53b7b4fc31bf08fe27",
         "version" : "2.4.0"
+      }
+    },
+    {
+      "identity" : "macappsettingsui",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/usagimaru/MacAppSettingsUI",
+      "state" : {
+        "revision" : "cd6d53688a49903616ac518db1d67c151da50dc4",
+        "version" : "2.1.0"
       }
     },
     {

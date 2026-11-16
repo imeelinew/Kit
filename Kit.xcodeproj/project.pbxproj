@@ -48,6 +48,7 @@
 		A9BFCCAECCC68D9444932887 /* ClipboardManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A08EBA3DF42E6A3D8518C909 /* ClipboardManager.swift */; };
 		AA1000000000000000000001 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000002 /* UpdateService.swift */; };
 		AA1000000000000000000003 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = AA1000000000000000000004 /* Sparkle */; };
+		AB2000000000000000000001 /* MacAppSettingsUI in Frameworks */ = {isa = PBXBuildFile; productRef = AB2000000000000000000002 /* MacAppSettingsUI */; };
 		ACA000000000000000000001 /* ApplicationMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA000000000000000000002 /* ApplicationMenu.swift */; };
 		ACA000000000000000000003 /* TextFieldPasteTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA000000000000000000004 /* TextFieldPasteTarget.swift */; };
 		B1C2D3E4F5061728394A5B6C /* PinnedImageWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* PinnedImageWindow.swift */; };
@@ -186,6 +187,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA1000000000000000000003 /* Sparkle in Frameworks */,
+				AB2000000000000000000001 /* MacAppSettingsUI in Frameworks */,
 				CE1562B33E657CF448D04DDC /* KeyboardShortcuts in Frameworks */,
 				D1F4A37B85934AE6A943621C /* Markdown in Frameworks */,
 			);
@@ -389,6 +391,7 @@
 			);
 			name = Kit;
 			packageProductDependencies = (
+				AB2000000000000000000002 /* MacAppSettingsUI */,
 				40E3D8D2C77ADCC20CD390CC /* KeyboardShortcuts */,
 				36DB9A864D8D41DDA74C4DC7 /* Markdown */,
 				AA1000000000000000000004 /* Sparkle */,
@@ -423,6 +426,7 @@
 			mainGroup = 98E3C31A88659DC4B6B4D241;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				AB2000000000000000000003 /* XCRemoteSwiftPackageReference "MacAppSettingsUI" */,
 				AED5A052BAF777F41B977401 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
 				5C53B13C04F14755AD768A82 /* XCRemoteSwiftPackageReference "swift-markdown" */,
 				AA1000000000000000000005 /* XCRemoteSwiftPackageReference "Sparkle" */,
@@ -763,6 +767,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		AB2000000000000000000003 /* XCRemoteSwiftPackageReference "MacAppSettingsUI" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/usagimaru/MacAppSettingsUI";
+			requirement = {
+				kind = exactVersion;
+				version = 2.1.0;
+			};
+		};
 		5C53B13C04F14755AD768A82 /* XCRemoteSwiftPackageReference "swift-markdown" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/swiftlang/swift-markdown";
@@ -790,6 +802,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		AB2000000000000000000002 /* MacAppSettingsUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AB2000000000000000000003 /* XCRemoteSwiftPackageReference "MacAppSettingsUI" */;
+			productName = MacAppSettingsUI;
+		};
 		36DB9A864D8D41DDA74C4DC7 /* Markdown */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 5C53B13C04F14755AD768A82 /* XCRemoteSwiftPackageReference "swift-markdown" */;

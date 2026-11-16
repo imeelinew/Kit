@@ -14,11 +14,12 @@ When a dependency is upgraded, re-check the corresponding section below.
 | Library | Version | License | Source |
 | --- | --- | --- | --- |
 | KeyboardShortcuts | 2.4.0 | MIT | <https://github.com/sindresorhus/KeyboardShortcuts> |
+| MacAppSettingsUI | 2.1.0 | MIT | <https://github.com/usagimaru/MacAppSettingsUI> |
 | Sparkle | 2.9.5 | MIT, plus the external licenses reproduced below | <https://github.com/sparkle-project/Sparkle> |
 | swift-cmark | 0.8.0 | BSD-2-Clause, plus the derived-file notices reproduced below | <https://github.com/apple/swift-cmark> |
 | swift-markdown | 0.8.0 | Apache License 2.0 | <https://github.com/apple/swift-markdown> |
 
-The in-app equivalent of this list is the Acknowledgments section of the About pane
+The About pane contains links to the libraries listed before this addition
 (`Kit/Features/Settings/GeneralSettingsView.swift`).
 
 ---
@@ -627,4 +628,34 @@ https://github.com/apple/swift-cmark.
     * https://opensource.org/licenses/BSD-2-Clause
   * HOMEPAGE:
     * https://github.com/github/cmark-gfm
+```
+
+---
+
+## MacAppSettingsUI 2.1.0
+
+License: MIT
+
+```
+MIT License
+
+Copyright (c) 2024 usagimaru
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
