@@ -133,6 +133,10 @@ struct AboutSettingsView: View {
             URL(string: "https://github.com/sindresorhus/KeyboardShortcuts")!
         ),
         (
+            "MacAppSettingsUI",
+            URL(string: "https://github.com/usagimaru/MacAppSettingsUI")!
+        ),
+        (
             "Sparkle",
             URL(string: "https://github.com/sparkle-project/Sparkle")!
         ),
