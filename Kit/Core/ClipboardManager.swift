@@ -70,23 +70,16 @@ final class ClipboardManager {
             disabledApps: settings.clipboardDisabledApps
         ) else { return }
 
-        // A browser may advertise several representations while only some of them are readable.
-        // Keep every image type so a missing promised PNG can fall through to TIFF or another
-        // bitmap representation instead of losing the copy altogether.
-        let preferredImageTypes = [NSPasteboard.PasteboardType.png, .tiff].filter(types.contains)
-        let imageTypes = preferredImageTypes + types.filter {
-            !preferredImageTypes.contains($0)
-                && UTType($0.rawValue)?.conforms(to: .image) == true
-        }
         let generation = store.captureGeneration
+        let disabledApps = settings.clipboardDisabledApps
         let previous = captureTail
         let previousRead = readTail
         let readTask = Task.detached(priority: .utility) { () -> PasteboardSnapshot? in
             _ = await previousRead?.value
             guard !Task.isCancelled else { return nil }
-            return Self.readSnapshot(
-                changeCount: changeCount, imageTypes: imageTypes,
-                sourceBundleID: sourceBundleID, generation: generation)
+            return await Self.readSnapshot(
+                changeCount: changeCount, sourceBundleID: sourceBundleID,
+                generation: generation, disabledApps: disabledApps)
         }
         // Retain only completion, not the last snapshot and its potentially large image data
         readTail = Task { _ = await readTask.value }
@@ -99,16 +92,7 @@ final class ClipboardManager {
             }
             await previous?.value
             guard !Task.isCancelled, let self else { return }
-            guard let snapshot else {
-                // Some owners publish types just before their promised data becomes readable. If
-                // the pasteboard is still on this generation, retry on the next tick.
-                if NSPasteboard.general.changeCount == changeCount,
-                    self.lastObservedChangeCount == changeCount
-                {
-                    self.lastObservedChangeCount = .min
-                }
-                return
-            }
+            guard let snapshot else { return }
             guard
                 let capture = await self.pipeline.process(snapshot), !Task.isCancelled
             else { return }
@@ -141,12 +125,50 @@ final class ClipboardManager {
         }
     }
 
-    private nonisolated static func readSnapshot(
-        changeCount: Int, imageTypes: [NSPasteboard.PasteboardType],
+    nonisolated static func readSnapshot(
+        changeCount: Int, sourceBundleID: String?, generation: UInt64,
+        disabledApps: [String], pasteboardName: NSPasteboard.Name = .general
+    ) async -> PasteboardSnapshot? {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(30))
+        while !Task.isCancelled {
+            let pasteboard = NSPasteboard(name: pasteboardName)
+            guard pasteboard.changeCount == changeCount else { return nil }
+            let types = pasteboard.types ?? []
+            guard ClipboardCapturePolicy.shouldCapture(
+                types: types, sourceBundleID: sourceBundleID, disabledApps: disabledApps
+            ) else { return nil }
+
+            // Promised images can become readable without changing the pasteboard generation
+            // Refresh the types on every attempt, retaining the original source and store generation
+            let preferredImageTypes = [NSPasteboard.PasteboardType.png, .tiff].filter(types.contains)
+            let imageTypes = preferredImageTypes + types.filter {
+                !preferredImageTypes.contains($0)
+                    && UTType($0.rawValue)?.conforms(to: .image) == true
+            }
+            let snapshot = readAvailableSnapshot(
+                pasteboard: pasteboard, changeCount: changeCount, imageTypes: imageTypes,
+                sourceBundleID: sourceBundleID, generation: generation
+            )
+            if let snapshot {
+                let waitingForImage = !imageTypes.isEmpty && snapshot.imageData == nil
+                    && snapshot.fileURLs.isEmpty
+                if !waitingForImage && !types.isEmpty { return snapshot }
+            }
+            guard ContinuousClock.now < deadline else { return snapshot }
+            do {
+                try await Task.sleep(for: .milliseconds(100))
+            } catch {
+                return nil
+            }
+        }
+        return nil
+    }
+
+    private nonisolated static func readAvailableSnapshot(
+        pasteboard: NSPasteboard, changeCount: Int, imageTypes: [NSPasteboard.PasteboardType],
         sourceBundleID: String?, generation: UInt64
     ) -> PasteboardSnapshot? {
         guard !Task.isCancelled else { return nil }
-        let pasteboard = NSPasteboard.general
         guard pasteboard.changeCount == changeCount else { return nil }
         var fileURLs: [URL] = []
         var fileBookmarks: [String: Data] = [:]
