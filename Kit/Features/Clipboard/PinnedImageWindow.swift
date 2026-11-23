@@ -110,21 +110,6 @@ final class PinnedWindowController: NSObject, NSWindowDelegate {
         hiddenForFullscreen.remove(itemID)
     }
 
-    func windowDidEndLiveResize(_ notification: Notification) {
-        (notification.object as? PinnedImagePanel)?.fitToScreen()
-    }
-
-    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        guard let panel = sender as? PinnedImagePanel, let geometry = panel.geometry else {
-            return frameSize
-        }
-        let minimum = geometry.minimumFrameSize
-        if frameSize.width < minimum.width || frameSize.height < minimum.height {
-            return minimum
-        }
-        return frameSize
-    }
-
     private func close(_ itemID: ClipboardItem.ID) {
         hiddenForFullscreen.remove(itemID)
         panels[itemID]?.close()
@@ -159,7 +144,7 @@ final class PinnedWindowController: NSObject, NSWindowDelegate {
     private func makePanel(title: String, frame: CGRect) -> PinnedImagePanel {
         let panel = PinnedImagePanel(
             contentRect: frame,
-            styleMask: [.borderless, .resizable],
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
@@ -187,7 +172,7 @@ final class PinnedWindowController: NSObject, NSWindowDelegate {
         hosting.layer?.cornerCurve = .continuous
         hosting.layer?.masksToBounds = true
         panel.contentView = hosting
-        // Apply frame constraints after hosting installation and enforce them during live resize
+        // Apply frame constraints after hosting installation
         if let geometry = panel.geometry {
             panel.minSize = geometry.minimumFrameSize
         }
