@@ -85,6 +85,13 @@ struct ClipboardPreviewTests {
         precondition(viewport.contentView.bounds.maxY >= viewport.textView.intrinsicContentSize.height,
                      "The final line can scroll above the bottom fade")
 
+        let codeViewport = PreviewTextScrollView(frame: NSRect(x: 0, y: 0, width: 240, height: 120))
+        codeViewport.wrapsLines = false
+        codeViewport.textView.string = String(repeating: "long code line ", count: 50)
+        codeViewport.updateDocumentGeometry()
+        precondition(codeViewport.hasHorizontalScroller && codeViewport.textView.frame.width > 240,
+                     "Pinned code keeps long lines in a horizontally scrollable viewport")
+
         let sample = ClipboardItem(text: "CLIPTEST-UTF16 👩‍💻", kind: .text, sourceBundleID: nil)
         let samplePayload = await ClipboardPreviewPayload.load(for: sample, imageURL: nil)
         precondition(samplePayload.details.characters == 20 && samplePayload.details.words == 2,

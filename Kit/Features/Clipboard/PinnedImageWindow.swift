@@ -5,9 +5,9 @@ import SwiftUI
 /// at most one panel; pinning it again brings the existing panel forward. Panels follow regular
 /// Spaces and hide on exclusive fullscreen Spaces.
 @MainActor
-final class PinnedImageWindowController: NSObject, NSWindowDelegate {
+final class PinnedWindowController: NSObject, NSWindowDelegate {
     private unowned let core: AppCore
-    private var panels: [ClipboardItem.ID: PinnedImagePanel] = [:]
+    private var panels: [ClipboardItem.ID: PinnedWindowPanel] = [:]
     private var hiddenForFullscreen: Set<ClipboardItem.ID> = []
     private var spaceObservers: [NotificationToken] = []
     private var fullscreenSyncTask: Task<Void, Never>?
@@ -18,39 +18,49 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         self.core = core
     }
 
-    func show(
+    func contains(_ itemID: ClipboardItem.ID) -> Bool { panels[itemID] != nil }
+
+    func reveal(_ itemID: ClipboardItem.ID) {
+        guard let panel = panels[itemID] else { return }
+        reveal(panel, itemID: itemID)
+    }
+
+    func showImage(
         itemID: ClipboardItem.ID,
-        url: URL,
         title: String,
         preferredLongEdge: CGFloat,
         image: NSImage
     ) {
-        observeExclusiveFullScreenIfNeeded()
-        observeTitlesIfNeeded()
-        if let panel = panels[itemID] {
-            reveal(panel, itemID: itemID)
-            return
-        }
-
         let visibleFrame = targetVisibleFrame()
         let geometry = PinnedImageGeometry(
             imageSize: image.size,
             visibleFrame: visibleFrame,
             preferredLongEdge: preferredLongEdge
         )
-        let panel = makePanel(title: title, geometry: geometry)
-        panel.onClose = { [weak self] in
-            self?.close(itemID)
-        }
+        let panel = makePanel(title: title, frame: geometry.frame)
+        panel.geometry = geometry
+        panel.contentAspectRatio = geometry.baseSize
+        let onClose = closeAction(for: itemID)
+        panel.onClose = onClose
 
         install(
             PinnedImageContent(
                 image: image,
-                onClose: { [weak self] in self?.close(itemID) }
+                onClose: onClose
             ),
             in: panel
         )
         present(panel, itemID: itemID)
+    }
+
+    func showText(item: ClipboardItem, text: String) {
+        let settings = core.settings
+        let locale = settings.language.locale
+        let frame = PinnedTextContent.initialFrame(text: text, kind: item.kind, visibleFrame: targetVisibleFrame())
+        let panel = makePanel(title: item.displayTitle(locale: locale), frame: frame)
+        panel.onClose = closeAction(for: item.id)
+        install(PinnedTextContent(text: text, kind: item.kind, settings: settings), in: panel)
+        present(panel, itemID: item.id)
     }
 
     var imageDecodeMaxPixel: CGFloat {
@@ -63,10 +73,9 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func activate(_ panel: PinnedImagePanel) {
+    private func activate(_ panel: PinnedWindowPanel) {
         // Trackpad gesture events are delivered to the active application. The clipboard palette
-        // is intentionally non-activating, but an interactive pinned image cannot be: activating
-        // here lets AppKit route physical magnify events to this window.
+        // is intentionally non-activating. Pinned windows need mouse gestures and key events.
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
         panel.orderFrontRegardless()
@@ -78,7 +87,7 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
     }
 
     /// Bring an existing panel forward unless its display is in exclusive fullscreen.
-    private func reveal(_ panel: PinnedImagePanel, itemID: ClipboardItem.ID) {
+    private func reveal(_ panel: PinnedWindowPanel, itemID: ClipboardItem.ID) {
         panel.fitToScreen()
         if hidesForExclusiveFullScreen(panel) {
             hideForFullscreen(itemID, panel)
@@ -89,7 +98,7 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        guard let panel = notification.object as? PinnedImagePanel,
+        guard let panel = notification.object as? PinnedWindowPanel,
             let itemID = itemID(for: panel)
         else { return }
         panels.removeValue(forKey: itemID)
@@ -97,11 +106,11 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowDidEndLiveResize(_ notification: Notification) {
-        (notification.object as? PinnedImagePanel)?.fitToScreen()
+        (notification.object as? PinnedWindowPanel)?.fitToScreen()
     }
 
     func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        guard let panel = sender as? PinnedImagePanel, let geometry = panel.geometry else {
+        guard let panel = sender as? PinnedWindowPanel, let geometry = panel.geometry else {
             return frameSize
         }
         let minimum = geometry.minimumFrameSize
@@ -116,7 +125,11 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         panels[itemID]?.close()
     }
 
-    private func itemID(for panel: PinnedImagePanel) -> ClipboardItem.ID? {
+    private func closeAction(for itemID: ClipboardItem.ID) -> () -> Void {
+        { [weak self] in self?.close(itemID) }
+    }
+
+    private func itemID(for panel: PinnedWindowPanel) -> ClipboardItem.ID? {
         panels.first(where: { $0.value === panel })?.key
     }
 
@@ -138,15 +151,13 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func makePanel(title: String, geometry: PinnedImageGeometry) -> PinnedImagePanel {
-        let panel = PinnedImagePanel(
-            contentRect: geometry.frame,
+    private func makePanel(title: String, frame: CGRect) -> PinnedWindowPanel {
+        let panel = PinnedWindowPanel(
+            contentRect: frame,
             styleMask: [.borderless, .resizable],
             backing: .buffered,
             defer: false
         )
-        panel.geometry = geometry
-        panel.contentAspectRatio = geometry.baseSize
         panel.title = title
         panel.isFloatingPanel = true
         panel.level = .floating
@@ -163,7 +174,7 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         return panel
     }
 
-    private func install(_ view: some View, in panel: PinnedImagePanel) {
+    private func install(_ view: some View, in panel: PinnedWindowPanel) {
         let hosting = NSHostingView(rootView: view)
         hosting.sizingOptions = []
         hosting.wantsLayer = true
@@ -177,7 +188,9 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func present(_ panel: PinnedImagePanel, itemID: ClipboardItem.ID) {
+    private func present(_ panel: PinnedWindowPanel, itemID: ClipboardItem.ID) {
+        observeExclusiveFullScreenIfNeeded()
+        observeTitlesIfNeeded()
         panels[itemID] = panel
         reveal(panel, itemID: itemID)
     }
@@ -257,13 +270,13 @@ final class PinnedImageWindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func hideForFullscreen(_ itemID: ClipboardItem.ID, _ panel: PinnedImagePanel) {
+    private func hideForFullscreen(_ itemID: ClipboardItem.ID, _ panel: PinnedWindowPanel) {
         hiddenForFullscreen.insert(itemID)
         guard panel.isVisible else { return }
         panel.orderOut(nil)
     }
 
-    private func hidesForExclusiveFullScreen(_ panel: PinnedImagePanel) -> Bool {
+    private func hidesForExclusiveFullScreen(_ panel: PinnedWindowPanel) -> Bool {
         guard let screen = screen(for: panel) else { return false }
         return ExclusiveFullScreen.contains(screen)
     }

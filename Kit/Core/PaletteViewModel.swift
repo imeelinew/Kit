@@ -295,7 +295,7 @@ final class PaletteViewModel {
                 .pasteKeepingOpen(item),
                 .copy(item),
             ]
-            if item.hasImagePreview {
+            if item.canPinToScreen {
                 actions.append(.pinToScreen(item))
             }
             if item.hasImagePreview || item.kind == .file || item.kind == .path {
@@ -515,7 +515,7 @@ final class PaletteViewModel {
                 openMenu(.actions(id))
             }
         case .pinToScreen:
-            guard searchReady, let item = actionTarget, item.hasImagePreview else { return true }
+            guard searchReady, let item = actionTarget, item.canPinToScreen else { return true }
             perform(.pinToScreen(item))
         case .revealInFinder:
             guard searchReady, let item = actionTarget,
@@ -603,7 +603,7 @@ final class PaletteViewModel {
             closeMenu()
             core.copyToClipboard(item)
         case .pinToScreen(let item):
-            guard item.hasImagePreview else { return }
+            guard item.canPinToScreen else { return }
             closeMenu()
             core.pinToScreen(item)
         case .revealInFinder(let item):

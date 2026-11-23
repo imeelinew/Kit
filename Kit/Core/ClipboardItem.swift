@@ -77,6 +77,13 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     /// Preview capabilities do not determine the clipboard payload category
     var hasImagePreview: Bool { kind == .image || (isFileBacked && fileIsImage) }
 
+    var canPinToScreen: Bool {
+        switch kind {
+        case .image, .file: hasImagePreview
+        case .text, .markdown, .code, .link, .path: text?.isEmpty == false
+        }
+    }
+
     var typeLabel: String {
         fileURLs.count > 1 ? "Files" : fileIsImage ? "Image File" : kind.typeLabel
     }

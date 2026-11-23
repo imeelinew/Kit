@@ -33,9 +33,13 @@ struct AttributedTextPreview: View {
             attributed: attributed, contentID: contentID, fontSize: fontSize)
     }
 
-    init(nsAttributed: NSAttributedString, contentID: PreviewContentID, fontSize: CGFloat? = nil) {
+    init(
+        nsAttributed: NSAttributedString, contentID: PreviewContentID,
+        fontSize: CGFloat? = nil, wrapsLines: Bool = true
+    ) {
         preview = AttributedTextPreviewRepresentable(
-            nsAttributed: nsAttributed, contentID: contentID, fontSize: fontSize)
+            nsAttributed: nsAttributed, contentID: contentID, fontSize: fontSize,
+            wrapsLines: wrapsLines)
     }
 
     var body: some View { preview }
@@ -50,6 +54,7 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
     private let storage: Storage
     private let fontSize: CGFloat?
     private let contentID: PreviewContentID
+    private let wrapsLines: Bool
 
     init(
         attributed: AttributedString,
@@ -59,16 +64,19 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
         storage = .swiftUI(attributed)
         self.fontSize = fontSize
         self.contentID = contentID
+        wrapsLines = true
     }
 
     init(
         nsAttributed: NSAttributedString,
         contentID: PreviewContentID,
-        fontSize: CGFloat? = nil
+        fontSize: CGFloat? = nil,
+        wrapsLines: Bool
     ) {
         storage = .appKit(nsAttributed)
         self.fontSize = fontSize
         self.contentID = contentID
+        self.wrapsLines = wrapsLines
     }
 
     final class Coordinator {
@@ -88,6 +96,7 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
 
     func makeNSView(context: Context) -> PreviewTextScrollView {
         let scrollView = PreviewTextScrollView()
+        scrollView.wrapsLines = wrapsLines
         return scrollView
     }
 
@@ -107,6 +116,7 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
 
     func updateNSView(_ scrollView: PreviewTextScrollView, context: Context) {
         let environment = context.environment
+        scrollView.wrapsLines = wrapsLines
         let appKit: Bool
         switch storage {
         case .swiftUI: appKit = false
@@ -235,6 +245,17 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
 final class PreviewTextScrollView: KitScrollView {
     let textView = PreviewTextView()
     private static let fadeHeight: CGFloat = 16
+    private var lastVerticalOffset: CGFloat = 0
+
+    var wrapsLines = true {
+        didSet {
+            guard wrapsLines != oldValue else { return }
+            hasHorizontalScroller = !wrapsLines
+            textView.isHorizontallyResizable = !wrapsLines
+            textView.autoresizingMask = wrapsLines ? [.width] : []
+            needsLayout = true
+        }
+    }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -276,11 +297,17 @@ final class PreviewTextScrollView: KitScrollView {
         updateDocumentGeometry()
     }
 
+    override func reflectScrolledClipView(_ clipView: NSClipView) {
+        super.reflectScrolledClipView(clipView)
+        guard !wrapsLines, clipView === contentView,
+            clipView.bounds.minY != lastVerticalOffset else { return }
+        lastVerticalOffset = clipView.bounds.minY
+        needsLayout = true
+    }
+
     func contentHeight(width: CGFloat, limit: CGFloat) -> CGFloat {
         guard let textContainer = textView.textContainer else { return limit }
-        let size = NSSize(
-            width: max(1, width - PreviewTextView.trailingGutter),
-            height: CGFloat.greatestFiniteMagnitude)
+        let size = containerSize(for: width)
         if textContainer.containerSize != size {
             textContainer.containerSize = size
         }
@@ -295,10 +322,9 @@ final class PreviewTextScrollView: KitScrollView {
         let width = contentSize.width
         guard width > 0, let textContainer = textView.textContainer else { return }
 
-        let containerSize = NSSize(
-            width: max(1, width - PreviewTextView.trailingGutter), height: CGFloat.greatestFiniteMagnitude)
-        if textContainer.containerSize != containerSize {
-            textContainer.containerSize = containerSize
+        let size = containerSize(for: width)
+        if textContainer.containerSize != size {
+            textContainer.containerSize = size
         }
         // Lay out the viewport before presentation, TextKit estimates the remaining document
         textView.layoutManager?.ensureLayout(
@@ -308,13 +334,22 @@ final class PreviewTextScrollView: KitScrollView {
         // The final line can scroll above the fade instead of remaining hidden underneath it
         let overflows = contentHeight > contentSize.height
         let height = max(contentSize.height, contentHeight + (overflows ? Self.fadeHeight : 0))
-        let size = NSSize(width: width, height: height)
-        if textView.frame.size != size {
-            textView.setFrameSize(size)
+        var documentWidth = width
+        if !wrapsLines, let layoutManager = textView.layoutManager {
+            let textWidth = layoutManager.usedRect(for: textContainer).maxX
+            documentWidth = max(width, ceil(textWidth) + PreviewTextView.trailingGutter)
+        }
+        let documentSize = NSSize(width: documentWidth, height: height)
+        if textView.frame.size != documentSize {
+            textView.setFrameSize(documentSize)
         }
         updateScrollAppearance()
     }
 
+    private func containerSize(for width: CGFloat) -> NSSize {
+        NSSize(width: wrapsLines ? max(1, width - PreviewTextView.trailingGutter) : .greatestFiniteMagnitude,
+               height: .greatestFiniteMagnitude)
+    }
 }
 
 @MainActor
@@ -361,7 +396,8 @@ final class PreviewTextView: NSTextView {
 
     override func layout() {
         super.layout()
-        if let textContainer, abs(textContainer.size.width - max(1, bounds.width - Self.trailingGutter)) > 0.5 {
+        if !isHorizontallyResizable, let textContainer,
+            abs(textContainer.size.width - max(1, bounds.width - Self.trailingGutter)) > 0.5 {
             textContainer.size = NSSize(width: max(1, bounds.width - Self.trailingGutter), height: CGFloat.greatestFiniteMagnitude)
             invalidateIntrinsicContentSize()
         }

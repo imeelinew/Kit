@@ -139,6 +139,7 @@ struct CodePreview: View {
     let code: String
     var query: String = ""
     var fontSize: CGFloat? = nil
+    var wrapsLines = true
     @State private var highlighted: Rendered?
 
     private struct RenderID: Hashable {
@@ -157,13 +158,13 @@ struct CodePreview: View {
             ofSize: fontSize ?? NSFont.preferredFont(forTextStyle: .subheadline).pointSize)
         let value = highlighted?.id == id ? highlighted?.value : nil
         Group {
-            if code.utf8.count > CodeSyntaxHighlighter.maximumHighlightedBytes {
+            if wrapsLines, code.utf8.count > CodeSyntaxHighlighter.maximumHighlightedBytes {
                 ClipboardTextPreview(text: code, query: query, fontSize: fontSize).equatable()
             } else {
                 AttributedTextPreview(
                     nsAttributed: value ?? NSAttributedString(string: code, attributes: [.font: font]),
                     contentID: PreviewContentID(source: code, query: query, rendered: value != nil),
-                    fontSize: fontSize)
+                    fontSize: fontSize, wrapsLines: wrapsLines)
             }
         }
         .task(id: id) {

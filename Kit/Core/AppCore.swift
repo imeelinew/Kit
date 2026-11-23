@@ -15,7 +15,7 @@ final class AppCore {
 
     private lazy var windowController = PaletteWindowController(core: self)
     private let activationPolicy = ActivationPolicyCoordinator()
-    private lazy var pinnedImageWindows = PinnedImageWindowController(core: self)
+    private lazy var pinnedWindows = PinnedWindowController(core: self)
     private lazy var settingsWindowController = KitSettingsWindowController(
         core: self,
         activationPolicy: activationPolicy
@@ -263,9 +263,20 @@ final class AppCore {
     }
 
     func pinToScreen(_ item: ClipboardItem, dismissPalette: Bool = true) {
-        guard item.hasImagePreview, let url = clipboardStore.imageURL(for: item) else { return }
+        guard item.canPinToScreen else { return }
         startTransfer { [weak self] in
-            guard let self else { return }
+            guard let self, !Task.isCancelled else { return }
+            if self.pinnedWindows.contains(item.id) {
+                if dismissPalette { self.hidePalette(restoreFocus: false, cancelTransfer: false) }
+                self.pinnedWindows.reveal(item.id)
+                return
+            }
+            if !item.hasImagePreview, let text = item.text {
+                if dismissPalette { self.hidePalette(restoreFocus: false, cancelTransfer: false) }
+                self.pinnedWindows.showText(item: item, text: text)
+                return
+            }
+            guard let url = self.clipboardStore.imageURL(for: item) else { return }
             let access: FileAccessLease?
             if item.isFileBacked {
                 guard let lease = await ClipboardFileAccess.acquire(item, store: self.clipboardStore)
@@ -276,15 +287,15 @@ final class AppCore {
                 access = nil
             }
             defer { withExtendedLifetime(access) {} }
-            guard let image = await ImageThumbnail.loadAsync(url, maxPixel: self.pinnedImageWindows.imageDecodeMaxPixel),
+            guard let image = await ImageThumbnail.loadAsync(url, maxPixel: self.pinnedWindows.imageDecodeMaxPixel),
                 !Task.isCancelled else {
                 if !Task.isCancelled { ClipboardFileAccess.showFailure(filename: url.lastPathComponent) }
                 return
             }
             let title = item.displayTitle(locale: self.settings.language.locale)
             if dismissPalette { self.hidePalette(restoreFocus: false, cancelTransfer: false) }
-            self.pinnedImageWindows.show(
-                itemID: item.id, url: url, title: title,
+            self.pinnedWindows.showImage(
+                itemID: item.id, title: title,
                 preferredLongEdge: self.settings.pinnedImageSize.longestEdge,
                 image: image)
         }

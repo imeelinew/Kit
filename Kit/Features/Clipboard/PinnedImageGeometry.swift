@@ -89,7 +89,7 @@ struct PinnedImageGeometry {
 }
 
 /// Screen coordinates, positive Y points upward
-struct PinnedImageResizeEdge: Equatable {
+struct PinnedResizeEdge: Equatable {
     let x: CGFloat
     let y: CGFloat
     static let hitWidth: CGFloat = 14
@@ -121,5 +121,16 @@ struct PinnedImageResizeEdge: Equatable {
         return CGRect(x: anchor.x - (x < 0 ? size.width : x == 0 ? size.width / 2 : 0),
                       y: anchor.y - (y < 0 ? size.height : y == 0 ? size.height / 2 : 0),
                       width: size.width, height: size.height)
+    }
+
+    func freeFrame(from start: CGRect, delta: CGSize, minimum: CGSize, visible: CGRect) -> CGRect {
+        let maxWidth = x < 0 ? start.maxX - visible.minX : visible.maxX - start.minX
+        let maxHeight = y < 0 ? start.maxY - visible.minY : visible.maxY - start.minY
+        let width = x == 0 ? start.width : min(max(start.width + x * delta.width, minimum.width),
+                                              max(minimum.width, maxWidth))
+        let height = y == 0 ? start.height : min(max(start.height + y * delta.height, minimum.height),
+                                                max(minimum.height, maxHeight))
+        return CGRect(x: x < 0 ? start.maxX - width : start.minX,
+                      y: y < 0 ? start.maxY - height : start.minY, width: width, height: height)
     }
 }

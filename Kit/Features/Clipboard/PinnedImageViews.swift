@@ -38,7 +38,7 @@ struct PinnedImageContent: View {
                 .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            PinnedImageDragSurface()
+            PinnedDragSurface()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             Button(action: onClose) {
@@ -63,18 +63,75 @@ struct PinnedImageContent: View {
     }
 }
 
-private struct PinnedImageDragSurface: NSViewRepresentable {
-    func makeNSView(context: Context) -> PinnedImageDragView {
-        PinnedImageDragView()
+@MainActor
+struct PinnedTextContent: View {
+    static let minimumSize = CGSize(width: 200, height: 72)
+    private static let headerHeight: CGFloat = 28
+
+    let text: String
+    let kind: ClipboardItem.Kind
+    let settings: AppSettings
+
+    var body: some View {
+        let edge = PinnedResizeEdge.hitWidth
+        VStack(spacing: 0) {
+            PinnedDragSurface().frame(height: Self.headerHeight)
+
+            HStack(spacing: 0) {
+                PinnedDragSurface().frame(width: edge)
+                preview.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                PinnedDragSurface().frame(width: edge)
+            }
+            PinnedDragSurface().frame(height: edge)
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+        .ignoresSafeArea()
     }
 
-    func updateNSView(_ nsView: PinnedImageDragView, context: Context) {}
+    @ViewBuilder private var preview: some View {
+        switch kind {
+        case .markdown where settings.renderMarkdown:
+            MarkdownPreview(source: text).equatable()
+        case .code:
+            CodePreview(code: text, wrapsLines: false)
+        default:
+            ClipboardTextPreview(text: text, query: "").equatable()
+        }
+    }
+
+    static func initialFrame(text: String, kind: ClipboardItem.Kind, visibleFrame: CGRect) -> CGRect {
+        let availableWidth = max(1, visibleFrame.width - 24)
+        let availableHeight = max(1, visibleFrame.height - 24)
+        let pointSize = NSFont.preferredFont(forTextStyle: .subheadline).pointSize
+        let font = ClipboardPreviewFont.regular(ofSize: pointSize)
+        let edge = PinnedResizeEdge.hitWidth
+        let insets = 2 * edge + PreviewTextView.trailingGutter
+        let lines = text.prefix(4_096).split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).prefix(32)
+        let widths = lines.map { (String($0.prefix(240)) as NSString).size(withAttributes: [.font: font]).width }
+        let idealWidth = max((widths.max() ?? 0) + insets, minimumSize.width)
+        let width = min(ceil(idealWidth), kind == .code ? 640 : 540, availableWidth)
+        let contentWidth = max(1, width - insets)
+        let rows = kind == .code ? CGFloat(lines.count) : widths.reduce(0) { $0 + max(1, ceil($1 / contentWidth)) }
+        let rowHeight = font.ascender - font.descender + font.leading
+        let idealHeight = max(Self.headerHeight + edge + rows * rowHeight + 4, minimumSize.height)
+        let height = min(ceil(idealHeight), 360, availableHeight)
+        return CGRect(x: visibleFrame.midX - width / 2, y: visibleFrame.midY - height / 2,
+                      width: width, height: height)
+    }
 }
 
-private final class PinnedImageDragView: NSView {
+private struct PinnedDragSurface: NSViewRepresentable {
+    func makeNSView(context: Context) -> PinnedDragView {
+        PinnedDragView()
+    }
+
+    func updateNSView(_ nsView: PinnedDragView, context: Context) {}
+}
+
+private final class PinnedDragView: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    private var resize: (edge: PinnedImageResizeEdge, frame: CGRect, mouse: CGPoint)?
+    private var resize: (edge: PinnedResizeEdge, frame: CGRect, mouse: CGPoint)?
 
     private var cursorTrackingArea: NSTrackingArea?
 
@@ -93,13 +150,12 @@ private final class PinnedImageDragView: NSView {
     }
 
     override func cursorUpdate(with event: NSEvent) {
-        (window as? PinnedImagePanel)?.updateResizeCursor(at: event.locationInWindow)
+        (window as? PinnedWindowPanel)?.updateResizeCursor(at: event.locationInWindow, overDragSurface: true)
     }
 
     override func mouseDown(with event: NSEvent) {
-        guard let panel = window as? PinnedImagePanel else { return }
-        let point = convert(event.locationInWindow, from: nil)
-        guard let edge = PinnedImageResizeEdge.hit(at: point, in: bounds) else {
+        guard let panel = window as? PinnedWindowPanel else { return }
+        guard let edge = panel.resizeEdge(at: event.locationInWindow) else {
             panel.performDrag(with: event)
             return
         }
@@ -108,13 +164,18 @@ private final class PinnedImageDragView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let resize, let panel = window as? PinnedImagePanel else { return }
+        guard let resize, let panel = window as? PinnedWindowPanel else { return }
         let mouse = panel.convertPoint(toScreen: event.locationInWindow)
-        let visible = panel.screen?.visibleFrame ?? panel.frame
-        let frame = resize.edge.frame(from: resize.frame,
-            delta: CGSize(width: mouse.x - resize.mouse.x, height: mouse.y - resize.mouse.y),
-            minimum: panel.geometry?.minimumFrameSize ?? panel.minSize,
-            visible: visible.insetBy(dx: 12, dy: 12))
+        let delta = CGSize(width: mouse.x - resize.mouse.x, height: mouse.y - resize.mouse.y)
+        let bounds = panel.resizeBounds
+        let frame: CGRect
+        if let geometry = panel.geometry {
+            frame = resize.edge.frame(from: resize.frame, delta: delta,
+                                      minimum: geometry.minimumFrameSize, visible: bounds)
+        } else {
+            frame = resize.edge.freeFrame(from: resize.frame, delta: delta,
+                                          minimum: panel.minSize, visible: bounds)
+        }
         panel.setFrame(frame, display: true)
         panel.geometry?.adopt(frame)
     }
@@ -122,7 +183,7 @@ private final class PinnedImageDragView: NSView {
     override func mouseUp(with event: NSEvent) {
         guard resize != nil else { return }
         resize = nil
-        (window as? PinnedImagePanel)?.fitToScreen()
+        (window as? PinnedWindowPanel)?.fitToScreen()
         window?.invalidateCursorRects(for: self)
     }
 }
