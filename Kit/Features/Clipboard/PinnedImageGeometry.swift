@@ -89,7 +89,7 @@ struct PinnedImageGeometry {
 }
 
 /// Screen coordinates, positive Y points upward
-struct PinnedResizeEdge: Equatable {
+struct PinnedImageResizeEdge: Equatable {
     let x: CGFloat
     let y: CGFloat
     static let hitWidth: CGFloat = 14

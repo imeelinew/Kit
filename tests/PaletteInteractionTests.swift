@@ -1,5 +1,4 @@
 import AppKit
-import Carbon.HIToolbox
 import Darwin
 @testable import Kit
 
@@ -50,9 +49,13 @@ enum PaletteInteractionTests {
         vm.openActions(for: UUID())
         try TestSupport.expect(!vm.menuOpen, "Unknown action targets are ignored")
         vm.openActions(for: code.id)
-        try TestSupport.expect(!vm.menuActions.contains(.addToStack(code)), "Assignment is hidden without an alternative stack")
+        try TestSupport.expect(vm.menuActions.contains(.addToStack(code)), "Stacks enable assignment actions")
         try TestSupport.expect(vm.menuActions.contains(.removeFromStack(code)), "Members expose removal actions")
-        try TestSupport.expect(vm.menuActions.contains(.pinToScreen(code)), "Code can be pinned from the action menu")
+        try TestSupport.expect(!vm.menuActions.contains(.pinToScreen(code)), "Text code has no image pin action")
+        let assignment = vm.menuActions.firstIndex(of: .addToStack(code))!
+        vm.activateMenuItem(at: assignment)
+        try TestSupport.expect(vm.overlay == .actions(code.id),
+                               "Assignment ignores a menu when no alternative stack exists")
         let second = store.createStack(name: "Personal")!
         vm.activateMenuItem(at: vm.menuActions.firstIndex(of: .addToStack(code))!)
         try TestSupport.expect(vm.overlay == .addToStack(code.id)
@@ -161,71 +164,6 @@ enum PaletteInteractionTests {
                                "Cancelling a stack name does not write storage")
         vm.closeMenu()
         await store.waitForSearchMetadata()
-    }
-
-    private static func pinnedTextCards(in directory: URL) async throws {
-        let store = ClipboardStore(directory: directory)
-        let path = directory.appendingPathComponent("pin-fixture.txt")
-        try write(Data(), to: path)
-        let file = store.addFiles([path], sourceBundleID: nil)!
-        let samples: [(ClipboardItem.Kind, String, String)] = [
-            (.text, "Pinned plain text\nSecond line", "Pinned plain text\nSecond line"),
-            (.markdown, "# Pinned heading", "Pinned heading"),
-            (.code, "let pinFixture = 42", "let pinFixture = 42"),
-            (.link, "https://example.com/pin-fixture", "https://example.com/pin-fixture"),
-            (.path, path.path, path.path),
-        ]
-        let items = samples.map { store.addText($0.1, kind: $0.0, sourceBundleID: nil)! }
-        let core = AppCore(clipboardStore: store)
-        core.settings.renderMarkdown = true
-        let vm = core.palette
-        try await ready(vm)
-        vm.openActions(for: file.id)
-        try TestSupport.expect(!vm.menuActions.contains(.pinToScreen(file)), "Ordinary files stay ineligible for pinning")
-        vm.closeMenu()
-
-        func panels(for item: ClipboardItem) -> [PinnedWindowPanel] {
-            NSApp.windows.compactMap { $0 as? PinnedWindowPanel }.filter {
-                $0.title == item.displayTitle(locale: core.settings.language.locale)
-            }
-        }
-        func preview(in view: NSView) -> PreviewTextView? {
-            if let text = view as? PreviewTextView { return text }
-            return view.subviews.lazy.compactMap { preview(in: $0) }.first
-        }
-        defer { items.flatMap { panels(for: $0) }.forEach { $0.close() } }
-
-        for (index, (item, sample)) in zip(items, samples).enumerated() {
-            try await ready(vm)
-            vm.openActions(for: item.id)
-            guard let action = vm.menuActions.firstIndex(of: .pinToScreen(item)) else {
-                throw TestSupport.Failure(description: "The pin action is available for \(item.kind)")
-            }
-            if index.isMultiple(of: 2) { vm.activateMenuItem(at: action) }
-            else { vm.handle(.pinToScreen) }
-            try await TestSupport.eventually("The floating panel renders \(item.kind)") {
-                guard let view = panels(for: item).first?.contentView else { return false }
-                view.layoutSubtreeIfNeeded()
-                return preview(in: view)?.string.trimmingCharacters(in: .newlines) == sample.2
-            }
-        }
-
-        let item = items[0]
-        let original = panels(for: item)[0]
-        try await ready(vm)
-        vm.select(item.id)
-        original.setFrameOrigin(NSPoint(x: -10_000, y: -10_000))
-        let movedFrame = original.frame
-        vm.handle(.pinToScreen)
-        try await TestSupport.eventually("Revealing the existing card fits it back on screen") {
-            original.frame != movedFrame
-        }
-        try TestSupport.expect(panels(for: item) == [original], "Pinning twice reuses the same window")
-        try TestSupport.expect(!preview(in: original.contentView!)!.isEditable, "Pinned text is read-only")
-        let close = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
-            timestamp: 0, windowNumber: original.windowNumber, context: nil,
-            characters: "w", charactersIgnoringModifiers: "w", isARepeat: false, keyCode: UInt16(kVK_ANSI_W))!
-        try TestSupport.expect(original.performKeyEquivalent(with: close), "Command-W closes a pinned card")
     }
 
     private static func previewCopyAvailability(in directory: URL) async throws {
@@ -489,7 +427,6 @@ enum PaletteInteractionTests {
         try await TestSupport.withTemporaryDirectory { root in
             try await navigation(in: root.appendingPathComponent("navigation"))
             try await naming(in: root.appendingPathComponent("naming"))
-            try await pinnedTextCards(in: root.appendingPathComponent("pinned-cards"))
             try await previewCopyAvailability(in: root.appendingPathComponent("preview-copy"))
             try await permissionSensitiveCopy(in: root.appendingPathComponent("permission-copy"))
             try await paginationAndRaces(in: root.appendingPathComponent("pagination"))

@@ -20,10 +20,8 @@ enum WindowGeometryTests {
 
     @MainActor
     private static func pinnedImageResizeCursors() throws {
-        let panel = PinnedWindowPanel(contentRect: CGRect(x: 100, y: 100, width: 400, height: 300),
+        let panel = PinnedImagePanel(contentRect: CGRect(x: 100, y: 100, width: 400, height: 300),
                                     styleMask: [.borderless, .resizable], backing: .buffered, defer: false)
-        panel.geometry = PinnedImageGeometry(imageSize: panel.frame.size,
-            visibleFrame: CGRect(x: 0, y: 0, width: 1280, height: 800), preferredLongEdge: 400)
         let hosting = NSHostingView(rootView: Color.clear)
         hosting.sizingOptions = []
         panel.contentView = hosting
@@ -57,18 +55,18 @@ enum WindowGeometryTests {
     @MainActor
     private static func pinnedImageResizeEdges() throws {
         let bounds = CGRect(x: 0, y: 0, width: 400, height: 300)
-        try TestSupport.expect(PinnedResizeEdge.hit(at: CGPoint(x: 12, y: 150), in: bounds)
-            == PinnedResizeEdge(x: -1, y: 0), "Resize begins twelve points inside the edge")
-        try TestSupport.expect(PinnedResizeEdge.hit(at: CGPoint(x: 20, y: 150), in: bounds) == nil,
+        try TestSupport.expect(PinnedImageResizeEdge.hit(at: CGPoint(x: 12, y: 150), in: bounds)
+            == PinnedImageResizeEdge(x: -1, y: 0), "Resize begins twelve points inside the edge")
+        try TestSupport.expect(PinnedImageResizeEdge.hit(at: CGPoint(x: 20, y: 150), in: bounds) == nil,
                                "The image interior remains draggable")
-        try TestSupport.expect(PinnedResizeEdge.hit(at: CGPoint(x: -1, y: 150), in: bounds) == nil,
+        try TestSupport.expect(PinnedImageResizeEdge.hit(at: CGPoint(x: -1, y: 150), in: bounds) == nil,
                                "Outside points do not claim events")
         let start = CGRect(x: 300, y: 300, width: 400, height: 300)
         let visible = CGRect(x: 0, y: 0, width: 1400, height: 1000)
         let minimum = CGSize(width: 240, height: 180)
         for x in [-1.0, 0, 1] {
             for y in [-1.0, 0, 1] where x != 0 || y != 0 {
-                let edge = PinnedResizeEdge(x: x, y: y)
+                let edge = PinnedImageResizeEdge(x: x, y: y)
                 let resized = edge.frame(from: start, delta: CGSize(width: x * 40, height: y * 30),
                                          minimum: minimum, visible: visible)
                 try TestSupport.expect(close(resized.size, CGSize(width: 440, height: 330)),

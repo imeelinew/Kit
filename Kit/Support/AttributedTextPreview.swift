@@ -23,6 +23,10 @@ struct PreviewContentID: Hashable {
     var rendered = true
 }
 
+extension EnvironmentValues {
+    @Entry var previewTextSelectable = true
+}
+
 /// Read-only attributed preview text. The scroll view and text system are
 /// entirely AppKit so large previews do not need a SwiftUI `ScrollView` around `NSTextView`.
 struct AttributedTextPreview: View {
@@ -97,6 +101,7 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
     func makeNSView(context: Context) -> PreviewTextScrollView {
         let scrollView = PreviewTextScrollView()
         scrollView.wrapsLines = wrapsLines
+        scrollView.textView.isSelectable = context.environment.previewTextSelectable
         return scrollView
     }
 
@@ -117,6 +122,9 @@ private struct AttributedTextPreviewRepresentable: NSViewRepresentable {
     func updateNSView(_ scrollView: PreviewTextScrollView, context: Context) {
         let environment = context.environment
         scrollView.wrapsLines = wrapsLines
+        if scrollView.textView.isSelectable != environment.previewTextSelectable {
+            scrollView.textView.isSelectable = environment.previewTextSelectable
+        }
         let appKit: Bool
         switch storage {
         case .swiftUI: appKit = false
@@ -380,6 +388,10 @@ final class PreviewTextView: NSTextView {
         if pasteboard.changeCount != previousChangeCount {
             Paster.markCurrentPasteboardSelection()
         }
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        isSelectable ? super.menu(for: event) : nil
     }
 
     override func paste(_ sender: Any?) {}

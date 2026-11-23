@@ -38,22 +38,9 @@ struct PinnedImageContent: View {
                 .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            PinnedDragSurface()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 28, height: 28)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .frosted(in: Circle())
-            .accessibilityLabel("Close Pinned Image")
-            .help("Close Pinned Image")
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
+            PinnedCloseButton(isImage: true, action: onClose)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
@@ -65,24 +52,24 @@ struct PinnedImageContent: View {
 
 @MainActor
 struct PinnedTextContent: View {
-    static let minimumSize = CGSize(width: 200, height: 72)
-    private static let headerHeight: CGFloat = 28
+    static let minimumSize = CGSize(width: 200, height: 84)
+    private static let headerHeight: CGFloat = 42
 
     let text: String
     let kind: ClipboardItem.Kind
     let settings: AppSettings
+    let onClose: () -> Void
 
     var body: some View {
-        let edge = PinnedResizeEdge.hitWidth
-        VStack(spacing: 0) {
-            PinnedDragSurface().frame(height: Self.headerHeight)
+        let edge = PinnedImageResizeEdge.hitWidth
+        ZStack(alignment: .topLeading) {
+            preview
+                .environment(\.previewTextSelectable, false)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(EdgeInsets(top: Self.headerHeight, leading: edge, bottom: edge, trailing: edge))
 
-            HStack(spacing: 0) {
-                PinnedDragSurface().frame(width: edge)
-                preview.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                PinnedDragSurface().frame(width: edge)
-            }
-            PinnedDragSurface().frame(height: edge)
+            PinnedCloseButton(isImage: false, action: onClose)
+                .padding(10)
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .ignoresSafeArea()
@@ -104,7 +91,7 @@ struct PinnedTextContent: View {
         let availableHeight = max(1, visibleFrame.height - 24)
         let pointSize = NSFont.preferredFont(forTextStyle: .subheadline).pointSize
         let font = ClipboardPreviewFont.regular(ofSize: pointSize)
-        let edge = PinnedResizeEdge.hitWidth
+        let edge = PinnedImageResizeEdge.hitWidth
         let insets = 2 * edge + PreviewTextView.trailingGutter
         let lines = text.prefix(4_096).split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).prefix(32)
         let widths = lines.map { (String($0.prefix(240)) as NSString).size(withAttributes: [.font: font]).width }
@@ -120,70 +107,28 @@ struct PinnedTextContent: View {
     }
 }
 
-private struct PinnedDragSurface: NSViewRepresentable {
-    func makeNSView(context: Context) -> PinnedDragView {
-        PinnedDragView()
-    }
+private struct PinnedCloseButton: View {
+    private static let systemLabel = NSWindow.standardWindowButton(.closeButton, for: [.titled, .closable])?
+        .accessibilityLabel() ?? ""
 
-    func updateNSView(_ nsView: PinnedDragView, context: Context) {}
-}
+    let isImage: Bool
+    let action: () -> Void
 
-private final class PinnedDragView: NSView {
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    private var resize: (edge: PinnedResizeEdge, frame: CGRect, mouse: CGPoint)?
-
-    private var cursorTrackingArea: NSTrackingArea?
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        window?.acceptsMouseMovedEvents = true
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let cursorTrackingArea { removeTrackingArea(cursorTrackingArea) }
-        let area = NSTrackingArea(rect: .zero,
-            options: [.cursorUpdate, .activeAlways, .inVisibleRect], owner: self, userInfo: nil)
-        addTrackingArea(area)
-        cursorTrackingArea = area
-    }
-
-    override func cursorUpdate(with event: NSEvent) {
-        (window as? PinnedWindowPanel)?.updateResizeCursor(at: event.locationInWindow, overDragSurface: true)
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        guard let panel = window as? PinnedWindowPanel else { return }
-        guard let edge = panel.resizeEdge(at: event.locationInWindow) else {
-            panel.performDrag(with: event)
-            return
+    var body: some View {
+        let button = Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 28, height: 28)
+                .contentShape(Circle())
         }
-        panel.makeKeyAndOrderFront(nil)
-        resize = (edge, panel.frame, panel.convertPoint(toScreen: event.locationInWindow))
-    }
+        .buttonStyle(.plain)
+        .frosted(in: Circle())
 
-    override func mouseDragged(with event: NSEvent) {
-        guard let resize, let panel = window as? PinnedWindowPanel else { return }
-        let mouse = panel.convertPoint(toScreen: event.locationInWindow)
-        let delta = CGSize(width: mouse.x - resize.mouse.x, height: mouse.y - resize.mouse.y)
-        let bounds = panel.resizeBounds
-        let frame: CGRect
-        if let geometry = panel.geometry {
-            frame = resize.edge.frame(from: resize.frame, delta: delta,
-                                      minimum: geometry.minimumFrameSize, visible: bounds)
+        if isImage {
+            button.accessibilityLabel("Close Pinned Image").help("Close Pinned Image")
         } else {
-            frame = resize.edge.freeFrame(from: resize.frame, delta: delta,
-                                          minimum: panel.minSize, visible: bounds)
+            button.accessibilityLabel(Text(verbatim: Self.systemLabel))
         }
-        panel.setFrame(frame, display: true)
-        panel.geometry?.adopt(frame)
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        guard resize != nil else { return }
-        resize = nil
-        (window as? PinnedWindowPanel)?.fitToScreen()
-        window?.invalidateCursorRects(for: self)
     }
 }
