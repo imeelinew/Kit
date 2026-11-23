@@ -23,6 +23,20 @@ enum ClipboardTextClassifier {
         return .text
     }
 
+    static func preservesTerminalLayout(for item: ClipboardItem, text: String) -> Bool {
+        guard item.kind == .text || item.kind == .markdown else { return false }
+        let sample = text.prefix(sampleLimit)
+        guard sample.contains(where: \.isNewline) else { return false }
+        if sample.contains(where: { "─━═".contains($0) })
+            && sample.contains(where: { "┌┐└┘├┤┬┼┴╭╮╯╰╋╔╗╚╝╦╬╩".contains($0) }) {
+            return true
+        }
+        guard item.sourceBundleID == "com.superlogical.rex" else { return false }
+        return item.kind == .text || sample.split(whereSeparator: \.isNewline).contains {
+            $0.drop(while: \.isWhitespace).hasPrefix("• ")
+        }
+    }
+
     /// Resolve a single existing local path, including file URLs and home-relative paths.
     /// Checking the filesystem keeps prose and code that merely look path-like as text.
     static func fileURL(for text: String) -> URL? {

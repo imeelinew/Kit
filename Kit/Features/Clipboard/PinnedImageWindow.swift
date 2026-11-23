@@ -56,11 +56,15 @@ final class PinnedWindowController: NSObject, NSWindowDelegate {
     func showText(item: ClipboardItem, text: String) {
         let settings = core.settings
         let locale = settings.language.locale
-        let frame = PinnedTextContent.initialFrame(text: text, kind: item.kind, visibleFrame: targetVisibleFrame())
+        let terminalText = ClipboardTextClassifier.preservesTerminalLayout(for: item, text: text)
+            ? PinnedTextContent.makeTerminalText(text) : nil
+        let frame = PinnedTextContent.initialFrame(
+            text: text, kind: item.kind, terminalText: terminalText, visibleFrame: targetVisibleFrame())
         let panel = makePanel(title: item.displayTitle(locale: locale), frame: frame)
         let onClose = closeAction(for: item.id)
         panel.onClose = onClose
-        install(PinnedTextContent(text: text, kind: item.kind, settings: settings, onClose: onClose), in: panel)
+        install(PinnedTextContent(text: text, kind: item.kind, terminalText: terminalText,
+                                  settings: settings, onClose: onClose), in: panel)
         present(panel, itemID: item.id)
     }
 
