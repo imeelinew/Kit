@@ -166,7 +166,6 @@ final class PinnedWindowController: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces]
         panel.hidesOnDeactivate = false
         panel.isMovableByWindowBackground = false
-        panel.acceptsMouseMovedEvents = true
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true

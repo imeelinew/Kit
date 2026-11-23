@@ -54,6 +54,7 @@ struct PinnedImageContent: View {
 struct PinnedTextContent: View {
     static let minimumSize = CGSize(width: 200, height: 84)
     private static let headerHeight: CGFloat = 42
+    private static let contentInset: CGFloat = 14
 
     let text: String
     let kind: ClipboardItem.Kind
@@ -61,7 +62,7 @@ struct PinnedTextContent: View {
     let onClose: () -> Void
 
     var body: some View {
-        let edge = PinnedImageResizeEdge.hitWidth
+        let edge = Self.contentInset
         ZStack(alignment: .topLeading) {
             preview
                 .environment(\.previewTextSelectable, false)
@@ -91,7 +92,7 @@ struct PinnedTextContent: View {
         let availableHeight = max(1, visibleFrame.height - 24)
         let pointSize = NSFont.preferredFont(forTextStyle: .subheadline).pointSize
         let font = ClipboardPreviewFont.regular(ofSize: pointSize)
-        let edge = PinnedImageResizeEdge.hitWidth
+        let edge = contentInset
         let insets = 2 * edge + PreviewTextView.trailingGutter
         let lines = text.prefix(4_096).split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).prefix(32)
         let widths = lines.map { (String($0.prefix(240)) as NSString).size(withAttributes: [.font: font]).width }

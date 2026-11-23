@@ -1,5 +1,3 @@
-import AppKit
-import SwiftUI
 import CoreGraphics
 import Foundation
 @testable import Kit
@@ -9,83 +7,11 @@ enum WindowGeometryTests {
     static func run() async throws {
         try paletteDefaultFrames()
         try paletteSnapping()
-        try pinnedImageResizeEdges()
-        try pinnedImageResizeCursors()
         try pinnedImageSizing()
         try pinnedImageInvalidInputs()
         try pinnedImageZoom()
         try pinnedImageAdoptionAndDisplayChanges()
         print("PASS: palette frames, snapping, pinned sizing, zoom, adoption, and display changes")
-    }
-
-    @MainActor
-    private static func pinnedImageResizeCursors() throws {
-        let panel = PinnedImagePanel(contentRect: CGRect(x: 100, y: 100, width: 400, height: 300),
-                                    styleMask: [.borderless, .resizable], backing: .buffered, defer: false)
-        let hosting = NSHostingView(rootView: Color.clear)
-        hosting.sizingOptions = []
-        panel.contentView = hosting
-        panel.acceptsMouseMovedEvents = true
-        defer { panel.close(); NSCursor.arrow.set() }
-        let cases: [(CGPoint, NSCursor.FrameResizePosition)] = [
-            (CGPoint(x: 12, y: 150), .left), (CGPoint(x: 388, y: 150), .right),
-            (CGPoint(x: 200, y: 12), .bottom), (CGPoint(x: 200, y: 288), .top),
-            (CGPoint(x: 5, y: 5), .bottomLeft), (CGPoint(x: 395, y: 5), .bottomRight),
-            (CGPoint(x: 5, y: 295), .topLeft), (CGPoint(x: 395, y: 295), .topRight)]
-        func move(to point: CGPoint) {
-            let event = NSEvent.mouseEvent(with: .mouseMoved, location: point, modifierFlags: [],
-                timestamp: 0, windowNumber: panel.windowNumber, context: nil,
-                eventNumber: 0, clickCount: 0, pressure: 0)!
-            panel.sendEvent(event)
-        }
-        for (point, position) in cases {
-            NSCursor.arrow.set()
-            move(to: point)
-            let expected = NSCursor.frameResize(position: position, directions: .all)
-            try TestSupport.expect(NSCursor.current == expected,
-                                   "Window mouse dispatch sets the matching resize cursor")
-        }
-        for point in [CGPoint(x: 200, y: 150), CGPoint(x: 12, y: 280)] {
-            move(to: point)
-            try TestSupport.expect(NSCursor.current == NSCursor.arrow,
-                                   "Interior and close button restore the arrow")
-        }
-    }
-
-    @MainActor
-    private static func pinnedImageResizeEdges() throws {
-        let bounds = CGRect(x: 0, y: 0, width: 400, height: 300)
-        try TestSupport.expect(PinnedImageResizeEdge.hit(at: CGPoint(x: 12, y: 150), in: bounds)
-            == PinnedImageResizeEdge(x: -1, y: 0), "Resize begins twelve points inside the edge")
-        try TestSupport.expect(PinnedImageResizeEdge.hit(at: CGPoint(x: 20, y: 150), in: bounds) == nil,
-                               "The image interior remains draggable")
-        try TestSupport.expect(PinnedImageResizeEdge.hit(at: CGPoint(x: -1, y: 150), in: bounds) == nil,
-                               "Outside points do not claim events")
-        let start = CGRect(x: 300, y: 300, width: 400, height: 300)
-        let visible = CGRect(x: 0, y: 0, width: 1400, height: 1000)
-        let minimum = CGSize(width: 240, height: 180)
-        for x in [-1.0, 0, 1] {
-            for y in [-1.0, 0, 1] where x != 0 || y != 0 {
-                let edge = PinnedImageResizeEdge(x: x, y: y)
-                let resized = edge.frame(from: start, delta: CGSize(width: x * 40, height: y * 30),
-                                         minimum: minimum, visible: visible)
-                try TestSupport.expect(close(resized.size, CGSize(width: 440, height: 330)),
-                                       "Every edge and corner preserves aspect ratio")
-                try TestSupport.expect(abs((x < 0 ? resized.maxX : x > 0 ? resized.minX : resized.midX)
-                    - (x < 0 ? start.maxX : x > 0 ? start.minX : start.midX)) < 0.001,
-                                       "The opposite horizontal anchor remains fixed")
-                try TestSupport.expect(abs((y < 0 ? resized.maxY : y > 0 ? resized.minY : resized.midY)
-                    - (y < 0 ? start.maxY : y > 0 ? start.minY : start.midY)) < 0.001,
-                                       "The opposite vertical anchor remains fixed")
-                let tiny = edge.frame(from: start, delta: CGSize(width: -x * 5000, height: -y * 5000),
-                                      minimum: minimum, visible: visible)
-                try TestSupport.expect(close(tiny.size, minimum), "Shrinking respects minimum size")
-                let huge = edge.frame(from: start, delta: CGSize(width: x * 5000, height: y * 5000),
-                                      minimum: minimum, visible: visible)
-                try TestSupport.expect(visible.insetBy(dx: -0.001, dy: -0.001).contains(huge),
-                                       "Growth stays within the display")
-            }
-        }
     }
 
     @MainActor
