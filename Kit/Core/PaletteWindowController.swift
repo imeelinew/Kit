@@ -98,6 +98,10 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
                     let panel, panel.isVisible, !panel.isKeyWindow
                 else { return }
                 panel.makeKeyAndOrderFront(nil)
+                if !panel.isKeyWindow {
+                    NSApp.activate(ignoringOtherApps: true)
+                    panel.makeKeyAndOrderFront(nil)
+                }
                 panel.requestSearchFocus()
             }
         }

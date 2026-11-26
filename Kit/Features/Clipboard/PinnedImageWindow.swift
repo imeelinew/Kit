@@ -165,7 +165,7 @@ final class PinnedWindowController: NSObject, NSWindowDelegate {
     }
 
     private func install(_ view: some View, in panel: PinnedImagePanel) {
-        let hosting = NSHostingView(rootView: view)
+        let hosting = PinnedHostingView(rootView: view)
         hosting.sizingOptions = []
         hosting.wantsLayer = true
         hosting.layer?.cornerRadius = Theme.Radius.panel

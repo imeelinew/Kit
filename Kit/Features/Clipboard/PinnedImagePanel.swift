@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import SwiftUI
 
 final class PinnedImagePanel: NSPanel {
     enum PointerTarget: Equatable {
@@ -10,6 +11,7 @@ final class PinnedImagePanel: NSPanel {
     var geometry: PinnedImageGeometry?
     private var appliedFrame: CGRect?
     private var cursorEdge: PinnedResizeEdge?
+    private(set) var isRoutingLeftMouseDown = false
     private static let commandModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
 
     func zoom(by delta: CGFloat) {
@@ -34,8 +36,7 @@ final class PinnedImagePanel: NSPanel {
         if frame.size != geometry.frame.size {
             geometry.adopt(frame)
         }
-        // Window Server drags are asynchronous and may not deliver mouseUp. Adopt the actual
-        // position before the next sizing action, while retaining the exact zoom center otherwise.
+        // Adopt any move since the last geometry update before applying the shared sizing policy.
         let movedCenter = frame != appliedFrame ? CGPoint(x: frame.midX, y: frame.midY) : nil
         geometry.fit(visibleFrame: visibleFrame, movedCenter: movedCenter)
         self.geometry = geometry
@@ -75,22 +76,14 @@ final class PinnedImagePanel: NSPanel {
 
     override func sendEvent(_ event: NSEvent) {
         if handleShortcut(event) { return }
-        if event.type == .leftMouseDown, let target = pointerTarget(at: event.locationInWindow) {
-            switch target {
-            case .closeButton:
-                break
-            case .move:
-                performDrag(with: event)
-                return
-            case .resize(let edge):
-                trackResize(edge)
-                return
-            }
-        }
         if geometry != nil, event.type == .magnify {
             zoom(by: event.magnification)
             return
         }
+        // Let AppKit process leftMouseDown activation before the hosting view starts a drag or resize.
+        let routingLeftMouseDown = event.type == .leftMouseDown
+        if routingLeftMouseDown { isRoutingLeftMouseDown = true }
+        defer { if routingLeftMouseDown { isRoutingLeftMouseDown = false } }
         super.sendEvent(event)
         // Apply after hosting dispatch so SwiftUI cannot replace the edge cursor
         switch event.type {
@@ -118,9 +111,31 @@ final class PinnedImagePanel: NSPanel {
         return .move
     }
 
+    /// Track window movement inside AppKit instead of `performDrag(with:)` so mouse-down
+    /// activation and mouse-up stay balanced with AppKit's deferred activation tracking.
+    func trackMove() {
+        let startOrigin = frame.origin
+        let startPointer = NSEvent.mouseLocation
+        defer {
+            updateCursor(at: mouseLocationOutsideOfEventStream)
+        }
+        while let event = nextEvent(matching: [.leftMouseDragged, .leftMouseUp]),
+            event.type == .leftMouseDragged
+        {
+            let current = NSEvent.mouseLocation
+            let proposed = NSPoint(
+                x: startOrigin.x + (current.x - startPointer.x),
+                y: startOrigin.y + (current.y - startPointer.y)
+            )
+            if proposed != frame.origin {
+                setFrameOrigin(proposed)
+            }
+        }
+    }
+
     /// Synchronous tracking owns every drag event until mouse up, so neither SwiftUI nor the
     /// Window Server can turn an edge press into a click-through or a window move.
-    private func trackResize(_ edge: PinnedResizeEdge) {
+    func trackResize(_ edge: PinnedResizeEdge) {
         makeKeyAndOrderFront(nil)
         let start = frame
         let pointer = NSEvent.mouseLocation
@@ -179,5 +194,38 @@ final class PinnedImagePanel: NSPanel {
         else { return false }
         if !event.isARepeat { onClose?() }
         return true
+    }
+}
+
+/// Intercepts move and resize clicks after `NSWindow.sendEvent(_:)` has processed window
+/// activation, while leaving close-button clicks, scrolling, and hover to hosted subviews.
+final class PinnedHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if let panel = window as? PinnedImagePanel, panel.isRoutingLeftMouseDown {
+            let windowPoint = superview?.convert(point, to: nil) ?? point
+            if let target = panel.pointerTarget(at: windowPoint), target != .closeButton {
+                return self
+            }
+        }
+        return super.hitTest(point)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard let panel = window as? PinnedImagePanel,
+            let target = panel.pointerTarget(at: event.locationInWindow)
+        else {
+            super.mouseDown(with: event)
+            return
+        }
+        switch target {
+        case .closeButton:
+            super.mouseDown(with: event)
+        case .move:
+            panel.trackMove()
+        case .resize(let edge):
+            panel.trackResize(edge)
+        }
     }
 }
