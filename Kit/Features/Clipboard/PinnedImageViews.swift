@@ -139,6 +139,7 @@ struct PinnedTextContent: View {
         let result = NSMutableAttributedString(string: source, attributes: [
             .font: font, .ligature: 0, .paragraphStyle: style,
         ])
+        MarkdownAttributedRenderer.colorTerminalText(result)
         NerdSymbolsFont.applyFallback(to: result, baseFont: font)
         guard let locale = newlocale(LC_CTYPE_MASK, "en_US.UTF-8", nil) else { return result }
         defer { freelocale(locale) }

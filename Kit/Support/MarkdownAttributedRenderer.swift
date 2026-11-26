@@ -4,6 +4,24 @@ import Markdown
 /// Converts a GitHub-flavored Markdown syntax tree into fully styled AppKit text. Every block
 /// boundary and font is explicit: `NSTextView` is only responsible for drawing and selection.
 enum MarkdownAttributedRenderer {
+    private static let references = try! NSRegularExpression(pattern: #"""
+        (?x)
+        (?<![A-Za-z0-9_./@+-])
+        (?:
+            https?://[^\s<>“”"'，、。；（）()\[\]]*[A-Za-z0-9_/\x23%~=+-]
+          | (?:~/|\.{1,2}/|/(?=[A-Za-z0-9_*])|[A-Za-z0-9_.*@+-]+/)
+            (?:[A-Za-z0-9_.*@/+~-]*[A-Za-z0-9_*/@+~-])?(?::[0-9]+(?:-[0-9]+)?)?
+          | [A-Za-z0-9_*-]+(?:\.[A-Za-z0-9_*-]+)*\.[A-Za-z]{2,}(?::[0-9]+(?:-[0-9]+)?)?
+          | (?:[0-9]{1,3}\.){3}[0-9]{1,3}(?::[0-9]+)?
+          | :[0-9]{2,5}
+        )
+        (?![A-Za-z0-9_/@+-])
+        """#)
+    private static let terminalHeadings = try! NSRegularExpression(pattern:
+        #"(?m)^[\t ]*(?:#{1,6}[\t ]+|[一二三四五六七八九十]+、)\S[^\r\n]*"#)
+    private static let terminalDividers = try! NSRegularExpression(pattern:
+        #"(?m)^[\t ]*[─━═]{3,}[\t ]*$"#)
+
     nonisolated static func render(
         _ source: String,
         basePointSize: CGFloat? = nil
@@ -15,6 +33,30 @@ enum MarkdownAttributedRenderer {
                 ?? NSFont.preferredFont(forTextStyle: .subheadline).pointSize)
         renderer.renderDocument(document)
         return NSAttributedString(attributedString: renderer.output)
+    }
+
+    // Keep terminal ranges in the original string so the fixed-width layout is unchanged
+    static func colorTerminalText(_ target: NSMutableAttributedString) {
+        let source = target.string
+        guard source.utf8.count <= CodeSyntaxHighlighter.maximumHighlightedBytes else { return }
+        let range = NSRange(location: 0, length: target.length)
+        for match in terminalHeadings.matches(in: source, range: range) {
+            target.addAttribute(.foregroundColor, value: NSColor.systemPurple, range: match.range)
+        }
+        for match in terminalDividers.matches(in: source, range: range) {
+            target.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: match.range)
+        }
+        colorReferences(in: source, at: 0, of: target)
+    }
+
+    private static func colorReferences(
+        in source: String, at offset: Int, of target: NSMutableAttributedString
+    ) {
+        let range = NSRange(source.startIndex..<source.endIndex, in: source)
+        for match in references.matches(in: source, range: range) {
+            target.addAttribute(.foregroundColor, value: NSColor.systemBlue,
+                                range: NSRange(location: offset + match.range.location, length: match.range.length))
+        }
     }
 
     private struct InlineStyle: OptionSet, Sendable {
@@ -276,7 +318,9 @@ enum MarkdownAttributedRenderer {
         ) {
             switch markup {
             case let text as Markdown.Text:
+                let offset = target.length
                 append(text.string, to: target, style: style, pointSize: pointSize)
+                MarkdownAttributedRenderer.colorReferences(in: text.string, at: offset, of: target)
             case is SoftBreak:
                 append(" ", to: target, style: style, pointSize: pointSize)
             case is LineBreak:
@@ -284,6 +328,7 @@ enum MarkdownAttributedRenderer {
             case let code as InlineCode:
                 append(
                     code.code, to: target, style: style.union(.code), pointSize: pointSize,
+                    color: .systemBlue,
                     background: NSColor.labelColor.withAlphaComponent(0.08))
             case let strong as Strong:
                 appendInlineChildren(
