@@ -24,7 +24,7 @@ enum ClipboardUndoTests {
         let store = ClipboardStore(directory: directory)
         store.load()
         let a = store.addText("撤销测试", kind: .text, sourceBundleID: "original")!
-        let secondID = store.addText("second", kind: .code, sourceBundleID: "editor")!.id
+        let secondID = store.addText("second", kind: .markdown, sourceBundleID: "editor")!.id
         let stack = store.createStack(name: "Saved")!
         store.assign(a.id, to: stack.id)
         execute(directory, "UPDATE items SET custom_title = 'Saved title' WHERE id = '\(a.id)'")

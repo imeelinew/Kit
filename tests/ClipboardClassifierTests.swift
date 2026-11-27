@@ -96,11 +96,11 @@ enum ClipboardClassifierTests {
     }
 
     @MainActor
-    private static func codeCases() throws {
+    private static func plainSourceCases() throws {
         let cases: [(label: String, text: String)] = [
             ("JSON object",
              "{\n  \"name\": \"Kit\",\n  \"enabled\": true\n}"),
-            ("JSON array", "[\"text\", \"code\", \"markdown\"]"),
+            ("JSON array", "[\"text\", \"markdown\"]"),
             ("uppercase SQL", "SELECT name FROM items WHERE pinned = 1;"),
             ("JavaScript declaration",
              "const labels = items.map((item) => item.name);"),
@@ -110,18 +110,10 @@ enum ClipboardClassifierTests {
              "def greet(name):\n    return f\"Hello, {name}\""),
             ("shebang script",
              "#!/usr/bin/env python3\nprint(\"hello\")"),
-            ("HTML markup",
-             "<article>\n  <h1>Hello</h1>\n</article>"),
-        ]
-        for item in cases {
-            try assertKind(item.text, equals: .code, label: item.label)
-        }
-
-        let negativeCases: [(label: String, text: String)] = [
             ("invalid JSON-like text", "{not valid json}"),
             ("code-like prose", "Use const when declaring a stable value"),
         ]
-        for item in negativeCases {
+        for item in cases {
             try assertKind(item.text, equals: .text, label: item.label)
         }
     }
@@ -158,17 +150,17 @@ enum ClipboardClassifierTests {
             label: "Markdown prose with inline source")
 
         let standaloneBackticks = "```swift\nlet answer = 42\n```"
-        try assertKind(standaloneBackticks, equals: .code, label: "standalone backtick fence")
+        try assertKind(standaloneBackticks, equals: .markdown, label: "standalone backtick fence")
 
         let standaloneTildes = "~~~python\nprint(\"answer\")\n~~~"
-        try assertKind(standaloneTildes, equals: .code, label: "standalone tilde fence")
+        try assertKind(standaloneTildes, equals: .markdown, label: "standalone tilde fence")
 
         let unclosedFence = "```swift\nlet answer = 42"
-        try assertKind(unclosedFence, equals: .code, label: "standalone unclosed fence")
+        try assertKind(unclosedFence, equals: .markdown, label: "standalone unclosed fence")
     }
 
     @MainActor
-    private static func unicodeAndPrefixCases() throws {
+    private static func unicodeCases() throws {
         let plainCases: [(label: String, text: String)] = [
             ("Han prose", "测试、剪贴板与搜索"),
             ("decomposed Unicode prose", "Cafe\u{301} déjà vu"),
@@ -177,31 +169,14 @@ enum ClipboardClassifierTests {
         for item in plainCases {
             try assertKind(item.text, equals: .text, label: item.label)
         }
-
-        let codeAtSampleBoundary =
-            String(repeating: "🙂", count: 11_984) + "\nstruct Early {}"
-        try TestSupport.expect(
-            codeAtSampleBoundary.count == 12_000,
-            "Code fixture ends at the classifier sample boundary")
-        try assertKind(
-            codeAtSampleBoundary,
-            equals: .code,
-            label: "Unicode prefix with code at the sample boundary")
-
-        let codeAfterSampleBoundary =
-            String(repeating: "🙂", count: 12_000) + "\nstruct Late {}"
-        try assertKind(
-            codeAfterSampleBoundary,
-            equals: .text,
-            label: "Unicode prefix with code beyond the sample boundary")
     }
 
     @MainActor
     static func run() async throws {
         try linkCases()
-        try codeCases()
+        try plainSourceCases()
         try markdownCases()
-        try unicodeAndPrefixCases()
+        try unicodeCases()
         try await TestSupport.withTemporaryDirectory { directory in
             try fileCases(in: directory)
         }

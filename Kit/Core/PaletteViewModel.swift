@@ -87,7 +87,6 @@ extension ClipboardItem.Kind {
         switch self {
         case .text: "text.menu"
         case .markdown: "number"
-        case .code: "chevron.left.forwardslash.chevron.right"
         case .link: "link"
         case .path: "point.topleft.down.to.point.bottomright.curvepath"
         case .image: "photo"
@@ -97,7 +96,7 @@ extension ClipboardItem.Kind {
 }
 
 enum ClipboardKindFilter: Equatable, CaseIterable {
-    case all, text, markdown, code, link, path, image, file
+    case all, text, markdown, link, path, image, file
 
     var title: LocalizedStringKey {
         LocalizedStringKey(kind?.typeLabel ?? "All Types")
@@ -112,7 +111,6 @@ enum ClipboardKindFilter: Equatable, CaseIterable {
         case .all: nil
         case .text: .text
         case .markdown: .markdown
-        case .code: .code
         case .link: .link
         case .path: .path
         case .image: .image

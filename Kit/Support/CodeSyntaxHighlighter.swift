@@ -94,7 +94,7 @@ enum CodeSyntaxHighlighter {
     }
 
     /// AppKit variant used by the Markdown renderer. The caller's font, background, and paragraph
-    /// styling remain intact while the same token rules and colors as `CodePreview` are applied.
+    /// styling remain intact while token colors are applied.
     static func highlight(
         _ source: String,
         attributes: [NSAttributedString.Key: Any]
@@ -132,58 +132,5 @@ enum CodeSyntaxHighlighter {
             consumedThrough = NSMaxRange(token.range)
         }
         return highlighted
-    }
-}
-
-struct CodePreview: View {
-    let code: String
-    var query: String = ""
-    var fontSize: CGFloat? = nil
-    var wrapsLines = true
-    @State private var highlighted: Rendered?
-
-    private struct RenderID: Hashable {
-        let code: String
-        let query: String
-    }
-
-    private struct Rendered: @unchecked Sendable {
-        let id: RenderID
-        let value: NSAttributedString
-    }
-
-    var body: some View {
-        let id = RenderID(code: code, query: query)
-        let font = ClipboardPreviewFont.regular(
-            ofSize: fontSize ?? NSFont.preferredFont(forTextStyle: .subheadline).pointSize)
-        let value = highlighted?.id == id ? highlighted?.value : nil
-        Group {
-            if wrapsLines, code.utf8.count > CodeSyntaxHighlighter.maximumHighlightedBytes {
-                ClipboardTextPreview(text: code, query: query, fontSize: fontSize).equatable()
-            } else {
-                AttributedTextPreview(
-                    nsAttributed: value ?? NSAttributedString(string: code, attributes: [.font: font]),
-                    contentID: PreviewContentID(source: code, query: query, rendered: value != nil),
-                    fontSize: fontSize, wrapsLines: wrapsLines)
-            }
-        }
-        .task(id: id) {
-            let font = ClipboardPreviewFont.regular(
-                ofSize: fontSize ?? NSFont.preferredFont(forTextStyle: .subheadline).pointSize)
-            highlighted = nil
-            guard code.utf8.count <= CodeSyntaxHighlighter.maximumHighlightedBytes else { return }
-            let task = Task.detached(priority: .userInitiated) {
-                let attributed = CodeSyntaxHighlighter.highlight(
-                    code, attributes: [.font: font, .foregroundColor: NSColor.labelColor])
-                return Rendered(id: id, value: SearchHighlight.applying(to: attributed, query: query))
-            }
-            let rendered = await withTaskCancellationHandler {
-                await task.value
-            } onCancel: {
-                task.cancel()
-            }
-            guard !Task.isCancelled else { return }
-            highlighted = rendered
-        }
     }
 }

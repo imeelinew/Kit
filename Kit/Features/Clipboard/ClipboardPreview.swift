@@ -137,8 +137,6 @@ struct ClipboardPreview: View {
                 } else {
                     ClipboardTextPreview(text: item.text ?? "", query: query).equatable()
                 }
-            case .code:
-                CodePreview(code: item.text ?? "", query: query)
             case .file:
                 if let state = payload?.details.contentState, state == .ready {
                     if item.fileURLs.count == 1 {
@@ -676,7 +674,7 @@ private struct ClipboardInfoSection: View {
         }
         // Keep loading geometry stable, then omit metadata that a finished load cannot provide
         switch item.kind {
-        case .text, .markdown, .code, .link, .path:
+        case .text, .markdown, .link, .path:
             rows.append(InfoRow(label: "Characters", value: details.characters.map {
                 $0.formatted(.number.locale(settings.language.locale))
             } ?? "—"))

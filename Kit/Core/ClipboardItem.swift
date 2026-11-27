@@ -2,13 +2,12 @@ import Foundation
 
 struct ClipboardItem: Identifiable, Hashable, Sendable {
     enum Kind: String, Sendable {
-        case text, markdown, code, link, path, image, file
+        case text, markdown, link, path, image, file
 
         var typeLabel: String {
             switch self {
             case .text: "Text"
             case .markdown: "Markdown"
-            case .code: "Code"
             case .link: "Link"
             case .path: "Path"
             case .image: "Image"
@@ -80,7 +79,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
     var canPinToScreen: Bool {
         switch kind {
         case .image, .file: hasImagePreview
-        case .text, .markdown, .code, .link, .path: text?.isEmpty == false
+        case .text, .markdown, .link, .path: text?.isEmpty == false
         }
     }
 
@@ -131,7 +130,7 @@ struct ClipboardItem: Identifiable, Hashable, Sendable {
         switch kind {
         case .image:
             return AppLocalization.string("Image", locale: locale)
-        case .text, .markdown, .code, .link, .path, .file:
+        case .text, .markdown, .link, .path, .file:
             let text = String((text ?? "").prefix(200)).trimmingCharacters(
                 in: .whitespacesAndNewlines)
             let lineEnd = text.firstIndex(where: { $0.isNewline }) ?? text.endIndex

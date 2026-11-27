@@ -294,14 +294,14 @@ enum SearchSemanticsTests {
         let text = try requireItem(
             store.addText("empty text", kind: .text, sourceBundleID: nil),
             "The text filter fixture is inserted")
-        let code = try requireItem(
-            store.addText("empty code", kind: .code, sourceBundleID: nil),
-            "The code filter fixture is inserted")
+        let markdown = try requireItem(
+            store.addText("empty markdown", kind: .markdown, sourceBundleID: nil),
+            "The markdown filter fixture is inserted")
         let stack = try requireStack(
             store.createStack(name: "Search semantics"),
             "The empty-query stack is created")
         store.assign(text.id, to: stack.id)
-        store.assign(code.id, to: stack.id)
+        store.assign(markdown.id, to: stack.id)
 
         let textMatches = try await collectTexts(
             store, query: " \n\t ", kind: .text, stackID: stack.id)
@@ -309,7 +309,7 @@ enum SearchSemanticsTests {
                                "A whitespace query remains empty and applies kind and stack filters")
         let stackMatches = try await collectTexts(
             store, query: "", kind: nil, stackID: stack.id)
-        try TestSupport.expect(Set(stackMatches) == Set(["empty text", "empty code"]),
+        try TestSupport.expect(Set(stackMatches) == Set(["empty text", "empty markdown"]),
                                "An empty query with only a stack filter returns all members")
         let noKindMatches = try await collectTexts(
             store, query: "", kind: .image, stackID: stack.id)

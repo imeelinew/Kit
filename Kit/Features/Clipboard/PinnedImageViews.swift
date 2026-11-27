@@ -88,8 +88,6 @@ struct PinnedTextContent: View {
             switch kind {
             case .markdown where settings.renderMarkdown:
                 MarkdownPreview(source: text).equatable()
-            case .code:
-                CodePreview(code: text, wrapsLines: false)
             default:
                 ClipboardTextPreview(text: text, query: "").equatable()
             }
@@ -115,10 +113,10 @@ struct PinnedTextContent: View {
             return (String(sample) as NSString).size(withAttributes: [.font: font]).width
         }
         let idealWidth = max((widths.max() ?? 0) + insets, minimumSize.width)
-        let widthLimit = terminalText != nil ? availableWidth : min(kind == .code ? 640 : 540, availableWidth)
+        let widthLimit = terminalText != nil ? availableWidth : min(540, availableWidth)
         let width = min(ceil(idealWidth), widthLimit)
         let contentWidth = max(1, width - insets)
-        let rows = terminalText != nil || kind == .code
+        let rows = terminalText != nil
             ? CGFloat(lines.count) : widths.reduce(0) { $0 + max(1, ceil($1 / contentWidth)) }
         let rowHeight = terminalText != nil ? terminalLineHeight(for: font) : font.ascender - font.descender + font.leading
         let idealHeight = max(Self.headerHeight + edge + rows * rowHeight + 4, minimumSize.height)

@@ -11,20 +11,20 @@ enum PaletteInteractionTests {
     private static func navigation(in directory: URL) async throws {
         let store = ClipboardStore(directory: directory)
         let oldest = store.addText("oldest", kind: .text, sourceBundleID: nil)!
-        let code = store.addText("let value = 7", kind: .code, sourceBundleID: nil)!
+        let markdown = store.addText("# Heading", kind: .markdown, sourceBundleID: nil)!
         let newest = store.addText("newest", kind: .text, sourceBundleID: nil)!
         let stack = store.createStack(name: "Work")!
-        store.assign(code.id, to: stack.id)
+        store.assign(markdown.id, to: stack.id)
         let core = AppCore(clipboardStore: store)
         let vm = PaletteViewModel(core: core)
         try await ready(vm)
-        try TestSupport.expect(vm.results.map(\.id) == [newest.id, code.id, oldest.id],
+        try TestSupport.expect(vm.results.map(\.id) == [newest.id, markdown.id, oldest.id],
                                "Opening orders entries by latest copy")
         try TestSupport.expect(vm.selectedID == newest.id && vm.selectionIndex == 0,
                                "Opening selects the first entry")
         let nonce = vm.scrollIntent.nonce
         vm.handle(.move(1))
-        try TestSupport.expect(vm.selectedID == code.id && vm.scrollIntent.kind == .follow,
+        try TestSupport.expect(vm.selectedID == markdown.id && vm.scrollIntent.kind == .follow,
                                "Keyboard navigation follows selection")
         try TestSupport.expect(vm.scrollIntent.nonce != nonce, "Repeated scroll intents have unique identity")
         vm.handle(.move(100))
@@ -51,18 +51,18 @@ enum PaletteInteractionTests {
         vm.openActions(for: newest.id)
         try TestSupport.expect(vm.menuActions.contains(.addToStack(newest)), "Stacks enable assignment actions")
         try TestSupport.expect(!vm.menuActions.contains(.removeFromStack(newest)), "Non-members omit removal actions")
-        vm.openActions(for: code.id)
-        try TestSupport.expect(!vm.menuActions.contains(.addToStack(code)),
+        vm.openActions(for: markdown.id)
+        try TestSupport.expect(!vm.menuActions.contains(.addToStack(markdown)),
                                "Single stack hides assignment when the item is already in it")
-        try TestSupport.expect(vm.menuActions.contains(.removeFromStack(code)), "Members expose removal actions")
-        try TestSupport.expect(vm.menuActions.contains(.pinToScreen(code)), "Text code exposes screen pin action")
+        try TestSupport.expect(vm.menuActions.contains(.removeFromStack(markdown)), "Members expose removal actions")
+        try TestSupport.expect(vm.menuActions.contains(.pinToScreen(markdown)), "Markdown exposes screen pin action")
         let second = store.createStack(name: "Personal")!
-        vm.activateMenuItem(at: vm.menuActions.firstIndex(of: .addToStack(code))!)
-        try TestSupport.expect(vm.overlay == .addToStack(code.id)
-                               && vm.menuActions == [.assignToStack(code, second)],
+        vm.activateMenuItem(at: vm.menuActions.firstIndex(of: .addToStack(markdown))!)
+        try TestSupport.expect(vm.overlay == .addToStack(markdown.id)
+                               && vm.menuActions == [.assignToStack(markdown, second)],
                                "Assignment excludes the current stack")
         vm.handle(.cancel)
-        try TestSupport.expect(vm.overlay == .actions(code.id), "Escape returns from assignment to item actions")
+        try TestSupport.expect(vm.overlay == .actions(markdown.id), "Escape returns from assignment to item actions")
         vm.handle(.cancel)
         try TestSupport.expect(vm.overlay == .none, "Escape closes item actions")
         vm.toggleStackFilter()
@@ -92,7 +92,7 @@ enum PaletteInteractionTests {
         vm.handle(.cycleType(1))
         vm.handle(.cycleStack(1))
         try await ready(vm)
-        try TestSupport.expect(vm.stackFilter == stack.id && vm.results.map(\.id) == [code.id],
+        try TestSupport.expect(vm.stackFilter == stack.id && vm.results.map(\.id) == [markdown.id],
                                "Stack filters restrict the result set")
         vm.handle(.cycleStack(-1))
         try await ready(vm)

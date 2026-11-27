@@ -27,20 +27,15 @@ private struct PreviewFixtureView: View {
 
 @MainActor @Observable
 private final class RenderFixture {
-    var source = "let alpha = 42"
-    var query = "alpha"
-    var markdown = false
+    var source = "# Replacement\n\n**final**"
+    var query = "Replacement"
 }
 
 private struct RenderFixtureView: View {
     let fixture: RenderFixture
 
     var body: some View {
-        if fixture.markdown {
-            MarkdownPreview(source: fixture.source, query: fixture.query)
-        } else {
-            CodePreview(code: fixture.source, query: fixture.query)
-        }
+        MarkdownPreview(source: fixture.source, query: fixture.query)
     }
 }
 
@@ -118,24 +113,6 @@ struct ClipboardPreviewTests {
         let renderHosting = NSHostingView(rootView: RenderFixtureView(fixture: renderFixture))
         window.contentView = renderHosting
         renderHosting.layoutSubtreeIfNeeded()
-        await settle()
-        renderFixture.source = "let beta = 7"
-        await settle()
-        renderFixture.source = "let gamma = 9"
-        renderFixture.query = "gamma"
-        await settle()
-        let codeText = textView(in: renderHosting)!
-        precondition(codeText.string == renderFixture.source,
-                     "Async code rendering keeps only the latest source")
-        let codeFont = codeText.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
-        precondition(codeFont?.fontName == ClipboardPreviewFont.regular(
-            ofSize: NSFont.preferredFont(forTextStyle: .subheadline).pointSize).fontName,
-                     "Native code highlighting preserves the monospaced preview font")
-        precondition(codeText.textStorage?.attribute(.backgroundColor, at: 4, effectiveRange: nil) != nil,
-                     "Search highlights apply to highlighted code")
-        renderFixture.markdown = true
-        renderFixture.source = "# Replacement\n\n**final**"
-        renderFixture.query = "Replacement"
         await settle()
         let markdownText = textView(in: renderHosting)!
         precondition(markdownText.string.contains("Replacement") && !markdownText.string.contains("Heading"))

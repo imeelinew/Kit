@@ -68,7 +68,7 @@ struct ClipboardSearchTests {
         let store = ClipboardStore(directory: directory)
         store.load()
         for index in 0..<10 {
-            _ = store.addText("kz \(String(format: "%02d", index))", kind: .code, sourceBundleID: nil)
+            _ = store.addText("kz \(String(format: "%02d", index))", kind: .markdown, sourceBundleID: nil)
         }
         let database = directory.appendingPathComponent("clipboard.sqlite3").path
 
@@ -79,7 +79,7 @@ struct ClipboardSearchTests {
         let kzItems = store.items.filter { $0.text?.hasPrefix("kz") == true }
         store.assign(kzItems[0].id, to: stack.id)
         store.assign(kzItems[1].id, to: stack.id)
-        expect(collectDB(database, query: "kz", kind: .code, stackID: stack.id, limit: 10)
+        expect(collectDB(database, query: "kz", kind: .markdown, stackID: stack.id, limit: 10)
                 == [kzItems[0].text, kzItems[1].text],
                "Query, kind, and stack filters compose")
     }

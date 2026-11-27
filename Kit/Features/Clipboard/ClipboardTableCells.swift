@@ -392,7 +392,7 @@ final class ClipboardItemCellView: NSTableCellView {
             if let query = url.query, !query.isEmpty { title += "?\(query)" }
             if let fragment = url.fragment, !fragment.isEmpty { title += "#\(fragment)" }
             return boundedTitle(title)
-        case .text, .markdown, .code:
+        case .text, .markdown:
             let text = item.text ?? ""
             let sample = text.prefix(201)
             let lineEnd = sample.firstIndex(where: \.isNewline) ?? sample.endIndex
@@ -644,7 +644,7 @@ private final class ClipboardThumbnailView: NSView {
         finishedLoading = false
 
         switch item.kind {
-        case .text, .markdown, .code, .link, .path:
+        case .text, .markdown, .link, .path:
             showKind(item.kind)
             finishedLoading = true
         case .image, .file:
