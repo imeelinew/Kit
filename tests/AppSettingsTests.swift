@@ -429,6 +429,24 @@ enum AppSettingsTests {
             try TestSupport.expect(
                 PaletteShortcut.actions.shortcut(from: defaults) == nil,
                 "Clearing a local shortcut with a default stays cleared across reads")
+
+            let systemEvent = NSEvent.otherEvent(
+                with: .systemDefined, location: .zero, modifierFlags: [],
+                timestamp: 0, windowNumber: 0, context: nil, subtype: 0, data1: 0, data2: 0)
+            let keyDown = NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: .option, timestamp: 0,
+                windowNumber: 0, context: nil, characters: "w", charactersIgnoringModifiers: "w",
+                isARepeat: false, keyCode: 13)
+            let keyRepeat = NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: .option, timestamp: 0,
+                windowNumber: 0, context: nil, characters: "w", charactersIgnoringModifiers: "w",
+                isARepeat: true, keyCode: 13)
+            try TestSupport.expect(
+                AppCore.shouldHandleToggleHotkey(event: nil)
+                    && AppCore.shouldHandleToggleHotkey(event: systemEvent)
+                    && AppCore.shouldHandleToggleHotkey(event: keyDown)
+                    && !AppCore.shouldHandleToggleHotkey(event: keyRepeat),
+                "Global toggle hotkey handles Carbon systemDefined events without throwing and ignores key repeats")
         }
     }
 

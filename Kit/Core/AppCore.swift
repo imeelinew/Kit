@@ -66,9 +66,14 @@ final class AppCore {
         windowController.prewarm()
 
         KeyboardShortcuts.onKeyDown(for: .toggleClipboard) { [weak self] in
-            guard let self, NSApp.currentEvent?.isARepeat != true else { return }
+            guard let self, Self.shouldHandleToggleHotkey(event: NSApp.currentEvent) else { return }
             togglePalette()
         }
+    }
+
+    static func shouldHandleToggleHotkey(event: NSEvent?) -> Bool {
+        guard let event, event.type == .keyDown else { return true }
+        return !event.isARepeat
     }
 
     func togglePalette() {
