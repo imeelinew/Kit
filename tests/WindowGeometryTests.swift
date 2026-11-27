@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 @testable import Kit
@@ -12,6 +13,7 @@ enum WindowGeometryTests {
         try pinnedImageInvalidInputs()
         try pinnedImageZoom()
         try pinnedImageAdoptionAndDisplayChanges()
+        try pinnedTerminalCRLFAlignment()
         print("PASS: palette frames, snapping, pinned sizing, zoom, adoption, and display changes")
     }
 
@@ -431,6 +433,36 @@ enum WindowGeometryTests {
                                "A display change repositions a pinned image into the new negative-coordinate display")
         try TestSupport.expect(close(displayChange.frame.midY, secondaryBounds.maxY - 194),
                                "A display change preserves the requested side when the new height allows it")
+    }
+
+    @MainActor
+    private static func pinnedTerminalCRLFAlignment() throws {
+        let lf = "line1\nline2\n中文🔥"
+        let crlf = "line1\r\nline2\r\n中文🔥"
+        let lfRendered = PinnedTextContent.makeTerminalText(lf)
+        let crlfRendered = PinnedTextContent.makeTerminalText(crlf)
+
+        let lfSuffix = NSRange(lf.range(of: "中文🔥")!, in: lf)
+        let crlfSuffix = NSRange(crlf.range(of: "中文🔥")!, in: crlf)
+        var lfKerns: [(Int, Int, CGFloat)] = []
+        var crlfKerns: [(Int, Int, CGFloat)] = []
+        lfRendered.enumerateAttribute(.kern, in: NSRange(location: 0, length: lfRendered.length)) { value, range, _ in
+            if let kern = value as? CGFloat {
+                lfKerns.append((range.location - lfSuffix.location, range.length, kern))
+            }
+        }
+        crlfRendered.enumerateAttribute(.kern, in: NSRange(location: 0, length: crlfRendered.length)) { value, range, _ in
+            if let kern = value as? CGFloat {
+                crlfKerns.append((range.location - crlfSuffix.location, range.length, kern))
+            }
+        }
+        try TestSupport.expect(!lfKerns.isEmpty, "Terminal text applies kerning to non-ASCII characters")
+        try TestSupport.expect(
+            lfKerns.count == crlfKerns.count
+                && zip(lfKerns, crlfKerns).allSatisfy { lhs, rhs in
+                    lhs.0 == rhs.0 && lhs.1 == rhs.1 && abs(lhs.2 - rhs.2) < 0.001
+                },
+            "CRLF line endings preserve exact UTF-16 kerning ranges for subsequent CJK and emoji")
     }
 
     private static func close(

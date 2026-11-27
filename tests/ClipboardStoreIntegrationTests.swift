@@ -34,6 +34,7 @@ enum ClipboardStoreIntegrationTests {
         try await undoEdgeContracts(in: root.appendingPathComponent("undo"))
         try await nonresidentHistory(in: root.appendingPathComponent("history-window"))
         try await imageOCRTimestampRoundTrip(in: root.appendingPathComponent("ocr-precision"))
+        try await missingImageRemovalAndFTSVacuum(in: root.appendingPathComponent("fts-vacuum"))
     }
 
     @MainActor
@@ -676,6 +677,87 @@ enum ClipboardStoreIntegrationTests {
         store.maxAge = ClipboardRetention.forever.maxAge
         store.load()
         return store
+    }
+
+    @MainActor
+    private static func missingImageRemovalAndFTSVacuum(in directory: URL) async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let keepID = UUID()
+        let deleteID = UUID()
+        let ocrID = UUID()
+        let imageDir = directory.appendingPathComponent("images", isDirectory: true)
+        try FileManager.default.createDirectory(at: imageDir, withIntermediateDirectories: true)
+        let ocrImageURL = imageDir.appendingPathComponent("legacy-ocr.png")
+        try pngData(red: 12, green: 34, blue: 56).write(to: ocrImageURL)
+
+        // Legacy database with pre-existing rows, no INTEGER PRIMARY KEY, and no FTS tables
+        try executeDatabase(in: directory, """
+            CREATE TABLE items(
+              id TEXT NOT NULL UNIQUE,
+              kind TEXT NOT NULL,
+              text TEXT,
+              image_path TEXT,
+              created_at REAL NOT NULL,
+              source_app TEXT,
+              image_fingerprint TEXT,
+              custom_title TEXT,
+              pinyin TEXT,
+              pinyin_initials TEXT,
+              ocr_text TEXT,
+              ocr_status TEXT,
+              ocr_version INTEGER,
+              ocr_attempts INTEGER NOT NULL DEFAULT 0
+            );
+            INSERT INTO items(id, kind, text, created_at)
+            VALUES('\(deleteID.uuidString)', 'text', 'alpha legacy removable', 1700000100);
+            INSERT INTO items(id, kind, text, created_at)
+            VALUES('\(keepID.uuidString)', 'text', 'beta legacy searchable', 1700000200);
+            INSERT INTO items(id, kind, image_path, created_at, ocr_text, ocr_status, ocr_version, ocr_attempts)
+            VALUES('\(ocrID.uuidString)', 'image', '\(ocrImageURL.path)', 1700000300, 'gammaocrtext', 'complete', \(ClipboardImageTextRecognition.version), 1);
+            """)
+
+        do {
+            let store = ClipboardStore(directory: directory, maintenanceInterval: 3_600)
+            store.maxAge = ClipboardRetention.forever.maxAge
+            store.load()
+
+            let textHits = await store.searchAsync("searchable", after: nil, limit: 10)
+            try TestSupport.expect(textHits.items.map(\.id) == [keepID],
+                                   "Legacy rows are searchable through rebuilt items_fts")
+            let ocrHits = await store.searchAsync("gammaocrtext", after: nil, limit: 10)
+            try TestSupport.expect(ocrHits.items.map(\.id) == [ocrID],
+                                   "Legacy OCR rows are searchable through backfilled image_ocr_fts")
+
+            let removable = store.item(id: deleteID)!
+            try TestSupport.expect(store.remove(removable),
+                                   "Deleting a legacy row after FTS rebuild succeeds without corruption")
+
+            // Missing PNG file on disk must not block deleting its history entry
+            await store.addImage(try pngData(red: 99, green: 88, blue: 77), sourceBundleID: nil)
+            let ownedImage = store.items.first { $0.kind == .image && $0.id != ocrID }!
+            let missingURL = store.imageURL(for: ownedImage)!
+            try FileManager.default.removeItem(at: missingURL)
+            try TestSupport.expect(store.remove(ownedImage),
+                                   "Deleting an image row succeeds when its PNG blob is missing")
+            try TestSupport.expect(store.item(id: ownedImage.id) == nil,
+                                   "Deleted missing-blob image is removed from SQLite")
+        }
+
+        // VACUUM must preserve explicit INTEGER PRIMARY KEY rowids referenced by both FTS tables
+        try executeDatabase(in: directory, "VACUUM;")
+
+        let reopened = ClipboardStore(directory: directory, maintenanceInterval: 3_600)
+        reopened.maxAge = ClipboardRetention.forever.maxAge
+        reopened.load()
+        let textAfterVacuum = await reopened.searchAsync("searchable", after: nil, limit: 10)
+        try TestSupport.expect(textAfterVacuum.items.map(\.id) == [keepID],
+                               "VACUUM preserves items_fts rowid integrity")
+        let ocrAfterVacuum = await reopened.searchAsync("gammaocrtext", after: nil, limit: 10)
+        try TestSupport.expect(ocrAfterVacuum.items.map(\.id) == [ocrID],
+                               "VACUUM preserves image_ocr_fts rowid integrity")
+        let keepItem = reopened.item(id: keepID)!
+        try TestSupport.expect(reopened.remove(keepItem),
+                               "Deleting a row after VACUUM keeps external-content FTS5 valid")
     }
 
     private static func executeDatabase(in directory: URL, _ sql: String) throws {

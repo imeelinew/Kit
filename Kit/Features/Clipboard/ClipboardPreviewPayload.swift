@@ -63,7 +63,7 @@ final class ClipboardPreviewPayload {
     }
 
     func matches(_ item: ClipboardItem) -> Bool {
-        itemID == item.id && copiedAt == item.lastCopiedAt
+        itemID == item.id && copiedAt.timeIntervalSince1970 == item.lastCopiedAt.timeIntervalSince1970
             && imageVersion == (imageURL.map { ImageThumbnail.fileVersion(for: $0) } ?? 0)
             && fileVersions == item.fileURLs.map { ImageThumbnail.fileVersion(for: $0) }
     }

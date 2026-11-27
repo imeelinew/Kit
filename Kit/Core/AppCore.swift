@@ -25,7 +25,6 @@ final class AppCore {
     private var transferTask: Task<Void, Never>?
     private var transferGeneration = UUID()
     private var clipboardResumeTask: Task<Void, Never>?
-    private var clipboardShortcutIsDown = false
     private var imageTextSearchObserver: ObservationToken?
     private var historyAfterActionObserver: ObservationToken?
 
@@ -67,12 +66,8 @@ final class AppCore {
         windowController.prewarm()
 
         KeyboardShortcuts.onKeyDown(for: .toggleClipboard) { [weak self] in
-            guard let self, !clipboardShortcutIsDown else { return }
-            clipboardShortcutIsDown = true
+            guard let self, NSApp.currentEvent?.isARepeat != true else { return }
             togglePalette()
-        }
-        KeyboardShortcuts.onKeyUp(for: .toggleClipboard) { [weak self] in
-            self?.clipboardShortcutIsDown = false
         }
     }
 

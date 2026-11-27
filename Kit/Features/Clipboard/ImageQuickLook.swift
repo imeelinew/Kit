@@ -493,16 +493,19 @@ private final class ImageTextSelectionView: NSView {
 
     private func regionIndex(at point: CGPoint, nearest: Bool) -> Int? {
         guard let regions = textLayout?.regions, !regions.isEmpty else { return nil }
-        if let hit = regions.firstIndex(where: { rect($0).contains(point) }) { return hit }
+        let imageRect = ImageSearchHighlightOverlay.imageRect(imageSize: imageSize, in: bounds.size)
+        let boxes = regions.map {
+            ImageSearchHighlightOverlay.displayRect($0.bounds, imageRect: imageRect)
+        }
+        if let hit = boxes.firstIndex(where: { $0.contains(point) }) { return hit }
         guard nearest || lineRects.contains(where: { $0.contains(point) }) else { return nil }
-        return regions.indices.min { a, b in
-            func distance(_ index: Int) -> CGFloat {
-                let box = rect(regions[index])
+        return boxes.indices.min { a, b in
+            func distance(_ box: CGRect) -> CGFloat {
                 let dx = max(box.minX - point.x, 0, point.x - box.maxX)
                 let dy = max(box.minY - point.y, 0, point.y - box.maxY)
                 return dx * dx + dy * dy
             }
-            return distance(a) < distance(b)
+            return distance(boxes[a]) < distance(boxes[b])
         }
     }
 

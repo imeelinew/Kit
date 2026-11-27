@@ -286,14 +286,20 @@ final class ClipboardStore {
     func remove(_ item: ClipboardItem) -> Bool {
         guard let item = loadItem(id: item.id), let stmt = deleteByIDStmt else { return false }
         var backup: URL?
-        if item.imagePath != nil {
-            guard let imageURL = imageURL(for: item) else { return false }
+        if item.imagePath != nil,
+            let imageURL = imageURL(for: item),
+            FileManager.default.fileExists(atPath: imageURL.path)
+        {
             let destination = deletedImagesDir.appendingPathComponent(UUID().uuidString + ".png")
             do {
                 try FileManager.default.createDirectory(at: deletedImagesDir, withIntermediateDirectories: true)
                 // Keep the live image intact until the database transaction commits.
                 try FileManager.default.copyItem(at: imageURL, to: destination)
                 backup = destination
+            } catch let error as CocoaError where
+                error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile
+            {
+                backup = nil
             } catch {
                 return false
             }

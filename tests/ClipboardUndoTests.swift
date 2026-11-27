@@ -47,6 +47,7 @@ enum ClipboardUndoTests {
         for x in 0..<2 { for y in 0..<2 { bitmap.setColor(.red, atX: x, y: y) } }
         let data = bitmap.representation(using: .png, properties: [:])!
         await store.addImage(data, sourceBundleID: "image-source")
+        await store.waitForImageOCR()
         let image = store.items.first!
         let imageURL = store.imageURL(for: image)!
         precondition(store.remove(image))

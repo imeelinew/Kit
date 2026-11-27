@@ -158,10 +158,14 @@ extension ClipboardSQLite {
     private struct Schema {
         let database: OpaquePointer
 
+        private static let currentUserVersion = 2
+
         func prepare() -> Bool {
             guard execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=1000;"),
-                execute(Self.coreSchema), let columns = itemColumns()
+                execute(Self.coreSchema), let tableInfo = itemsTableInfo()
             else { return false }
+            let hadItemsFTS = tableExists("items_fts")
+            let hadImageOCRFTS = tableExists("image_ocr_fts")
             return ClipboardSQLite.transaction(in: database) {
                 let definitions = [
                     ("first_copied_at", "REAL"), ("copy_count", "INTEGER NOT NULL DEFAULT 1"),
@@ -170,11 +174,11 @@ extension ClipboardSQLite {
                     ("ocr_text", "TEXT"), ("ocr_status", "TEXT"), ("ocr_version", "INTEGER"),
                     ("ocr_attempts", "INTEGER NOT NULL DEFAULT 0"),
                 ]
-                for (name, type) in definitions where !columns.contains(name) {
+                for (name, type) in definitions where !tableInfo.columns.contains(name) {
                     guard execute("ALTER TABLE items ADD COLUMN \(name) \(type)") else { return false }
                 }
                 // Preserve copy history and searchable text while upgrading legacy rows
-                return execute("""
+                guard execute("""
                     UPDATE items SET first_copied_at = created_at WHERE first_copied_at IS NULL;
                     UPDATE items SET file_is_image = 1, kind = 'file'
                     WHERE kind = 'image' AND file_urls IS NOT NULL AND image_path IS NULL;
@@ -183,25 +187,128 @@ extension ClipboardSQLite {
                       AND ocr_version IS NOT NULL
                       AND ocr_version != \(ClipboardImageTextRecognition.version);
                     """)
-                    && execute(Self.fileURLsSchema)
-                    && execute(Self.searchSchema)
-                    && execute(Self.imageSearchSchema)
+                else { return false }
+
+                let rebuiltItemsTable: Bool
+                if !tableInfo.hasIntegerPrimaryKey {
+                    guard rebuildItemsWithIntegerPrimaryKey() else { return false }
+                    rebuiltItemsTable = true
+                } else {
+                    rebuiltItemsTable = false
+                }
+
+                guard execute(Self.coreIndexes),
+                    execute(Self.fileURLsSchema),
+                    execute(Self.searchSchema),
+                    execute(Self.imageSearchSchema)
+                else { return false }
+
+                // External-content FTS5 requires a rebuild when installed on a pre-existing table
+                if !hadItemsFTS || rebuiltItemsTable {
+                    guard execute("INSERT INTO items_fts(items_fts) VALUES('rebuild');") else {
+                        return false
+                    }
+                }
+                if !hadImageOCRFTS || rebuiltItemsTable {
+                    guard execute("""
+                        DELETE FROM image_ocr_fts;
+                        INSERT INTO image_ocr_fts(rowid, ocr_text)
+                        SELECT rowid, ocr_text FROM items WHERE ocr_text IS NOT NULL;
+                        """)
+                    else { return false }
+                }
+                return execute("PRAGMA user_version = \(Self.currentUserVersion);")
             }
         }
 
-        private func itemColumns() -> Set<String>? {
+        private struct TableInfo {
+            let columns: Set<String>
+            let hasIntegerPrimaryKey: Bool
+        }
+
+        private func itemsTableInfo() -> TableInfo? {
             var statement: OpaquePointer?
             defer { sqlite3_finalize(statement) }
             guard sqlite3_prepare_v2(database, "PRAGMA table_info(items)", -1, &statement, nil) == SQLITE_OK,
                 let statement
             else { return nil }
             var columns = Set<String>()
+            var pkColumns: [(type: String, pk: Int32)] = []
             var status = sqlite3_step(statement)
             while status == SQLITE_ROW {
                 if let name = ClipboardSQLite.columnString(statement, 1) { columns.insert(name) }
+                let pk = sqlite3_column_int(statement, 5)
+                if pk > 0 {
+                    let type = ClipboardSQLite.columnString(statement, 2)?.uppercased() ?? ""
+                    pkColumns.append((type, pk))
+                }
                 status = sqlite3_step(statement)
             }
-            return status == SQLITE_DONE ? columns : nil
+            guard status == SQLITE_DONE else { return nil }
+            let hasIntegerPK = pkColumns.count == 1 && pkColumns[0].type == "INTEGER"
+            return TableInfo(columns: columns, hasIntegerPrimaryKey: hasIntegerPK)
+        }
+
+        private func tableExists(_ name: String) -> Bool {
+            var statement: OpaquePointer?
+            defer { sqlite3_finalize(statement) }
+            guard sqlite3_prepare_v2(
+                database,
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
+                -1, &statement, nil
+            ) == SQLITE_OK, let statement else { return false }
+            ClipboardSQLite.bindText(name, to: statement, at: 1)
+            return sqlite3_step(statement) == SQLITE_ROW
+        }
+
+        /// Add an explicit INTEGER PRIMARY KEY so VACUUM preserves rowids referenced by FTS5 tables.
+        private func rebuildItemsWithIntegerPrimaryKey() -> Bool {
+            execute("""
+                DROP TRIGGER IF EXISTS items_ai;
+                DROP TRIGGER IF EXISTS items_ad;
+                DROP TRIGGER IF EXISTS items_au;
+                DROP TRIGGER IF EXISTS image_ocr_ai;
+                DROP TRIGGER IF EXISTS image_ocr_ad;
+                DROP TRIGGER IF EXISTS image_ocr_au;
+                DROP TABLE IF EXISTS items_migrated;
+                CREATE TABLE items_migrated(
+                  seq INTEGER PRIMARY KEY,
+                  id TEXT NOT NULL UNIQUE,
+                  kind TEXT NOT NULL,
+                  text TEXT,
+                  image_path TEXT,
+                  created_at REAL NOT NULL,
+                  source_app TEXT,
+                  image_fingerprint TEXT,
+                  custom_title TEXT,
+                  first_copied_at REAL,
+                  copy_count INTEGER NOT NULL DEFAULT 1,
+                  pinyin TEXT,
+                  pinyin_initials TEXT,
+                  ocr_text TEXT,
+                  ocr_status TEXT,
+                  ocr_version INTEGER,
+                  ocr_attempts INTEGER NOT NULL DEFAULT 0,
+                  file_urls TEXT,
+                  file_bookmarks BLOB,
+                  file_signature TEXT,
+                  file_is_image INTEGER NOT NULL DEFAULT 0
+                );
+                INSERT INTO items_migrated(
+                  seq, id, kind, text, image_path, created_at, source_app, image_fingerprint,
+                  custom_title, first_copied_at, copy_count, pinyin, pinyin_initials,
+                  ocr_text, ocr_status, ocr_version, ocr_attempts,
+                  file_urls, file_bookmarks, file_signature, file_is_image
+                )
+                SELECT
+                  rowid, id, kind, text, image_path, created_at, source_app, image_fingerprint,
+                  custom_title, first_copied_at, copy_count, pinyin, pinyin_initials,
+                  ocr_text, ocr_status, ocr_version, ocr_attempts,
+                  file_urls, file_bookmarks, file_signature, file_is_image
+                FROM items;
+                DROP TABLE items;
+                ALTER TABLE items_migrated RENAME TO items;
+                """)
         }
 
         private func execute(_ sql: String) -> Bool {
@@ -212,6 +319,7 @@ extension ClipboardSQLite {
 
         private static let coreSchema = """
             CREATE TABLE IF NOT EXISTS items(
+              seq INTEGER PRIMARY KEY,
               id TEXT NOT NULL UNIQUE,
               kind TEXT NOT NULL,
               text TEXT,
@@ -228,16 +336,11 @@ extension ClipboardSQLite {
               ocr_status TEXT,
               ocr_version INTEGER,
               ocr_attempts INTEGER NOT NULL DEFAULT 0,
-              file_urls TEXT
+              file_urls TEXT,
+              file_bookmarks BLOB,
+              file_signature TEXT,
+              file_is_image INTEGER NOT NULL DEFAULT 0
             );
-            CREATE INDEX IF NOT EXISTS items_created_at ON items(created_at);
-            CREATE INDEX IF NOT EXISTS items_kind ON items(kind);
-            CREATE INDEX IF NOT EXISTS items_text_content
-              ON items(text, created_at DESC) WHERE kind != 'image';
-            CREATE UNIQUE INDEX IF NOT EXISTS items_image_fingerprint
-              ON items(image_fingerprint) WHERE image_fingerprint IS NOT NULL;
-            CREATE INDEX IF NOT EXISTS items_image_path
-              ON items(image_path) WHERE image_path IS NOT NULL;
             CREATE TABLE IF NOT EXISTS stacks(
               id TEXT NOT NULL UNIQUE,
               name TEXT NOT NULL,
@@ -252,6 +355,17 @@ extension ClipboardSQLite {
             CREATE TABLE IF NOT EXISTS pending_blob_deletions(
               path TEXT NOT NULL PRIMARY KEY
             );
+            """
+
+        private static let coreIndexes = """
+            CREATE INDEX IF NOT EXISTS items_created_at ON items(created_at);
+            CREATE INDEX IF NOT EXISTS items_kind ON items(kind);
+            CREATE INDEX IF NOT EXISTS items_text_content
+              ON items(text, created_at DESC) WHERE kind != 'image';
+            CREATE UNIQUE INDEX IF NOT EXISTS items_image_fingerprint
+              ON items(image_fingerprint) WHERE image_fingerprint IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS items_image_path
+              ON items(image_path) WHERE image_path IS NOT NULL;
             """
 
         private static let fileURLsSchema = """

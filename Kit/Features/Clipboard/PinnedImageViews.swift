@@ -148,11 +148,11 @@ struct PinnedTextContent: View {
         var adjustments: [Character: CGFloat] = [:]
         var offset = 0
         for character in source {
-            if character.asciiValue != nil {
+            if character.unicodeScalars.count == 1, character.asciiValue != nil {
                 offset += 1
                 continue
             }
-            let length = character.unicodeScalars.reduce(0) { $0 + ($1.value > 0xFFFF ? 2 : 1) }
+            let length = character.utf16.count
             let range = NSRange(location: offset, length: length)
             offset += length
             guard !character.isNewline else { continue }

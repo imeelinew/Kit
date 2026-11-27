@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import KeyboardShortcuts
 import SQLite3
 @testable import Kit
 
@@ -33,6 +34,7 @@ enum AppSettingsTests {
         try await explicitFalseBooleansRoundTrip()
         try await legacyCopySoundValues()
         try await disabledApplicationsPersistence()
+        try paletteShortcutIsolationAndConflicts()
         try await localization()
         try await clipboardPause()
         try await appearance()
@@ -383,6 +385,51 @@ enum AppSettingsTests {
             ("sound", settings.soundEffectsEnabled),
             ("haptic", settings.hapticFeedbackEnabled),
         ]
+    }
+
+    @MainActor
+    private static func paletteShortcutIsolationAndConflicts() throws {
+        try withDefaults { defaults in
+            let global = KeyboardShortcuts.Shortcut(.w, modifiers: [.option])
+            try TestSupport.expect(
+                PaletteShortcut.actions.shortcut(from: defaults) == .init(.k, modifiers: [.command]),
+                "Unset local shortcuts resolve to their default binding")
+
+            try TestSupport.expect(
+                !PaletteShortcut.canAssign(global, to: .pinToScreen, globalShortcut: global, defaults: defaults),
+                "Local shortcuts cannot collide with the global toggle shortcut")
+            try TestSupport.expect(
+                !PaletteShortcut.canAssign(.init(.z, modifiers: [.command]), to: .pinToScreen, globalShortcut: global, defaults: defaults),
+                "Local shortcuts cannot override reserved palette commands")
+            try TestSupport.expect(
+                !PaletteShortcut.canAssign(.init(.k, modifiers: [.command]), to: .pinToScreen, globalShortcut: global, defaults: defaults),
+                "Local shortcuts cannot duplicate another local shortcut")
+            try TestSupport.expect(
+                PaletteShortcut.canAssign(.init(.k, modifiers: [.command]), to: .actions, globalShortcut: global, defaults: defaults),
+                "Re-recording the same binding on its current owner is allowed")
+
+            let custom = KeyboardShortcuts.Shortcut(.p, modifiers: [.command, .shift])
+            try TestSupport.expect(
+                PaletteShortcut.canAssign(custom, to: .pinToScreen, globalShortcut: global, defaults: defaults),
+                "Unused combinations are assignable to local shortcuts")
+            PaletteShortcut.pinToScreen.setShortcut(custom, in: defaults)
+            try TestSupport.expect(
+                PaletteShortcut.pinToScreen.shortcut(from: defaults) == custom,
+                "Local shortcuts persist in UserDefaults without global registration")
+            try TestSupport.expect(
+                !PaletteShortcut.canAssign(custom, to: .showInFinder, globalShortcut: global, defaults: defaults),
+                "Persisted local shortcuts block duplicate assignment to other actions")
+
+            PaletteShortcut.clearConflicts(with: custom, in: defaults)
+            try TestSupport.expect(
+                PaletteShortcut.pinToScreen.shortcut(from: defaults) == nil,
+                "Clearing conflicts removes colliding local shortcuts")
+
+            PaletteShortcut.actions.setShortcut(nil, in: defaults)
+            try TestSupport.expect(
+                PaletteShortcut.actions.shortcut(from: defaults) == nil,
+                "Clearing a local shortcut with a default stays cleared across reads")
+        }
     }
 
     @MainActor

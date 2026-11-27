@@ -152,6 +152,10 @@ enum ClipboardPreviewLifecycleTests {
         }!
         precondition(descendants(loadingPane.subviews.first!).allSatisfy { !($0 is NSScrollView) },
                      "Pending availability must not flash an unverified file list")
+        let searchDeadline = Date().addingTimeInterval(5)
+        while !core.palette.searchReady && Date() < searchDeadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
         core.palette.select(item.id)
         let ready = await ClipboardPreviewPayload.load(for: item, imageURL: nil, store: store)
         core.palette.acceptPreview(ready)

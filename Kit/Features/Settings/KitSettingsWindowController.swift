@@ -171,7 +171,9 @@ private final class CommandWCloseView: NSView {
         }
         var responder: NSResponder? = window?.firstResponder
         while let current = responder {
-            if current is KeyboardShortcuts.RecorderCocoa { return false }
+            if current is KeyboardShortcuts.RecorderCocoa
+                || current is LocalShortcutRecorderCocoa
+            { return false }
             responder = current.nextResponder
         }
         window?.performClose(nil)

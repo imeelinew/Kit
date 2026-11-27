@@ -48,14 +48,14 @@ enum PaletteInteractionTests {
         try TestSupport.expect(menuChanges == [true, false], "Closing emits a single menu state change")
         vm.openActions(for: UUID())
         try TestSupport.expect(!vm.menuOpen, "Unknown action targets are ignored")
+        vm.openActions(for: newest.id)
+        try TestSupport.expect(vm.menuActions.contains(.addToStack(newest)), "Stacks enable assignment actions")
+        try TestSupport.expect(!vm.menuActions.contains(.removeFromStack(newest)), "Non-members omit removal actions")
         vm.openActions(for: code.id)
-        try TestSupport.expect(vm.menuActions.contains(.addToStack(code)), "Stacks enable assignment actions")
+        try TestSupport.expect(!vm.menuActions.contains(.addToStack(code)),
+                               "Single stack hides assignment when the item is already in it")
         try TestSupport.expect(vm.menuActions.contains(.removeFromStack(code)), "Members expose removal actions")
-        try TestSupport.expect(!vm.menuActions.contains(.pinToScreen(code)), "Text code has no image pin action")
-        let assignment = vm.menuActions.firstIndex(of: .addToStack(code))!
-        vm.activateMenuItem(at: assignment)
-        try TestSupport.expect(vm.overlay == .actions(code.id),
-                               "Assignment ignores a menu when no alternative stack exists")
+        try TestSupport.expect(vm.menuActions.contains(.pinToScreen(code)), "Text code exposes screen pin action")
         let second = store.createStack(name: "Personal")!
         vm.activateMenuItem(at: vm.menuActions.firstIndex(of: .addToStack(code))!)
         try TestSupport.expect(vm.overlay == .addToStack(code.id)
